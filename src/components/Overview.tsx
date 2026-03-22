@@ -95,56 +95,6 @@ export function Overview({ markets, tickers }: OverviewProps) {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [chartInterval, setChartInterval] = useState('1h');
-
-  // News & Calendar state
-  interface NewsItem { title: string; link: string; source: string; pubDate: string; description?: string; urlToImage?: string; timeAgo?: string; category?: string; }
-  interface CalEvent { event: string; country: string; currency: string; date: string; time: string; impact: string; forecast?: string; previous?: string; actual?: string; }
-  const [news, setNews] = useState<NewsItem[]>([]);
-  const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
-  const [newsFilter, setNewsFilter] = useState<'All'|'Crypto'|'Macro'|'Equities'>('All');
-  const [calFilter, setCalFilter] = useState<'Global'|'US'|'EU'|'JP'|'CN'|'GB'>('Global');
-
-  useEffect(() => {
-    async function loadNews() {
-      try {
-        const res = await fetch('/api/news');
-        if (!res.ok) return;
-        const data = await res.json();
-        const articles = data.articles || data.data || data || [];
-        setNews(Array.isArray(articles) ? articles.slice(0, 30) : []);
-      } catch {}
-    }
-    loadNews();
-    const iv = setInterval(loadNews, 120000);
-    return () => clearInterval(iv);
-  }, []);
-
-  useEffect(() => {
-    async function loadCalendar() {
-      try {
-        const res = await fetch('/api/calendar');
-        if (!res.ok) return;
-        const data = await res.json();
-        const events = data.data || data.calendarData || data || [];
-        if (Array.isArray(events)) {
-          setCalEvents(events.slice(0, 40).map((e: Record<string,string>) => ({
-            event: e.event || e.name || e.title || 'Event',
-            country: e.country || e.currency || '',
-            currency: e.currency || e.country || '',
-            date: e.date || e.releaseDate || '',
-            time: e.time || '',
-            impact: e.importance || e.impact || '1',
-            forecast: e.forecast || e.forecastValue || '',
-            previous: e.previous || e.previousValue || '',
-            actual: e.actual || e.actualValue || '',
-          })));
-        }
-      } catch {}
-    }
-    loadCalendar();
-    const iv = setInterval(loadCalendar, 300000);
-    return () => clearInterval(iv);
-  }, []);
   const [detailTab, setDetailTab] = useState<'chart' | 'orderbook' | 'liquidations'>('chart');
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('volume');
@@ -260,24 +210,19 @@ export function Overview({ markets, tickers }: OverviewProps) {
     .sort((a, b) => get24hChange(tickers[a.symbol]) - get24hChange(tickers[b.symbol]))
     .slice(0, 3);
 
-  // Sort candles ascending by time (oldest first → newest last)
+  const liquidations = trades.filter(t => t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation');
   const sortedCandles = [...candles].sort((a, b) => a.t - b.t);
   const chartData = sortedCandles.map(candle => {
     const d = new Date(candle.t);
     let time: string;
-    if (chartInterval === '1d') {
-      time = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    } else if (chartInterval === '4h' || chartInterval === '1h') {
-      time = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    } else {
-      time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    }
-    return { time, price: Number(candle.c), open: Number(candle.o) };
+    if (chartInterval === '1d') time = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    else if (chartInterval === '4h' || chartInterval === '1h') time = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    else time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return { time, price: Number(candle.c) };
   });
   const selTicker = selected ? tickers[selected.symbol] : null;
   const selPrice = getMarkPrice(selTicker ?? undefined);
   const selChange = get24hChange(selTicker ?? undefined);
-  // Color = first candle open vs last candle close (true period direction)
   const firstCandle = sortedCandles[0];
   const lastCandle = sortedCandles[sortedCandles.length - 1];
   const chartChange = firstCandle && lastCandle
@@ -290,85 +235,10 @@ export function Overview({ markets, tickers }: OverviewProps) {
     </th>
   );
 
-  const countryFlag: Record<string,string> = { US: '🇺🇸', EU: '🇪🇺', JP: '🇯🇵', CN: '🇨🇳', GB: '🇬🇧', DE: '🇩🇪', AU: '🇦🇺', CA: '🇨🇦', NZ: '🇳🇿', CH: '🇨🇭' };
-
   return (
-    <div className="flex h-full overflow-hidden bg-bg">
-
-      {/* LEFT SIDEBAR — Economic Calendar */}
-      <div className="w-[280px] shrink-0 border-r border-border1 flex flex-col overflow-hidden">
-        <div className="px-3 py-3 border-b border-border1 bg-surface shrink-0">
-          <div className="text-[12px] font-bold text-text1 mb-2">Economic Calendar</div>
-          <div className="flex flex-wrap gap-1">
-            {(['Global','US','EU','JP','CN','GB'] as const).map(f => (
-              <button key={f} onClick={() => setCalFilter(f)}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all ${calFilter === f ? 'bg-accent text-white' : 'bg-surface2 text-text3 hover:text-text2 border border-border1'}`}>
-                {f === 'Global' ? 'Global' : `${countryFlag[f] || ''} ${f}`}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {calEvents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-2 text-text3">
-              <div className="w-4 h-4 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-              <span className="text-[11px]">Loading calendar...</span>
-            </div>
-          ) : (() => {
-            const filtered = calFilter === 'Global' ? calEvents : calEvents.filter(e => e.currency === calFilter || e.country === calFilter || e.country?.includes(calFilter));
-            let lastDate = '';
-            return (
-              <div className="pb-4">
-                {filtered.map((ev, i) => {
-                  const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase() : '';
-                  const showDate = dateStr !== lastDate;
-                  if (showDate) lastDate = dateStr;
-                  const impactNum = Number(ev.impact) || 1;
-                  const impactColor = impactNum >= 3 ? 'bg-danger' : impactNum === 2 ? 'bg-warn' : 'bg-success/50';
-                  const now = Date.now();
-                  const evTime = ev.date ? new Date(ev.date).getTime() : 0;
-                  const diffMs = evTime - now;
-                  const diffDays = Math.floor(diffMs / 86400000);
-                  const diffHrs = Math.floor((diffMs % 86400000) / 3600000);
-                  const countdown = diffMs > 0 ? `${diffDays > 0 ? diffDays + 'd ' : ''}${diffHrs}h` : 'Live';
-                  return (
-                    <div key={i}>
-                      {showDate && (
-                        <div className="px-3 py-1.5 text-[9px] font-bold text-text3 uppercase tracking-wider bg-surface2/50 border-b border-border1 sticky top-0">
-                          {dateStr}
-                        </div>
-                      )}
-                      <div className="flex items-start gap-2.5 px-3 py-2.5 border-b border-border1 hover:bg-surface2/40 transition-colors">
-                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${impactColor}`} />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[11px] font-semibold text-text1 leading-snug mb-0.5">{ev.event}</div>
-                          <div className="flex items-center gap-1.5 text-[10px] text-text3">
-                            <span>{countryFlag[ev.currency] || ''} {ev.currency}</span>
-                            {ev.time && <span>· {ev.time} UTC</span>}
-                            {(ev.forecast || ev.previous) && (
-                              <span className="ml-auto">
-                                {ev.forecast && `F: ${ev.forecast}`}
-                                {ev.previous && ` P: ${ev.previous}`}
-                              </span>
-                            )}
-                          </div>
-                          {diffMs > 0 && (
-                            <div className="text-[9px] text-text3 mt-0.5">{countdown} away</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-        </div>
-      </div>
-
-      {/* CENTER — main content */}
-      <div className="flex-1 overflow-auto">
-      <div className="w-full max-w-[1100px] mx-auto px-6">
+    <div className="flex flex-col h-full overflow-auto bg-bg">
+      {/* Centered container */}
+      <div className="w-full max-w-[1400px] mx-auto px-8">
 
         {/* TOP ROW: Fear&Greed + Altcoin Season + Trending + Top Gainers */}
         <div className="grid grid-cols-4 gap-4 py-5">
@@ -543,54 +413,6 @@ export function Overview({ markets, tickers }: OverviewProps) {
           </table>
         </div>
       </div>
-      </div>{/* end center */}
-
-      {/* RIGHT SIDEBAR — Global News */}
-      <div className="w-[280px] shrink-0 border-l border-border1 flex flex-col overflow-hidden">
-        <div className="px-3 py-3 border-b border-border1 bg-surface shrink-0">
-          <div className="text-[12px] font-bold text-text1 mb-2">Global News</div>
-          <div className="flex gap-1 flex-wrap">
-            {(['All','Crypto','Macro','Equities'] as const).map(f => (
-              <button key={f} onClick={() => setNewsFilter(f)}
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all ${newsFilter === f ? 'bg-accent text-white' : 'bg-surface2 text-text3 hover:text-text2 border border-border1'}`}>
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {news.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-2 text-text3">
-              <div className="w-4 h-4 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-              <span className="text-[11px]">Loading news...</span>
-            </div>
-          ) : (
-            <div className="pb-4">
-              {news
-                .filter(n => newsFilter === 'All' || (n.category || '').toLowerCase().includes(newsFilter.toLowerCase()))
-                .map((n, i) => (
-                  <a key={i} href={n.link} target="_blank" rel="noopener noreferrer"
-                    className="flex gap-2.5 px-3 py-2.5 border-b border-border1 hover:bg-surface2/40 transition-colors group">
-                    {n.urlToImage && (
-                      <img src={n.urlToImage} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0 bg-surface2" onError={e => (e.currentTarget.style.display = 'none')} />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold text-text1 leading-snug mb-1 group-hover:text-accent transition-colors line-clamp-3">{n.title}</div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-text3">
-                        <span>{n.source || 'News'}</span>
-                        {n.timeAgo && <span>· {n.timeAgo}</span>}
-                        {n.category && (
-                          <span className="ml-auto px-1.5 py-0.5 rounded-full bg-surface2 border border-border1 text-[9px]">{n.category}</span>
-                        )}
-                      </div>
-                    </div>
-                  </a>
-                ))
-              }
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* DETAIL PANEL - slides over as fixed right panel */}
       {selected && (
@@ -637,35 +459,24 @@ export function Overview({ markets, tickers }: OverviewProps) {
                       className={'px-2.5 py-1 rounded text-[11px] font-semibold transition-all ' + (chartInterval === iv ? 'bg-accent text-white' : 'text-text2 hover:bg-surface2')}>{iv}</button>
                   ))}
                 </div>
-                {chartData.length > 0 ? (() => {
-                  // Recompute color from latest chartData directly (not stale chartChange)
-                  const isUp = chartData[chartData.length - 1].price >= chartData[0].price;
-                  const lineColor = isUp ? '#10b981' : '#ef4444';
-                  // Unique gradient id per symbol+interval to avoid stale SVG defs
-                  const gradId = `grad-${selected?.symbol ?? 'x'}-${chartInterval}`;
-                  return (
+                {chartData.length > 0 ? (
                   <div className="flex-1 p-3">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData} margin={{ top: 5, right: 15, left: 5, bottom: 5 }}>
                         <defs>
-                          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={lineColor} stopOpacity={0.15} />
-                            <stop offset="95%" stopColor={lineColor} stopOpacity={0} />
+                          <linearGradient id={`grad-${selected?.symbol}-${chartInterval}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={chartChange >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0.15} />
+                            <stop offset="95%" stopColor={chartChange >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                         <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => '$' + fmtPrice(v)} width={75} />
-                        <Tooltip
-                          contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border1)', borderRadius: 8, fontSize: 11, color: 'var(--color-text1)' }}
-                          labelStyle={{ color: 'var(--color-text3)', fontSize: 10, marginBottom: 2 }}
-                          formatter={(v: number) => ['$' + fmtPrice(v), 'Price']}
-                        />
-                        <Area type="monotone" dataKey="price" stroke={lineColor} strokeWidth={2} fill={`url(#${gradId})`} dot={false} animationDuration={300} />
+                        <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border1)', borderRadius: 8, fontSize: 11, color: 'var(--color-text1)' }} formatter={(v: number) => ['$' + fmtPrice(v), 'Price']} />
+                        <Area type="monotone" dataKey="price" stroke={chartChange >= 0 ? '#10b981' : '#ef4444'} strokeWidth={2} fill={`url(#grad-${selected?.symbol}-${chartInterval})`} dot={false} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                  );
-                })() : <div className="flex-1 flex items-center justify-center text-text3 text-sm">Loading chart...</div>}
+                ) : <div className="flex-1 flex items-center justify-center text-text3 text-sm">Loading chart...</div>}
               </div>
             )}
 
@@ -698,32 +509,50 @@ export function Overview({ markets, tickers }: OverviewProps) {
               </div>
             )}
 
-            {(detailTab === 'liquidations' || detailTab as string === 'trades') && (
+            {detailTab === 'liquidations' && (
               <div className="flex flex-col h-full overflow-hidden">
-                <div className="grid px-3 py-1.5 bg-surface2 border-b border-border1 text-[10px] text-text3 font-semibold uppercase shrink-0"
-                  style={{ gridTemplateColumns: '80px 1fr 1fr 1fr' }}>
-                  <span>Time</span><span>Side</span><span>Price</span><span className="text-right">Size</span>
-                </div>
                 <div className="flex-1 overflow-y-auto">
-                  {trades.length === 0 ? (
-                    <div className="flex items-center justify-center py-12 text-text3 text-sm">Loading trades...</div>
+                  {liquidations.length > 0 ? (
+                    <table className="w-full">
+                      <thead className="sticky top-0 bg-surface2 border-b border-border1">
+                        <tr>{['Time', 'Side', 'Price', 'Size', 'Type'].map(h => <th key={h} className="px-3 py-1.5 text-[10px] text-text3 font-semibold uppercase text-left">{h}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {liquidations.map((t, i) => {
+                          const isLong = t.side.includes('long');
+                          return (
+                            <tr key={i} className="border-b border-border1 hover:bg-surface2">
+                              <td className="px-3 py-1.5 text-[11px] text-text3 font-mono">{new Date(t.created_at).toLocaleTimeString()}</td>
+                              <td className={'px-3 py-1.5 text-[11px] font-bold ' + (isLong ? 'text-danger' : 'text-success')}>{isLong ? 'LONG LIQ' : 'SHORT LIQ'}</td>
+                              <td className="px-3 py-1.5 text-[11px] font-mono">${fmtPrice(t.price)}</td>
+                              <td className="px-3 py-1.5 text-[11px] font-mono">{fmt(Number(t.amount), 4)}</td>
+                              <td className="px-3 py-1.5 text-[10px] text-text3">{t.cause === 'backstop_liquidation' ? 'Backstop' : 'Market'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   ) : (
-                    trades.slice(0, 100).map((t, i) => {
-                      const isOpen = t.side.includes('open') || t.side === 'bid';
-                      const isLong = t.side.includes('long') || t.side === 'bid';
-                      return (
-                        <div key={i} className="grid px-3 py-1.5 border-b border-border1 hover:bg-surface2/60 transition-colors"
-                          style={{ gridTemplateColumns: '80px 1fr 1fr 1fr' }}>
-                          <span className="text-[10px] text-text3 font-mono">{new Date(t.created_at).toLocaleTimeString()}</span>
-                          <span className={`text-[11px] font-semibold ${isLong ? 'text-success' : 'text-danger'}`}>
-                            {t.side.replace(/_/g, ' ').toUpperCase()}
-                          </span>
-                          <span className="text-[11px] font-mono text-text1">${fmtPrice(Number(t.price))}</span>
-                          <span className="text-[11px] font-mono text-text2 text-right">{fmt(Number(t.amount), 4)}</span>
-                        </div>
-                      );
-                    })
+                    <div className="flex flex-col items-center justify-center py-12 text-text3 gap-2">
+                      <span className="text-xl">✓</span><p className="text-sm">No liquidations</p>
+                    </div>
                   )}
+                </div>
+                <div className="border-t border-border1 max-h-48 overflow-y-auto shrink-0">
+                  <div className="px-4 py-1.5 bg-surface2 border-b border-border1 sticky top-0">
+                    <span className="text-[10px] text-text3 font-semibold uppercase">Recent Trades</span>
+                  </div>
+                  {trades.slice(0, 30).map((t, i) => {
+                    const isLong = t.side.includes('long');
+                    return (
+                      <div key={i} className="grid px-3 py-1.5 border-b border-border1 hover:bg-surface2" style={{ gridTemplateColumns: '80px 1fr 1fr 1fr' }}>
+                        <span className="text-[10px] text-text3 font-mono">{new Date(t.created_at).toLocaleTimeString()}</span>
+                        <span className={'text-[11px] font-semibold ' + (isLong ? 'text-success' : 'text-danger')}>{t.side.replace('_', ' ').toUpperCase()}</span>
+                        <span className="text-[11px] font-mono text-text1">${fmtPrice(t.price)}</span>
+                        <span className="text-[11px] font-mono text-text2 text-right">{fmt(Number(t.amount), 4)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
