@@ -155,7 +155,7 @@ function FavoriteCard({
                   const { label, isLong } = sideLabel(t.side);
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   const pnl = Number((t as any).pnl ?? t.realized_pnl ?? 0);
-                  const isOpenTrade = t.side?.includes('open') || t.side === 'bid' || t.side === 'ask';
+                  const isOpenTrade = t.side?.includes('open') || t.side === 'bid' || t.side === 'ask' || t.side?.includes('long') || t.side?.includes('short');
                   return (
                     <div key={t.id || i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-surface2 border border-border1 hover:border-border2 transition-colors group">
                       <CoinLogo symbol={t.symbol} size={24} />

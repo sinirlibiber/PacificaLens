@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   getAccountInfo, getPositions, getEquityHistory, getTradesHistory,
-  getOrderHistory, getFundingHistory,
+  getOrderHistory, getFundingHistory, getTradeHistory,
   AccountInfo, Position, EquityHistory, TradeHistory, FundingHistory, OpenOrder, Ticker, Market,
 } from '@/lib/pacifica';
 import { fmt, fmtShortAddr, fmtPrice, getMarkPrice } from '@/lib/utils';
@@ -114,7 +114,7 @@ function OrderLogRow({ entry }: { entry: OrderLogEntry }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-type PortfolioTab = 'positions' | 'open_orders' | 'trade_history' | 'funding' | 'order_log' | 'copy_perf' | 'alerts';
+type PortfolioTab = 'positions' | 'open_orders' | 'trade_history' | 'funding' | 'order_log' | 'copy_perf' | 'alerts' | 'heatmap' | 'journal' | 'performance';
 
 interface PortfolioProps {
   wallet: string | null;
@@ -139,6 +139,32 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
   const [tab, setTab] = useState<PortfolioTab>('positions');
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(0);
+
+  // Journal state
+  const JOURNAL_KEY = `pacificalens_journal_${wallet || 'anon'}`;
+  interface JournalEntry { id: string; ts: number; symbol: string; side: 'long' | 'short'; notes: string; result: 'win' | 'loss' | 'open'; pnl?: number; }
+  const [journal, setJournal] = useState<JournalEntry[]>(() => {
+    try { const r = localStorage.getItem(JOURNAL_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
+  });
+  const [jSymbol, setJSymbol] = useState('BTC');
+  const [jSide, setJSide] = useState<'long'|'short'>('long');
+  const [jNotes, setJNotes] = useState('');
+  const [jResult, setJResult] = useState<'win'|'loss'|'open'>('open');
+  const [jPnl, setJPnl] = useState('');
+
+  function addJournalEntry() {
+    if (!jNotes.trim()) return;
+    const entry: JournalEntry = { id: crypto.randomUUID(), ts: Date.now(), symbol: jSymbol, side: jSide, notes: jNotes, result: jResult, pnl: jPnl ? Number(jPnl) : undefined };
+    const next = [entry, ...journal];
+    setJournal(next);
+    try { localStorage.setItem(JOURNAL_KEY, JSON.stringify(next)); } catch {}
+    setJNotes(''); setJPnl('');
+  }
+  function deleteJournalEntry(id: string) {
+    const next = journal.filter(e => e.id !== id);
+    setJournal(next);
+    try { localStorage.setItem(JOURNAL_KEY, JSON.stringify(next)); } catch {}
+  }
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: '', dir: 'desc' });
 
   function toggleSort(key: string) {
@@ -222,6 +248,9 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
     { key: 'order_log',    label: 'PacificaLens Orders', count: logStats.pending > 0 ? logStats.pending : undefined },
     { key: 'copy_perf',    label: 'Copy Performance' },
     { key: 'alerts',       label: '🔔 Price Alerts' },
+    { key: 'heatmap',      label: 'Heat Map' },
+    { key: 'journal',      label: 'Journal', count: journal.filter(e => e.result === 'open').length || undefined },
+    { key: 'performance',  label: 'Performance' },
   ];
 
   return (
@@ -587,6 +616,213 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                 </div>
               );
             })()}
+
+
+            {/* HEAT MAP */}
+            {tab === 'heatmap' && (
+              <div className="p-4 space-y-4">
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Portfolio Risk', value: `${equity > 0 ? ((marginUsed / equity) * 100).toFixed(1) : 0}%`,
+                      color: (marginUsed / Math.max(equity, 1)) * 100 < 10 ? 'text-success' : (marginUsed / Math.max(equity, 1)) * 100 < 25 ? 'text-warn' : 'text-danger' },
+                    { label: 'Margin Used', value: fmtUSD(marginUsed), color: 'text-text1' },
+                    { label: 'Open Positions', value: String(positions.length), color: positions.length > 0 ? 'text-accent' : 'text-text3' },
+                  ].map(s => (
+                    <div key={s.label} className="bg-surface2 border border-border1 rounded-xl px-4 py-3">
+                      <div className="text-[10px] text-text3 uppercase font-semibold tracking-wide mb-1">{s.label}</div>
+                      <div className={`text-[20px] font-bold ${s.color}`}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Risk bar */}
+                <div className="bg-surface border border-border1 rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-[12px] font-semibold text-text1">Risk Exposure</span>
+                    <span className={`text-[15px] font-bold ${(marginUsed / Math.max(equity, 1)) * 100 < 10 ? 'text-success' : (marginUsed / Math.max(equity, 1)) * 100 < 25 ? 'text-warn' : 'text-danger'}`}>
+                      {equity > 0 ? ((marginUsed / equity) * 100).toFixed(1) : 0}%
+                    </span>
+                  </div>
+                  <div className="relative h-4 bg-gradient-to-r from-success via-warn to-danger rounded-full">
+                    <div className="absolute top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-2 border-text2 rounded-full shadow transition-all"
+                      style={{ left: `calc(${Math.min((marginUsed / Math.max(equity, 1)) * 200, 96)}% - 10px)` }} />
+                  </div>
+                  <div className="flex justify-between text-[10px] mt-1.5">
+                    <span className="text-success font-semibold">Safe &lt;10%</span>
+                    <span className="text-warn font-semibold">Moderate 10-25%</span>
+                    <span className="text-danger font-semibold">High &gt;25%</span>
+                  </div>
+                </div>
+                {/* Bubble map */}
+                {positions.length > 0 ? (
+                  <div className="bg-surface border border-border1 rounded-xl p-4">
+                    <div className="text-[12px] font-semibold text-text1 mb-4">Position Bubbles</div>
+                    <div className="flex flex-wrap gap-4 justify-center">
+                      {positions.map((p, i) => {
+                        const tk = tickers[p.symbol];
+                        const size = Number(p.amount || 0) * (getMarkPrice(tk) || Number(p.entry_price));
+                        const maxSize = Math.max(...positions.map(pos => Number(pos.amount || 0) * (getMarkPrice(tickers[pos.symbol]) || Number(pos.entry_price))));
+                        const rel = maxSize > 0 ? size / maxSize : 0;
+                        const isLong = p.side === 'bid';
+                        const d = Math.max(60, rel * 120);
+                        return (
+                          <div key={i} className="flex flex-col items-center gap-1">
+                            <div className="rounded-full flex flex-col items-center justify-center border-2 transition-all"
+                              style={{ width: d, height: d, background: isLong ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)', borderColor: isLong ? '#10b981' : '#ef4444' }}>
+                              <CoinLogo symbol={p.symbol} size={Math.max(16, d * 0.3)} />
+                              <span className="text-[9px] font-bold text-text1 mt-0.5">{p.symbol}</span>
+                            </div>
+                            <span className={`text-[10px] font-bold ${isLong ? 'text-success' : 'text-danger'}`}>{isLong ? '↑ LONG' : '↓ SHORT'}</span>
+                            <span className="text-[10px] text-text3 font-mono">{fmtUSD(size)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-16 text-[12px] text-text3">No open positions</div>
+                )}
+              </div>
+            )}
+
+            {/* JOURNAL */}
+            {tab === 'journal' && (
+              <div className="p-4 space-y-4">
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Total Entries', value: String(journal.length), color: 'text-text1' },
+                    { label: 'Win Rate', value: journal.filter(e => e.result !== 'open').length > 0 ? `${(journal.filter(e => e.result === 'win').length / journal.filter(e => e.result !== 'open').length * 100).toFixed(0)}%` : '—', color: 'text-success' },
+                    { label: 'Total PnL', value: fmtUSD(journal.reduce((s, e) => s + (e.pnl || 0), 0), true), color: journal.reduce((s, e) => s + (e.pnl || 0), 0) >= 0 ? 'text-success' : 'text-danger' },
+                  ].map(s => (
+                    <div key={s.label} className="bg-surface2 border border-border1 rounded-xl px-4 py-3">
+                      <div className="text-[10px] text-text3 uppercase font-semibold tracking-wide mb-1">{s.label}</div>
+                      <div className={`text-[18px] font-bold ${s.color}`}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Add entry */}
+                <div className="bg-surface border border-border1 rounded-xl p-4">
+                  <div className="text-[12px] font-semibold text-text1 mb-3">Log Trade</div>
+                  <div className="grid grid-cols-4 gap-2 mb-3">
+                    <div>
+                      <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">Symbol</label>
+                      <select value={jSymbol} onChange={e => setJSymbol(e.target.value)}
+                        className="w-full bg-surface2 border border-border1 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-accent">
+                        {['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','MATIC','LINK','UNI'].map(s => <option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">Side</label>
+                      <select value={jSide} onChange={e => setJSide(e.target.value as 'long'|'short')}
+                        className="w-full bg-surface2 border border-border1 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-accent">
+                        <option value="long">Long</option>
+                        <option value="short">Short</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">Result</label>
+                      <select value={jResult} onChange={e => setJResult(e.target.value as 'win'|'loss'|'open')}
+                        className="w-full bg-surface2 border border-border1 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-accent">
+                        <option value="open">Open</option>
+                        <option value="win">Win</option>
+                        <option value="loss">Loss</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">PnL ($)</label>
+                      <input type="number" value={jPnl} onChange={e => setJPnl(e.target.value)} placeholder="0.00"
+                        className="w-full bg-surface2 border border-border1 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-accent" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <input value={jNotes} onChange={e => setJNotes(e.target.value)} placeholder="Trade notes..."
+                      className="flex-1 bg-surface2 border border-border1 rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-accent"
+                      onKeyDown={e => e.key === 'Enter' && addJournalEntry()} />
+                    <button onClick={addJournalEntry} disabled={!jNotes.trim()}
+                      className="px-4 py-1.5 bg-accent text-white text-[12px] font-semibold rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-40">
+                      + Log
+                    </button>
+                  </div>
+                </div>
+                {/* Entries */}
+                <div className="bg-surface border border-border1 rounded-xl overflow-hidden">
+                  {journal.length === 0 ? (
+                    <div className="py-12 text-center text-[12px] text-text3">No entries yet. Log your first trade above.</div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-6 gap-2 px-4 py-2 text-[10px] text-text3 uppercase font-semibold border-b border-border1 bg-surface2">
+                        <span>Date</span><span>Symbol</span><span>Side</span><span>Result</span><span>PnL</span><span>Notes</span>
+                      </div>
+                      {journal.map(e => (
+                        <div key={e.id} className="grid grid-cols-6 gap-2 px-4 py-2.5 border-b border-border1 last:border-0 hover:bg-surface2/40 transition-colors text-[12px] items-center group">
+                          <span className="text-text3 text-[11px]">{new Date(e.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
+                          <span className="font-bold text-text1">{e.symbol}</span>
+                          <span className={`font-semibold ${e.side === 'long' ? 'text-success' : 'text-danger'}`}>{e.side === 'long' ? 'Long' : 'Short'}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block ${e.result === 'win' ? 'bg-success/10 text-success' : e.result === 'loss' ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent'}`}>
+                            {e.result.toUpperCase()}
+                          </span>
+                          <span className={`font-mono font-semibold ${(e.pnl || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
+                            {e.pnl !== undefined ? fmtUSD(e.pnl, true) : '—'}
+                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-text3 truncate text-[11px]">{e.notes}</span>
+                            <button onClick={() => deleteJournalEntry(e.id)}
+                              className="opacity-0 group-hover:opacity-100 text-text3 hover:text-danger transition-all text-[13px] ml-2">✕</button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* PERFORMANCE */}
+            {tab === 'performance' && (
+              <div className="p-4 space-y-4">
+                {!wallet ? (
+                  <div className="py-16 text-center text-[12px] text-text3">Connect wallet to view performance</div>
+                ) : (() => {
+                  const totalPnl = tradeHist.reduce((s, t) => s + Number((t as TradeHistory & {pnl?:string}).pnl ?? t.realized_pnl ?? 0), 0);
+                  const totalFunding = fundingHist.reduce((s, f) => s + Number(f.amount || 0), 0);
+                  const wins = tradeHist.filter(t => Number((t as TradeHistory & {pnl?:string}).pnl ?? t.realized_pnl ?? 0) > 0).length;
+                  const winRate = tradeHist.length > 0 ? (wins / tradeHist.length * 100) : 0;
+                  const fees = tradeHist.reduce((s, t) => s + Number((t as TradeHistory & {fee?:string}).fee ?? 0), 0);
+                  return (
+                    <>
+                      <div className="grid grid-cols-4 gap-3">
+                        {[
+                          { label: 'Realized PnL', value: fmtUSD(totalPnl, true), color: totalPnl >= 0 ? 'text-success' : 'text-danger' },
+                          { label: 'Funding Earned', value: fmtUSD(totalFunding, true), color: totalFunding >= 0 ? 'text-success' : 'text-danger' },
+                          { label: 'Fees Paid', value: fmtUSD(fees), color: 'text-warn' },
+                          { label: 'Win Rate', value: winRate.toFixed(1) + '%', color: winRate >= 50 ? 'text-success' : 'text-danger' },
+                        ].map(s => (
+                          <div key={s.label} className="bg-surface2 border border-border1 rounded-xl px-4 py-3">
+                            <div className="text-[10px] text-text3 uppercase font-semibold tracking-wide mb-1">{s.label}</div>
+                            <div className={`text-[18px] font-bold ${s.color}`}>{s.value}</div>
+                            <div className="text-[9px] text-text3 mt-0.5">{tradeHist.length} trades</div>
+                          </div>
+                        ))}
+                      </div>
+                      {equityHist.length > 1 && (
+                        <div className="bg-surface border border-border1 rounded-xl p-4">
+                          <div className="text-[12px] font-semibold text-text1 mb-3">Equity History</div>
+                          <div className="h-40 flex items-end gap-px">
+                            {equityHist.slice(-60).map((e, i) => {
+                              const vals = equityHist.slice(-60).map(x => Number(x.equity));
+                              const min = Math.min(...vals); const max = Math.max(...vals);
+                              const pct = max > min ? ((Number(e.equity) - min) / (max - min)) * 100 : 50;
+                              const isUp = i > 0 ? Number(e.equity) >= Number(equityHist.slice(-60)[i-1]?.equity) : true;
+                              return <div key={i} className={`flex-1 rounded-t-sm transition-all ${isUp ? 'bg-success/40' : 'bg-danger/40'}`} style={{ height: `${Math.max(2, pct)}%` }} />;
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
           </div>
         </div>

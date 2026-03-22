@@ -483,7 +483,7 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                       onClick={() => setConfig(c => ({ ...c, active: !c.active }))}
                       className={'px-4 py-2 rounded-lg text-[12px] font-bold transition-all ' +
                         (config.active ? 'bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20' : 'bg-success/10 border border-success/30 text-success hover:bg-success/20')}>
-                      {config.active ? '⏹ Stop Bot' : '▶ Start Bot'}
+                      {config.active ? '⏹ Stop Alerts' : '▶ Start Alerts'}
                     </button>
                   </div>
 
@@ -699,6 +699,14 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                   </div>
                 </div>
 
+                {/* Disclaimer */}
+                <div className="bg-surface2 border border-border1 rounded-xl px-4 py-3 flex gap-2.5">
+                  <span className="text-[16px] shrink-0">ℹ️</span>
+                  <div className="text-[11px] text-text2 leading-relaxed">
+                    <strong className="text-text1">Alerts only</strong> — this bot monitors funding rates and sends notifications. It does not open or close trades automatically. Use alerts to manually execute on Pacifica and the opposing exchange.
+                  </div>
+                </div>
+
                 {/* Setup guide */}
                 <div className="bg-accent/5 rounded-xl border border-accent/20 p-5">
                   <h3 className="text-[12px] font-bold text-accent mb-3">⚡ Quick Setup Guide</h3>
@@ -708,7 +716,7 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                     <li className="flex gap-2"><span className="text-accent font-bold">3.</span> Add Telegram token + Chat ID for mobile alerts</li>
                     <li className="flex gap-2"><span className="text-accent font-bold">4.</span> Add Discord webhook for server alerts</li>
                     <li className="flex gap-2"><span className="text-accent font-bold">5.</span> Enable browser notifications for desktop alerts</li>
-                    <li className="flex gap-2"><span className="text-accent font-bold">6.</span> Click <span className="text-success font-bold">Start Bot</span> — alerts fire automatically</li>
+                    <li className="flex gap-2"><span className="text-accent font-bold">6.</span> Click <span className="text-success font-bold">Start Alerts</span> — notifications will fire when opportunities appear</li>
                   </ol>
                 </div>
               </div>
