@@ -460,24 +460,35 @@ export function Overview({ markets, tickers }: OverviewProps) {
                       className={'px-2.5 py-1 rounded text-[11px] font-semibold transition-all ' + (chartInterval === iv ? 'bg-accent text-white' : 'text-text2 hover:bg-surface2')}>{iv}</button>
                   ))}
                 </div>
-                {chartData.length > 0 ? (
+                {chartData.length > 0 ? (() => {
+                  // Recompute color from latest chartData directly (not stale chartChange)
+                  const isUp = chartData[chartData.length - 1].price >= chartData[0].price;
+                  const lineColor = isUp ? '#10b981' : '#ef4444';
+                  // Unique gradient id per symbol+interval to avoid stale SVG defs
+                  const gradId = `grad-${selected?.symbol ?? 'x'}-${chartInterval}`;
+                  return (
                   <div className="flex-1 p-3">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData} margin={{ top: 5, right: 15, left: 5, bottom: 5 }}>
                         <defs>
-                          <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={chartChange >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0.12} />
-                            <stop offset="95%" stopColor={chartChange >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0} />
+                          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={lineColor} stopOpacity={0.15} />
+                            <stop offset="95%" stopColor={lineColor} stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                         <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => '$' + fmtPrice(v)} width={75} />
-                        <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 11 }} formatter={(v: number) => ['$' + fmtPrice(v), 'Price']} />
-                        <Area type="monotone" dataKey="price" stroke={chartChange >= 0 ? '#10b981' : '#ef4444'} strokeWidth={2} fill="url(#grad)" dot={false} />
+                        <Tooltip
+                          contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border1)', borderRadius: 8, fontSize: 11, color: 'var(--color-text1)' }}
+                          labelStyle={{ color: 'var(--color-text3)', fontSize: 10, marginBottom: 2 }}
+                          formatter={(v: number) => ['$' + fmtPrice(v), 'Price']}
+                        />
+                        <Area type="monotone" dataKey="price" stroke={lineColor} strokeWidth={2} fill={`url(#${gradId})`} dot={false} animationDuration={300} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                ) : <div className="flex-1 flex items-center justify-center text-text3 text-sm">Loading chart...</div>}
+                  );
+                })() : <div className="flex-1 flex items-center justify-center text-text3 text-sm">Loading chart...</div>}
               </div>
             )}
 
