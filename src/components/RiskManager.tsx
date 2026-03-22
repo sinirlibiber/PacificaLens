@@ -27,8 +27,7 @@ interface RiskManagerProps {
 type RiskTab = 'results' | 'portfolio';
 
 
-
-
+function ResizablePanels({ left, center, right }: { left: React.ReactNode; center: React.ReactNode; right: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [widths, setWidths] = useState([240, 380]);
   const dragging = useRef<{ col: number; startX: number; startW: number[] } | null>(null);
@@ -274,8 +273,8 @@ export function RiskManager({
             </div>
           )}
 
-
-
+          </div>
+        </div>}
       />
 
       <AccountTabs positions={positions} tickers={tickers} wallet={wallet ?? null} />
