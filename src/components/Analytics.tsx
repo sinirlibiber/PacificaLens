@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Market, Ticker, getMarkPrice, get24hChange } from '@/lib/pacifica';
-import { fmt, fmtPrice } from '@/lib/utils';
+import { Market, Ticker } from '@/lib/pacifica';
+import { fmt, fmtPrice, getMarkPrice, get24hChange } from '@/lib/utils';
 import { CoinLogo } from './CoinLogo';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
