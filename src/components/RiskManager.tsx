@@ -82,50 +82,101 @@ export function RiskManager({
   const [activeTab, setActiveTab] = useState<RiskTab>('results');
   const [selected, setSelected] = useState<Market | null>(null);
   const [result, setResult] = useState<CalcResult | null>(null);
-  const [newAlertDir, setNewAlertDir] = useState<'above' | 'below'>('below');
   const notifiedRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    try {
-      const j = localStorage.getItem('pl_journal');
-      if (j) setJournal(JSON.parse(j));
-      const a = localStorage.getItem('pl_alerts');
-      if (a) setAlerts(JSON.parse(a));
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    try { localStorage.setItem('pl_journal', JSON.stringify(journal)); } catch {}
-  }, [journal]);
-
-  useEffect(() => {
-    try { localStorage.setItem('pl_alerts', JSON.stringify(alerts)); } catch {}
-  }, [alerts]);
 
   useEffect(() => {
     if (!selected && markets.length > 0) setSelected(markets[0]);
   }, [markets, selected]);
 
-  // Check price alerts
+seState, useEffect, useRef, useCallback } from 'react';
+import { Calculator, CalcResult } from './Calculator';
+import { Results } from './Results';
+import { StatsBar } from './StatsBar';
+import { AccountTabs } from './AccountTabs';
+import { MarketList } from './MarketList';
+import { CoinLogo } from './CoinLogo';
+import { fmt, fmtPrice, getMarkPrice } from '@/lib/utils';
+import { Market, Ticker, FundingRate, Position, AccountInfo, getTradeHistory, getEquityHistory, getFundingHistory, TradeHistory, EquityHistory, FundingHistory } from '@/lib/pacifica';
+import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
+
+interface RiskManagerProps {
+  markets: Market[];
+  tickers: Record<string, Ticker>;
+  fundingRates: Record<string, FundingRate>;
+  positions: Position[];
+  accountInfo: AccountInfo | null;
+  accountSize: number;
+  onAccountSizeChange: (v: number) => void;
+  wallet: string | null;
+  error?: string | null;
+  onExecute: (r: CalcResult, symbol: string) => void;
+}
+
+type RiskTab = 'results' | 'portfolio';
+
+
+
+function ResizablePanels({ left, center, right }: { left: React.ReactNode; center: React.ReactNode; right: React.ReactNode }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [widths, setWidths] = useState([240, 380]);
+  const dragging = useRef<{ col: number; startX: number; startW: number[] } | null>(null);
+
+  function onMouseDown(col: number) {
+    return (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragging.current = { col, startX: e.clientX, startW: [...widths] };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    };
+  }
+
   useEffect(() => {
-    if (!alerts.length) return;
-    alerts.forEach(alert => {
-      if (alert.triggered) return;
-      const tk = tickers[alert.symbol];
-      if (!tk) return;
-      const price = getMarkPrice(tk);
-      const hit = alert.direction === 'above' ? price >= alert.price : price <= alert.price;
-      if (hit && !notifiedRef.current.has(alert.id)) {
-        notifiedRef.current.add(alert.id);
-        setAlerts(prev => prev.map(a => a.id === alert.id ? { ...a, triggered: true } : a));
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('PacificaLens Alert: ' + alert.symbol, {
-            body: alert.symbol + ' hit $' + fmtPrice(alert.price) + '! Current: $' + fmtPrice(price),
-          });
-        }
-      }
-    });
-  }, [tickers, alerts]);
+    function onMove(e: MouseEvent) {
+      if (!dragging.current || !containerRef.current) return;
+      const dx = e.clientX - dragging.current.startX;
+      const { col, startW } = dragging.current;
+      const containerW = containerRef.current.offsetWidth;
+      const newW = [...startW];
+      if (col === 0) newW[0] = Math.max(160, Math.min(400, startW[0] + dx));
+      else newW[1] = Math.max(280, Math.min(600, startW[1] + dx));
+      if (containerW - newW[0] - newW[1] < 240) return;
+      setWidths(newW);
+    }
+    function onUp() {
+      dragging.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="flex flex-1 overflow-hidden">
+      <div style={{ width: widths[0], flexShrink: 0, overflow: 'hidden' }}>{left}</div>
+      <div onMouseDown={onMouseDown(0)} className="w-1 shrink-0 cursor-col-resize hover:bg-accent/40 active:bg-accent transition-colors" />
+      <div style={{ width: widths[1], flexShrink: 0, overflow: 'hidden' }}>{center}</div>
+      <div onMouseDown={onMouseDown(1)} className="w-1 shrink-0 cursor-col-resize hover:bg-accent/40 active:bg-accent transition-colors" />
+      <div className="flex-1 min-w-0 overflow-hidden">{right}</div>
+    </div>
+  );
+}
+
+export function RiskManager({
+  markets, tickers, fundingRates, positions, accountInfo,
+  accountSize, onAccountSizeChange, wallet, error, onExecute
+}: RiskManagerProps) {
+  const [activeTab, setActiveTab] = useState<RiskTab>('results');
+  const [selected, setSelected] = useState<Market | null>(null);
+  const [result, setResult] = useState<CalcResult | null>(null);
+  const notifiedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!selected && markets.length > 0) setSelected(markets[0]);
+  }, [markets, selected]);
+
+
 
   const equity = accountInfo ? Number(accountInfo.account_equity || accountInfo.balance || 0) : accountSize;
   const totalMarginUsed = accountInfo ? Number(accountInfo.total_margin_used || 0) : 0;
@@ -158,10 +209,6 @@ export function RiskManager({
     return { symbol: p.symbol, side: p.side === 'bid' ? 'Long' : 'Short', markPx, liqPx, dist, pnlPct };
   });
 
-  const closed = journal.filter(j => j.result !== 'open');
-  const wins = closed.filter(j => j.result === 'win').length;
-  const winRate = closed.length > 0 ? (wins / closed.length * 100) : 0;
-  const totalPnl = closed.reduce((s, j) => s + (j.pnl || 0), 0);
 
 
 
