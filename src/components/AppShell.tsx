@@ -15,7 +15,7 @@ import { CalcResult } from '@/components/Calculator';
 import { useOrderLog } from '@/hooks/useOrderLog';
 
 interface ToastState { message: string; type: 'success' | 'error' | 'info' | 'loading'; duration?: number; action?: { label: string; href: string }; }
-type Tab = 'overview' | 'risk' | 'arbitrage' | 'arbitrage-bot' | 'whale' | 'copy' | 'portfolio' | 'trade';
+type Tab = 'overview' | 'risk' | 'arbitrage' | 'arbitrage-bot' | 'whale' | 'copy' | 'portfolio';
 
 const ROUTE_MAP: Record<string, Tab> = {
   '/overview': 'overview',
@@ -25,7 +25,6 @@ const ROUTE_MAP: Record<string, Tab> = {
   '/smart-money': 'whale',
   '/copy-trading': 'copy',
   '/portfolio': 'portfolio',
-  '/trade': 'trade',
 };
 
 const TAB_ROUTE: Record<Tab, string> = {
@@ -36,7 +35,6 @@ const TAB_ROUTE: Record<Tab, string> = {
   'whale': '/smart-money',
   'copy': '/copy-trading',
   'portfolio': '/portfolio',
-  'trade': '/trade',
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {

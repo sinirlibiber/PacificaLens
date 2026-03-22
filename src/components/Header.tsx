@@ -8,7 +8,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { updateBuilderFeeRate, getBuilderOverview, BUILDER_WALLET, toBase58 } from '@/lib/pacificaSigning';
 
-type Tab = 'overview' | 'risk' | 'arbitrage' | 'arbitrage-bot' | 'whale' | 'copy' | 'portfolio' | 'trade';
+type Tab = 'overview' | 'risk' | 'arbitrage' | 'arbitrage-bot' | 'whale' | 'copy' | 'portfolio';
 
 interface HeaderProps {
   tab: Tab;
@@ -168,13 +168,6 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
               className={'px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all ' +
                 (tab === 'portfolio' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2')}>
               Portfolio
-            </button>
-
-            {/* Trade */}
-            <button onClick={() => onTabChange('trade')}
-              className={'px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all ' +
-                (tab === 'trade' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2')}>
-              Trade
             </button>
 
           </div>

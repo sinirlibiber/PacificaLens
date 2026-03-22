@@ -253,8 +253,9 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
   // O(1) lookup map for leaderboard entries by address
   const leaderboardMap = new Map<string, LeaderboardEntry>(leaderboard.map(e => [e.account, e]));
 
-  // Apply filters on top of search
-  const filteredPagedList = pagedList.filter(e => {
+  // Apply filters to FULL leaderboard first, then slice for current page
+  const hasActiveFilters = Object.values(filters).some(v => v !== '' && v !== false);
+  const filteredLeaderboard = hasActiveFilters ? leaderboard.filter(e => {
     if (filters.minPnl7d && e.pnl_7d < Number(filters.minPnl7d)) return false;
     if (filters.minPnl30d && e.pnl_30d < Number(filters.minPnl30d)) return false;
     if (filters.minPnlAll && e.pnl_all < Number(filters.minPnlAll)) return false;
@@ -262,8 +263,13 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     if (filters.minEquity && e.equity_current < Number(filters.minEquity)) return false;
     if (filters.onlyProfitable && e.pnl_30d <= 0) return false;
     return true;
-  });
-  const hasActiveFilters = Object.values(filters).some(v => v !== '' && v !== false);
+  }) : pagedList;
+  // When filters active: paginate filtered full list; otherwise use hook's pagedList
+  const PAGE_SIZE_FILTER = 50;
+  const filteredTotalPages = hasActiveFilters ? Math.ceil(filteredLeaderboard.length / PAGE_SIZE_FILTER) : totalPages;
+  const filteredPagedList = hasActiveFilters
+    ? filteredLeaderboard.slice(page * PAGE_SIZE_FILTER, (page + 1) * PAGE_SIZE_FILTER)
+    : pagedList;
 
   const myBalance = accountInfo ? Number(accountInfo.available_to_spend || accountInfo.balance || 0) : 0;
   const { addEntry, updateEntry } = useOrderLog(wallet);
@@ -441,116 +447,119 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
       {/* Main content — shrinks when drawer open */}
       <div className={`flex flex-col overflow-hidden transition-all duration-300 ${selectedTrader ? 'flex-1 min-w-0' : 'flex-1'}`}>
 
-      {/* Top bar */}
-      <div className="px-6 py-3 border-b border-border1 bg-surface flex items-center gap-4 shrink-0 justify-center">
-        <div className="w-full max-w-[1280px] flex items-center gap-4">
-        {/* Tab switcher */}
-        <div className="flex bg-surface2 border border-border1 rounded-lg p-0.5 gap-0">
-          <button
-            onClick={() => setActiveTab('leaderboard')}
-            className={`px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all ${
-              activeTab === 'leaderboard' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2'
-            }`}>
-            Leaderboard
-          </button>
-          <button
-            onClick={() => setActiveTab('favorites')}
-            className={`px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all flex items-center gap-1.5 ${
-              activeTab === 'favorites' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2'
-            }`}>
-            Watching
-            {favorites.length > 0 && (
-              <span className="bg-accent text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                {favorites.length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        </div>{/* end max-w wrapper */}
-        {activeTab === 'leaderboard' && (
-          <>
-            {/* Search */}
-            <div className="relative flex-1 max-w-64">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text3 text-[12px]">🔍</span>
-              <input
-                type="text"
-                placeholder="Search wallet..."
-                value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); setPage(0); }}
-                className="w-full bg-surface2 border border-border1 rounded-xl pl-8 pr-3 py-1.5 text-[12px] text-text1 outline-none focus:border-accent transition-colors placeholder-text3"
-              />
-            </div>
-
-            <div className="ml-auto flex items-center gap-3">
-              {/* Filter button */}
-              <button onClick={() => setShowFilters(v => !v)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all ${
-                  showFilters || hasActiveFilters
-                    ? 'bg-accent/10 border-accent/30 text-accent'
-                    : 'border-border1 text-text3 hover:border-accent/40 hover:text-accent'
-                }`}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-                </svg>
-                Filter
-                {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
-              </button>
-              <span className="text-[11px] text-text3">{filteredPagedList.length.toLocaleString()} traders</span>
-              <button
-                onClick={fetchLeaderboard}
-                disabled={lbLoading}
-                className="flex items-center gap-1.5 text-[11px] text-accent hover:underline disabled:opacity-50">
-                {lbLoading ? (
-                  <><div className="w-3 h-3 border border-accent/30 border-t-accent rounded-full animate-spin" /> Loading...</>
-                ) : (
-                  <>↻ Refresh</>
-                )}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Filter panel */}
-      {showFilters && activeTab === 'leaderboard' && (
-        <div className="border-b border-border1 bg-surface2 px-4 py-3">
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            {[
-              { label: 'Min PnL 7D ($)', key: 'minPnl7d' },
-              { label: 'Min PnL 30D ($)', key: 'minPnl30d' },
-              { label: 'Min PnL All Time ($)', key: 'minPnlAll' },
-              { label: 'Min Volume 30D ($)', key: 'minVolume' },
-              { label: 'Min Equity ($)', key: 'minEquity' },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">{f.label}</label>
-                <input type="number" placeholder="0"
-                  value={filters[f.key as keyof typeof filters] as string}
-                  onChange={e => setFilters(prev => ({ ...prev, [f.key]: e.target.value }))}
-                  className="w-full bg-surface border border-border1 rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-text1 outline-none focus:border-accent transition-colors" />
-              </div>
-            ))}
-            <div className="flex items-end">
-              <button onClick={() => setFilters(prev => ({ ...prev, onlyProfitable: !prev.onlyProfitable }))}
-                className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all ${
-                  filters.onlyProfitable ? 'bg-success/10 border-success/30 text-success' : 'border-border1 text-text3 hover:border-border2'
-                }`}>
-                <div className={`relative w-7 h-4 rounded-full transition-all ${filters.onlyProfitable ? 'bg-success' : 'bg-border2'}`}>
-                  <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${filters.onlyProfitable ? 'translate-x-3' : ''}`} />
-                </div>
-                Profitable only (30d)
-              </button>
-            </div>
-          </div>
-          {hasActiveFilters && (
-            <button onClick={() => setFilters({ minPnl7d: '', minPnl30d: '', minPnlAll: '', minVolume: '', minEquity: '', onlyProfitable: false })}
-              className="text-[11px] text-danger hover:underline">
-              Clear all filters
+      {/* Top bar — all inside max-w-[1280px] wrapper */}
+      <div className="border-b border-border1 bg-surface shrink-0">
+        <div className="max-w-[1280px] mx-auto px-6 py-3 flex items-center gap-4">
+          {/* Tab switcher */}
+          <div className="flex bg-surface2 border border-border1 rounded-lg p-0.5 shrink-0">
+            <button
+              onClick={() => setActiveTab('leaderboard')}
+              className={`px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all ${
+                activeTab === 'leaderboard' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2'
+              }`}>
+              Leaderboard
             </button>
+            <button
+              onClick={() => setActiveTab('favorites')}
+              className={`px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                activeTab === 'favorites' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2'
+              }`}>
+              Watching
+              {favorites.length > 0 && (
+                <span className="bg-accent text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                  {favorites.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {activeTab === 'leaderboard' && (
+            <>
+              {/* Search */}
+              <div className="relative flex-1 max-w-64">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text3 text-[12px]">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search wallet..."
+                  value={searchQuery}
+                  onChange={e => { setSearchQuery(e.target.value); setPage(0); }}
+                  className="w-full bg-surface2 border border-border1 rounded-xl pl-8 pr-3 py-1.5 text-[12px] text-text1 outline-none focus:border-accent transition-colors placeholder-text3"
+                />
+              </div>
+
+              <div className="ml-auto flex items-center gap-3 shrink-0">
+                <button onClick={() => setShowFilters(v => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all ${
+                    showFilters || hasActiveFilters
+                      ? 'bg-accent/10 border-accent/30 text-accent'
+                      : 'border-border1 text-text3 hover:border-accent/40 hover:text-accent'
+                  }`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                  </svg>
+                  Filter
+                  {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+                </button>
+                <span className="text-[11px] text-text3">
+                  {hasActiveFilters
+                    ? `${filteredLeaderboard.length.toLocaleString()} / ${leaderboard.length.toLocaleString()} traders`
+                    : `${leaderboard.length.toLocaleString()} traders`
+                  }
+                </span>
+                <button onClick={fetchLeaderboard} disabled={lbLoading}
+                  className="flex items-center gap-1.5 text-[11px] text-accent hover:underline disabled:opacity-50">
+                  {lbLoading
+                    ? <><div className="w-3 h-3 border border-accent/30 border-t-accent rounded-full animate-spin" /> Loading...</>
+                    : <>↻ Refresh</>
+                  }
+                </button>
+              </div>
+            </>
           )}
         </div>
-      )}
+
+        {/* Filter panel */}
+        {showFilters && activeTab === 'leaderboard' && (
+          <div className="border-t border-border1 bg-surface2">
+            <div className="max-w-[1280px] mx-auto px-6 py-3">
+              <div className="grid grid-cols-6 gap-3 items-end">
+                {[
+                  { label: 'Min PnL 7D ($)', key: 'minPnl7d' },
+                  { label: 'Min PnL 30D ($)', key: 'minPnl30d' },
+                  { label: 'Min PnL All Time ($)', key: 'minPnlAll' },
+                  { label: 'Min Vol 30D ($)', key: 'minVolume' },
+                  { label: 'Min Equity ($)', key: 'minEquity' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">{f.label}</label>
+                    <input type="number" placeholder="0"
+                      value={filters[f.key as keyof typeof filters] as string}
+                      onChange={e => { setFilters(prev => ({ ...prev, [f.key]: e.target.value })); setPage(0); }}
+                      className="w-full bg-surface border border-border1 rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-text1 outline-none focus:border-accent transition-colors" />
+                  </div>
+                ))}
+                <div className="flex flex-col gap-2">
+                  <button onClick={() => { setFilters(prev => ({ ...prev, onlyProfitable: !prev.onlyProfitable })); setPage(0); }}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all ${
+                      filters.onlyProfitable ? 'bg-success/10 border-success/30 text-success' : 'border-border1 text-text3 hover:border-border2'
+                    }`}>
+                    <div className={`relative w-7 h-4 rounded-full transition-all ${filters.onlyProfitable ? 'bg-success' : 'bg-border2'}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${filters.onlyProfitable ? 'translate-x-3' : ''}`} />
+                    </div>
+                    Profitable only
+                  </button>
+                  {hasActiveFilters && (
+                    <button onClick={() => { setFilters({ minPnl7d: '', minPnl30d: '', minPnlAll: '', minVolume: '', minEquity: '', onlyProfitable: false }); setPage(0); }}
+                      className="text-[11px] text-danger hover:underline text-left">
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto bg-bg">
@@ -1326,6 +1335,28 @@ function CopyTradeModal({
               )}
             </div>
           </div>
+
+          {/* Slippage warning */}
+          {entryPrice > 0 && traderEntry > 0 && (() => {
+            const slipPct = Math.abs((entryPrice - traderEntry) / traderEntry * 100);
+            if (slipPct < 2) return null;
+            return (
+              <div className={`flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-[11px] leading-relaxed ${
+                slipPct > 10
+                  ? 'bg-danger/8 border-danger/30 text-danger'
+                  : 'bg-warn/8 border-warn/30 text-warn'
+              }`}>
+                <span className="text-[14px] shrink-0">{slipPct > 10 ? '⛔' : '⚠️'}</span>
+                <div>
+                  <strong>{slipPct.toFixed(1)}% slippage</strong> — The price has moved significantly since this trader opened. 
+                  {slipPct > 10
+                    ? ' This is a high-risk copy.'
+                    : ' Consider if this trade is still valid at current price.'
+                  }
+                </div>
+              </div>
+            );
+          })()}
 
           {/* CTA */}
           <button onClick={handleConfirm} disabled={placing || amount <= 0}
