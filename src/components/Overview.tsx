@@ -211,7 +211,22 @@ export function Overview({ markets, tickers }: OverviewProps) {
     .slice(0, 3);
 
   const liquidations = trades.filter(t => t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation');
-  const chartData = candles.map(c => ({ time: new Date(c.t).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }), price: Number(c.c) }));
+  const chartData = candles.map(c => {
+    const d = new Date(c.t);
+    let time: string;
+    if (chartInterval === '1d') {
+      time = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } else if (chartInterval === '4h' || chartInterval === '1h') {
+      time = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } else {
+      time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+    return { time, price: Number(c.c) };
+  });
+  // Chart color based on candle data (first vs last), not 24h change
+  const chartChange = chartData.length > 1
+    ? chartData[chartData.length - 1].price - chartData[0].price
+    : selChange;
   const selTicker = selected ? tickers[selected.symbol] : null;
   const selPrice = getMarkPrice(selTicker ?? undefined);
   const selChange = get24hChange(selTicker ?? undefined);
@@ -429,10 +444,10 @@ export function Overview({ markets, tickers }: OverviewProps) {
           </div>
 
           <div className="flex border-b border-border1 bg-surface shrink-0">
-            {(['chart', 'orderbook', 'liquidations'] as const).map(t => (
-              <button key={t} onClick={() => setDetailTab(t)}
+            {(['chart', 'orderbook', 'trades'] as const).map(t => (
+              <button key={t} onClick={() => setDetailTab(t as 'chart' | 'orderbook' | 'liquidations')}
                 className={'px-4 py-2 text-[11px] font-semibold uppercase tracking-wide border-b-2 transition-all ' + (detailTab === t ? 'border-accent text-accent' : 'border-transparent text-text3 hover:text-text2')}>
-                {t === 'liquidations' ? 'Liquidations (' + liquidations.length + ')' : t}
+                {t === 'trades' ? 'Recent Trades' : t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
           </div>
@@ -452,14 +467,14 @@ export function Overview({ markets, tickers }: OverviewProps) {
                       <AreaChart data={chartData} margin={{ top: 5, right: 15, left: 5, bottom: 5 }}>
                         <defs>
                           <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={selChange >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0.12} />
-                            <stop offset="95%" stopColor={selChange >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0} />
+                            <stop offset="5%" stopColor={chartChange >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0.12} />
+                            <stop offset="95%" stopColor={chartChange >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                         <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => '$' + fmtPrice(v)} width={75} />
                         <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 11 }} formatter={(v: number) => ['$' + fmtPrice(v), 'Price']} />
-                        <Area type="monotone" dataKey="price" stroke={selChange >= 0 ? '#10b981' : '#ef4444'} strokeWidth={2} fill="url(#grad)" dot={false} />
+                        <Area type="monotone" dataKey="price" stroke={chartChange >= 0 ? '#10b981' : '#ef4444'} strokeWidth={2} fill="url(#grad)" dot={false} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -496,50 +511,32 @@ export function Overview({ markets, tickers }: OverviewProps) {
               </div>
             )}
 
-            {detailTab === 'liquidations' && (
+            {(detailTab === 'liquidations' || detailTab as string === 'trades') && (
               <div className="flex flex-col h-full overflow-hidden">
-                <div className="flex-1 overflow-y-auto">
-                  {liquidations.length > 0 ? (
-                    <table className="w-full">
-                      <thead className="sticky top-0 bg-surface2 border-b border-border1">
-                        <tr>{['Time', 'Side', 'Price', 'Size', 'Type'].map(h => <th key={h} className="px-3 py-1.5 text-[10px] text-text3 font-semibold uppercase text-left">{h}</th>)}</tr>
-                      </thead>
-                      <tbody>
-                        {liquidations.map((t, i) => {
-                          const isLong = t.side.includes('long');
-                          return (
-                            <tr key={i} className="border-b border-border1 hover:bg-surface2">
-                              <td className="px-3 py-1.5 text-[11px] text-text3 font-mono">{new Date(t.created_at).toLocaleTimeString()}</td>
-                              <td className={'px-3 py-1.5 text-[11px] font-bold ' + (isLong ? 'text-danger' : 'text-success')}>{isLong ? 'LONG LIQ' : 'SHORT LIQ'}</td>
-                              <td className="px-3 py-1.5 text-[11px] font-mono">${fmtPrice(t.price)}</td>
-                              <td className="px-3 py-1.5 text-[11px] font-mono">{fmt(Number(t.amount), 4)}</td>
-                              <td className="px-3 py-1.5 text-[10px] text-text3">{t.cause === 'backstop_liquidation' ? 'Backstop' : 'Market'}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-text3 gap-2">
-                      <span className="text-xl">✓</span><p className="text-sm">No liquidations</p>
-                    </div>
-                  )}
+                <div className="grid px-3 py-1.5 bg-surface2 border-b border-border1 text-[10px] text-text3 font-semibold uppercase shrink-0"
+                  style={{ gridTemplateColumns: '80px 1fr 1fr 1fr' }}>
+                  <span>Time</span><span>Side</span><span>Price</span><span className="text-right">Size</span>
                 </div>
-                <div className="border-t border-border1 max-h-48 overflow-y-auto shrink-0">
-                  <div className="px-4 py-1.5 bg-surface2 border-b border-border1 sticky top-0">
-                    <span className="text-[10px] text-text3 font-semibold uppercase">Recent Trades</span>
-                  </div>
-                  {trades.slice(0, 30).map((t, i) => {
-                    const isLong = t.side.includes('long');
-                    return (
-                      <div key={i} className="grid px-3 py-1.5 border-b border-border1 hover:bg-surface2" style={{ gridTemplateColumns: '80px 1fr 1fr 1fr' }}>
-                        <span className="text-[10px] text-text3 font-mono">{new Date(t.created_at).toLocaleTimeString()}</span>
-                        <span className={'text-[11px] font-semibold ' + (isLong ? 'text-success' : 'text-danger')}>{t.side.replace('_', ' ').toUpperCase()}</span>
-                        <span className="text-[11px] font-mono text-text1">${fmtPrice(t.price)}</span>
-                        <span className="text-[11px] font-mono text-text2 text-right">{fmt(Number(t.amount), 4)}</span>
-                      </div>
-                    );
-                  })}
+                <div className="flex-1 overflow-y-auto">
+                  {trades.length === 0 ? (
+                    <div className="flex items-center justify-center py-12 text-text3 text-sm">Loading trades...</div>
+                  ) : (
+                    trades.slice(0, 100).map((t, i) => {
+                      const isOpen = t.side.includes('open') || t.side === 'bid';
+                      const isLong = t.side.includes('long') || t.side === 'bid';
+                      return (
+                        <div key={i} className="grid px-3 py-1.5 border-b border-border1 hover:bg-surface2/60 transition-colors"
+                          style={{ gridTemplateColumns: '80px 1fr 1fr 1fr' }}>
+                          <span className="text-[10px] text-text3 font-mono">{new Date(t.created_at).toLocaleTimeString()}</span>
+                          <span className={`text-[11px] font-semibold ${isLong ? 'text-success' : 'text-danger'}`}>
+                            {t.side.replace(/_/g, ' ').toUpperCase()}
+                          </span>
+                          <span className="text-[11px] font-mono text-text1">${fmtPrice(Number(t.price))}</span>
+                          <span className="text-[11px] font-mono text-text2 text-right">{fmt(Number(t.amount), 4)}</span>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             )}
