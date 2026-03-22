@@ -95,6 +95,56 @@ export function Overview({ markets, tickers }: OverviewProps) {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [chartInterval, setChartInterval] = useState('1h');
+
+  // News & Calendar state
+  interface NewsItem { title: string; link: string; source: string; pubDate: string; description?: string; urlToImage?: string; timeAgo?: string; category?: string; }
+  interface CalEvent { event: string; country: string; currency: string; date: string; time: string; impact: string; forecast?: string; previous?: string; actual?: string; }
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
+  const [newsFilter, setNewsFilter] = useState<'All'|'Crypto'|'Macro'|'Equities'>('All');
+  const [calFilter, setCalFilter] = useState<'Global'|'US'|'EU'|'JP'|'CN'|'GB'>('Global');
+
+  useEffect(() => {
+    async function loadNews() {
+      try {
+        const res = await fetch('/api/news');
+        if (!res.ok) return;
+        const data = await res.json();
+        const articles = data.articles || data.data || data || [];
+        setNews(Array.isArray(articles) ? articles.slice(0, 30) : []);
+      } catch {}
+    }
+    loadNews();
+    const iv = setInterval(loadNews, 120000);
+    return () => clearInterval(iv);
+  }, []);
+
+  useEffect(() => {
+    async function loadCalendar() {
+      try {
+        const res = await fetch('/api/calendar');
+        if (!res.ok) return;
+        const data = await res.json();
+        const events = data.data || data.calendarData || data || [];
+        if (Array.isArray(events)) {
+          setCalEvents(events.slice(0, 40).map((e: Record<string,string>) => ({
+            event: e.event || e.name || e.title || 'Event',
+            country: e.country || e.currency || '',
+            currency: e.currency || e.country || '',
+            date: e.date || e.releaseDate || '',
+            time: e.time || '',
+            impact: e.importance || e.impact || '1',
+            forecast: e.forecast || e.forecastValue || '',
+            previous: e.previous || e.previousValue || '',
+            actual: e.actual || e.actualValue || '',
+          })));
+        }
+      } catch {}
+    }
+    loadCalendar();
+    const iv = setInterval(loadCalendar, 300000);
+    return () => clearInterval(iv);
+  }, []);
   const [detailTab, setDetailTab] = useState<'chart' | 'orderbook' | 'liquidations'>('chart');
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('volume');
@@ -240,10 +290,85 @@ export function Overview({ markets, tickers }: OverviewProps) {
     </th>
   );
 
+  const countryFlag: Record<string,string> = { US: '🇺🇸', EU: '🇪🇺', JP: '🇯🇵', CN: '🇨🇳', GB: '🇬🇧', DE: '🇩🇪', AU: '🇦🇺', CA: '🇨🇦', NZ: '🇳🇿', CH: '🇨🇭' };
+
   return (
-    <div className="flex flex-col h-full overflow-auto bg-bg">
-      {/* Centered container */}
-      <div className="w-full max-w-[1400px] mx-auto px-8">
+    <div className="flex h-full overflow-hidden bg-bg">
+
+      {/* LEFT SIDEBAR — Economic Calendar */}
+      <div className="w-[280px] shrink-0 border-r border-border1 flex flex-col overflow-hidden">
+        <div className="px-3 py-3 border-b border-border1 bg-surface shrink-0">
+          <div className="text-[12px] font-bold text-text1 mb-2">Economic Calendar</div>
+          <div className="flex flex-wrap gap-1">
+            {(['Global','US','EU','JP','CN','GB'] as const).map(f => (
+              <button key={f} onClick={() => setCalFilter(f)}
+                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all ${calFilter === f ? 'bg-accent text-white' : 'bg-surface2 text-text3 hover:text-text2 border border-border1'}`}>
+                {f === 'Global' ? 'Global' : `${countryFlag[f] || ''} ${f}`}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {calEvents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2 text-text3">
+              <div className="w-4 h-4 border-2 border-border2 border-t-accent rounded-full animate-spin" />
+              <span className="text-[11px]">Loading calendar...</span>
+            </div>
+          ) : (() => {
+            const filtered = calFilter === 'Global' ? calEvents : calEvents.filter(e => e.currency === calFilter || e.country === calFilter || e.country?.includes(calFilter));
+            let lastDate = '';
+            return (
+              <div className="pb-4">
+                {filtered.map((ev, i) => {
+                  const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase() : '';
+                  const showDate = dateStr !== lastDate;
+                  if (showDate) lastDate = dateStr;
+                  const impactNum = Number(ev.impact) || 1;
+                  const impactColor = impactNum >= 3 ? 'bg-danger' : impactNum === 2 ? 'bg-warn' : 'bg-success/50';
+                  const now = Date.now();
+                  const evTime = ev.date ? new Date(ev.date).getTime() : 0;
+                  const diffMs = evTime - now;
+                  const diffDays = Math.floor(diffMs / 86400000);
+                  const diffHrs = Math.floor((diffMs % 86400000) / 3600000);
+                  const countdown = diffMs > 0 ? `${diffDays > 0 ? diffDays + 'd ' : ''}${diffHrs}h` : 'Live';
+                  return (
+                    <div key={i}>
+                      {showDate && (
+                        <div className="px-3 py-1.5 text-[9px] font-bold text-text3 uppercase tracking-wider bg-surface2/50 border-b border-border1 sticky top-0">
+                          {dateStr}
+                        </div>
+                      )}
+                      <div className="flex items-start gap-2.5 px-3 py-2.5 border-b border-border1 hover:bg-surface2/40 transition-colors">
+                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${impactColor}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-semibold text-text1 leading-snug mb-0.5">{ev.event}</div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-text3">
+                            <span>{countryFlag[ev.currency] || ''} {ev.currency}</span>
+                            {ev.time && <span>· {ev.time} UTC</span>}
+                            {(ev.forecast || ev.previous) && (
+                              <span className="ml-auto">
+                                {ev.forecast && `F: ${ev.forecast}`}
+                                {ev.previous && ` P: ${ev.previous}`}
+                              </span>
+                            )}
+                          </div>
+                          {diffMs > 0 && (
+                            <div className="text-[9px] text-text3 mt-0.5">{countdown} away</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* CENTER — main content */}
+      <div className="flex-1 overflow-auto">
+      <div className="w-full max-w-[1100px] mx-auto px-6">
 
         {/* TOP ROW: Fear&Greed + Altcoin Season + Trending + Top Gainers */}
         <div className="grid grid-cols-4 gap-4 py-5">
@@ -416,6 +541,54 @@ export function Overview({ markets, tickers }: OverviewProps) {
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+      </div>{/* end center */}
+
+      {/* RIGHT SIDEBAR — Global News */}
+      <div className="w-[280px] shrink-0 border-l border-border1 flex flex-col overflow-hidden">
+        <div className="px-3 py-3 border-b border-border1 bg-surface shrink-0">
+          <div className="text-[12px] font-bold text-text1 mb-2">Global News</div>
+          <div className="flex gap-1 flex-wrap">
+            {(['All','Crypto','Macro','Equities'] as const).map(f => (
+              <button key={f} onClick={() => setNewsFilter(f)}
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all ${newsFilter === f ? 'bg-accent text-white' : 'bg-surface2 text-text3 hover:text-text2 border border-border1'}`}>
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {news.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2 text-text3">
+              <div className="w-4 h-4 border-2 border-border2 border-t-accent rounded-full animate-spin" />
+              <span className="text-[11px]">Loading news...</span>
+            </div>
+          ) : (
+            <div className="pb-4">
+              {news
+                .filter(n => newsFilter === 'All' || (n.category || '').toLowerCase().includes(newsFilter.toLowerCase()))
+                .map((n, i) => (
+                  <a key={i} href={n.link} target="_blank" rel="noopener noreferrer"
+                    className="flex gap-2.5 px-3 py-2.5 border-b border-border1 hover:bg-surface2/40 transition-colors group">
+                    {n.urlToImage && (
+                      <img src={n.urlToImage} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0 bg-surface2" onError={e => (e.currentTarget.style.display = 'none')} />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-semibold text-text1 leading-snug mb-1 group-hover:text-accent transition-colors line-clamp-3">{n.title}</div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-text3">
+                        <span>{n.source || 'News'}</span>
+                        {n.timeAgo && <span>· {n.timeAgo}</span>}
+                        {n.category && (
+                          <span className="ml-auto px-1.5 py-0.5 rounded-full bg-surface2 border border-border1 text-[9px]">{n.category}</span>
+                        )}
+                      </div>
+                    </div>
+                  </a>
+                ))
+              }
+            </div>
+          )}
         </div>
       </div>
 

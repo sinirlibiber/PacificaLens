@@ -776,7 +776,7 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                           <span className="text-text3 text-[11px]">{new Date(e.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
                           <span className="font-bold text-text1">{e.symbol}</span>
                           <span className={`font-semibold ${e.side === 'long' ? 'text-success' : 'text-danger'}`}>{e.side === 'long' ? 'Long' : 'Short'}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block ${e.result === 'win' ? 'bg-success/10 text-success' : e.result === 'loss' ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent'}`}>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block whitespace-nowrap w-fit ${e.result === 'win' ? 'bg-success/10 text-success' : e.result === 'loss' ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent'}`}>
                             {e.result.toUpperCase()}
                           </span>
                           <span className={`font-mono font-semibold ${(e.pnl || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
@@ -785,7 +785,7 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                           <div className="flex items-center justify-between">
                             <span className="text-text3 truncate text-[11px]">{e.notes}</span>
                             <button onClick={() => deleteJournalEntry(e.id)}
-                              className="opacity-0 group-hover:opacity-100 text-danger hover:text-danger/70 transition-all text-[13px] ml-2 font-bold">✕</button>
+                              className="text-danger/50 hover:text-danger transition-colors text-[13px] ml-2 font-bold shrink-0">✕</button>
                           </div>
                         </div>
                       ))}
