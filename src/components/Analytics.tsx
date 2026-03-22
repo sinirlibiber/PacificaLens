@@ -10,9 +10,9 @@ import {
 } from 'recharts';
 
 interface AnalyticsProps {
-  markets: Market[];
-  tickers: Record<string, Ticker>;
-  wallet: string | null;
+  markets?: Market[];
+  tickers?: Record<string, Ticker>;
+  wallet?: string | null;
 }
 
 interface NewsItem {
@@ -47,7 +47,45 @@ const TOOLTIP_STYLE = {
   color: 'var(--color-text1)',
 };
 
-export function Analytics({ markets, tickers }: AnalyticsProps) {
+export function Analytics({ markets: propMarkets, tickers: propTickers }: AnalyticsProps) {
+  // Self-fetch markets/tickers if not provided via props
+  const [selfMarkets, setSelfMarkets] = useState<Market[]>([]);
+  const [selfTickers, setSelfTickers] = useState<Record<string, Ticker>>({});
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    if (propMarkets && propMarkets.length > 0) {
+      setSelfMarkets(propMarkets);
+      setSelfTickers(propTickers || {});
+      setDataLoading(false);
+      return;
+    }
+    // Fetch directly from Pacifica API
+    async function load() {
+      try {
+        const [mRes, tRes] = await Promise.all([
+          fetch('/api/proxy?path=' + encodeURIComponent('info')),
+          fetch('/api/proxy?path=' + encodeURIComponent('info/prices')),
+        ]);
+        const mData = await mRes.json();
+        const tData = await tRes.json();
+        if (mData.success && Array.isArray(mData.data)) setSelfMarkets(mData.data);
+        if (tData.success && Array.isArray(tData.data)) {
+          const map: Record<string, Ticker> = {};
+          (tData.data as Ticker[]).forEach((t) => { if (t.symbol) map[t.symbol] = t; });
+          setSelfTickers(map);
+        }
+      } catch {}
+      finally { setDataLoading(false); }
+    }
+    load();
+    const iv = setInterval(load, 5000);
+    return () => clearInterval(iv);
+  }, [propMarkets, propTickers]);
+
+  const markets = selfMarkets.length > 0 ? selfMarkets : (propMarkets || []);
+  const tickers = Object.keys(selfTickers).length > 0 ? selfTickers : (propTickers || {});
+
   const [news, setNews] = useState<NewsItem[]>([]);
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
   const [newsFilter, setNewsFilter] = useState<'All' | 'Crypto' | 'Macro'>('All');
@@ -143,6 +181,15 @@ export function Analytics({ markets, tickers }: AnalyticsProps) {
 
   const filteredCal = calFilter === 'Global' ? calEvents :
     calEvents.filter(e => e.country === calFilter || e.currency === calFilter);
+
+  if (dataLoading && markets.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center gap-3 bg-bg">
+        <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
+        <span className="text-[13px] text-text3">Loading market data...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full overflow-hidden bg-bg">
