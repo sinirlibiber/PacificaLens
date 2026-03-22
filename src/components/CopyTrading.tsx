@@ -1137,8 +1137,8 @@ function CopyTradeModal({
             {[
               { label: 'Trader Entry', value: '$' + fmtPrice(traderEntry), color: 'text-text1' },
               { label: 'Mark Price', value: '$' + fmtPrice(markPrice), color: markPrice > traderEntry ? 'text-success' : 'text-danger' },
-              { label: 'Slippage', value: traderEntry > 0 ? ((markPrice - traderEntry) / traderEntry * 100).toFixed(2) + '%' : '—',
-                color: Math.abs((markPrice - traderEntry) / traderEntry * 100) < 0.5 ? 'text-success' : Math.abs((markPrice - traderEntry) / traderEntry * 100) < 2 ? 'text-warn' : 'text-danger' },
+              { label: 'Price Drift', value: traderEntry > 0 ? ((markPrice - traderEntry) / traderEntry * 100).toFixed(2) + '%' : '—',
+                color: 'text-text3' },
             ].map(s => (
               <div key={s.label} className="px-3 py-2 text-center">
                 <div className="text-[9px] text-text3 uppercase tracking-wide">{s.label}</div>
@@ -1336,23 +1336,15 @@ function CopyTradeModal({
             </div>
           </div>
 
-          {/* Slippage warning */}
+          {/* Price drift warning — only show if very large drift */}
           {entryPrice > 0 && traderEntry > 0 && (() => {
-            const slipPct = Math.abs((entryPrice - traderEntry) / traderEntry * 100);
-            if (slipPct < 2) return null;
+            const driftPct = Math.abs((markPrice - traderEntry) / traderEntry * 100);
+            if (driftPct < 15) return null;
             return (
-              <div className={`flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-[11px] leading-relaxed ${
-                slipPct > 10
-                  ? 'bg-danger/8 border-danger/30 text-danger'
-                  : 'bg-warn/8 border-warn/30 text-warn'
-              }`}>
-                <span className="text-[14px] shrink-0">{slipPct > 10 ? '⛔' : '⚠️'}</span>
+              <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl border bg-warn/8 border-warn/30 text-warn text-[11px] leading-relaxed">
+                <span className="text-[14px] shrink-0">⚠️</span>
                 <div>
-                  <strong>{slipPct.toFixed(1)}% slippage</strong> — The price has moved significantly since this trader opened. 
-                  {slipPct > 10
-                    ? ' This is a high-risk copy.'
-                    : ' Consider if this trade is still valid at current price.'
-                  }
+                  <strong>Price moved {driftPct.toFixed(1)}% since trader entry.</strong> Your order will execute at the current mark price, not the trader&apos;s entry price. Verify the trade still makes sense before copying.
                 </div>
               </div>
             );
