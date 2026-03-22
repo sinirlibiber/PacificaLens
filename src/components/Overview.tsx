@@ -210,7 +210,6 @@ export function Overview({ markets, tickers }: OverviewProps) {
     .sort((a, b) => get24hChange(tickers[a.symbol]) - get24hChange(tickers[b.symbol]))
     .slice(0, 3);
 
-  const liquidations = trades.filter(t => t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation');
   const chartData = candles.map(c => {
     const d = new Date(c.t);
     let time: string;
@@ -224,12 +223,12 @@ export function Overview({ markets, tickers }: OverviewProps) {
     return { time, price: Number(c.c) };
   });
   // Chart color based on candle data (first vs last), not 24h change
-  const chartChange = chartData.length > 1
-    ? chartData[chartData.length - 1].price - chartData[0].price
-    : selChange;
   const selTicker = selected ? tickers[selected.symbol] : null;
   const selPrice = getMarkPrice(selTicker ?? undefined);
   const selChange = get24hChange(selTicker ?? undefined);
+  const chartChange = chartData.length > 1
+    ? chartData[chartData.length - 1].price - chartData[0].price
+    : selChange;
 
   const SortTh = ({ label, k }: { label: string; k: SortKey }) => (
     <th className="py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide cursor-pointer hover:text-text1 select-none whitespace-nowrap text-right first:text-left px-2" onClick={() => toggleSort(k)}>
