@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Calculator, CalcResult } from './Calculator';
 import { Results } from './Results';
 import { StatsBar } from './StatsBar';
-import { AccountTabs } from './AccountTabs';
 import { MarketList } from './MarketList';
 import { CoinLogo } from './CoinLogo';
 import { fmt, getMarkPrice } from '@/lib/utils';
@@ -255,7 +254,7 @@ export function RiskManager({
         }
       />
 
-      <AccountTabs positions={positions} tickers={tickers} wallet={wallet ?? null} />
+
     </div>
   );
 }

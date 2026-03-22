@@ -210,8 +210,10 @@ export function Overview({ markets, tickers }: OverviewProps) {
     .sort((a, b) => get24hChange(tickers[a.symbol]) - get24hChange(tickers[b.symbol]))
     .slice(0, 3);
 
-  const chartData = candles.map(c => {
-    const d = new Date(c.t);
+  // Sort candles ascending by time (oldest first → newest last)
+  const sortedCandles = [...candles].sort((a, b) => a.t - b.t);
+  const chartData = sortedCandles.map(candle => {
+    const d = new Date(candle.t);
     let time: string;
     if (chartInterval === '1d') {
       time = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -220,14 +222,16 @@ export function Overview({ markets, tickers }: OverviewProps) {
     } else {
       time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     }
-    return { time, price: Number(c.c) };
+    return { time, price: Number(candle.c), open: Number(candle.o) };
   });
-  // Chart color based on candle data (first vs last), not 24h change
   const selTicker = selected ? tickers[selected.symbol] : null;
   const selPrice = getMarkPrice(selTicker ?? undefined);
   const selChange = get24hChange(selTicker ?? undefined);
-  const chartChange = chartData.length > 1
-    ? chartData[chartData.length - 1].price - chartData[0].price
+  // Color = first candle open vs last candle close (true period direction)
+  const firstCandle = sortedCandles[0];
+  const lastCandle = sortedCandles[sortedCandles.length - 1];
+  const chartChange = firstCandle && lastCandle
+    ? Number(lastCandle.c) - Number(firstCandle.o)
     : selChange;
 
   const SortTh = ({ label, k }: { label: string; k: SortKey }) => (

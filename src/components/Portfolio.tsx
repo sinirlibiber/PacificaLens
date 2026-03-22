@@ -576,43 +576,61 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
             {/* COPY PERFORMANCE */}
             {tab === 'copy_perf' && (() => {
               const perf = getCopyPerformance(orderLog);
+              const totalOrders = perf.reduce((s, p) => s + p.totalOrders, 0);
+              const totalSuccess = perf.reduce((s, p) => s + p.successOrders, 0);
               if (!perf.length) return (
-                <div className="py-16 text-center">
-                  <div className="text-[13px] text-text3 mb-1">No copy trade data yet</div>
-                  <div className="text-[11px] text-text3">Copy trades from the Copy tab to see performance here</div>
+                <div className="py-16 text-center space-y-2">
+                  <div className="text-3xl mb-3">📋</div>
+                  <div className="text-[14px] font-semibold text-text1">No copy trades yet</div>
+                  <div className="text-[12px] text-text3">Go to the Copy tab, find a trader and copy their positions</div>
                 </div>
               );
               return (
                 <div>
-                  <div className="grid grid-cols-5 gap-3 px-4 py-2 text-[10px] text-text3 uppercase tracking-wide font-semibold border-b border-border1 bg-surface2">
-                    <span>Trader</span><span className="text-right">Orders</span><span className="text-right">Success Rate</span><span className="text-right">Total PnL</span><span className="text-right">Best / Worst</span>
+                  {/* Summary row */}
+                  <div className="grid grid-cols-3 gap-3 p-4 border-b border-border1">
+                    {[
+                      { label: 'Traders Copied', value: String(perf.length), color: 'text-accent' },
+                      { label: 'Total Orders', value: String(totalOrders), color: 'text-text1' },
+                      { label: 'Success Rate', value: totalOrders > 0 ? `${(totalSuccess / totalOrders * 100).toFixed(0)}%` : '—', color: totalOrders > 0 && totalSuccess / totalOrders >= 0.5 ? 'text-success' : 'text-danger' },
+                    ].map(s => (
+                      <div key={s.label} className="bg-surface2 border border-border1 rounded-xl px-4 py-3">
+                        <div className="text-[10px] text-text3 uppercase font-semibold mb-1">{s.label}</div>
+                        <div className={`text-[20px] font-bold ${s.color}`}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Per-trader table */}
+                  <div className="grid grid-cols-4 gap-3 px-4 py-2 text-[10px] text-text3 uppercase tracking-wide font-semibold border-b border-border1 bg-surface2">
+                    <span>Trader</span><span className="text-right">Orders</span><span className="text-right">Success Rate</span><span className="text-right">Status</span>
                   </div>
                   {perf.map((p, i) => (
-                    <div key={i} className="grid grid-cols-5 gap-3 px-4 py-3 border-b border-border1 last:border-0 hover:bg-surface2/40 transition-colors items-center text-[12px]">
+                    <div key={i} className="grid grid-cols-4 gap-3 px-4 py-3 border-b border-border1 last:border-0 hover:bg-surface2/40 transition-colors items-center text-[12px]">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center text-[9px] font-bold text-accent">
                           {p.traderAddress.slice(0, 2).toUpperCase()}
                         </div>
-                        <span className="font-mono text-text2">{p.traderAddress.slice(0, 8)}...{p.traderAddress.slice(-4)}</span>
+                        <span className="font-mono text-[11px] text-text2">{p.traderAddress.slice(0, 8)}...{p.traderAddress.slice(-4)}</span>
                       </div>
                       <div className="text-right">
                         <span className="font-bold text-text1">{p.successOrders}</span>
-                        <span className="text-text3">/{p.totalOrders}</span>
+                        <span className="text-text3 text-[11px]">/{p.totalOrders}</span>
                       </div>
                       <div className={`text-right font-bold ${p.winRate >= 50 ? 'text-success' : 'text-danger'}`}>
                         {p.winRate.toFixed(0)}%
                       </div>
-                      <div className={`text-right font-mono font-bold ${p.totalPnl >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {p.totalPnl !== 0 ? `${p.totalPnl >= 0 ? '+' : ''}$${Math.abs(p.totalPnl).toFixed(2)}` : '—'}
-                      </div>
-                      <div className="text-right text-[11px]">
-                        {p.bestTrade !== 0 && <span className="text-success">+${p.bestTrade.toFixed(2)}</span>}
-                        {p.bestTrade !== 0 && p.worstTrade !== 0 && <span className="text-text3"> / </span>}
-                        {p.worstTrade !== 0 && <span className="text-danger">${p.worstTrade.toFixed(2)}</span>}
-                        {p.bestTrade === 0 && p.worstTrade === 0 && <span className="text-text3">—</span>}
+                      <div className="text-right">
+                        {p.totalOrders > 0 && (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.winRate >= 50 ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
+                            {p.winRate >= 50 ? 'Good' : 'Poor'}
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
+                  <div className="px-4 py-3 text-[10px] text-text3 border-t border-border1">
+                    PnL tracking requires on-chain data. Orders are logged locally — clear browser data to reset.
+                  </div>
                 </div>
               );
             })()}

@@ -91,6 +91,10 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
       <div className="flex items-center gap-2 w-52 shrink-0">
         <Image src="/pacificalens.ico" alt="PacificaLens" width={40} height={40} className="object-contain" />
         <div className="font-bold text-[17px] tracking-tight text-text1 leading-none">PACIFICALENS</div>
+        <span className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-accent text-[9px] font-bold tracking-wide">
+          <span className="w-1 h-1 rounded-full bg-accent animate-pulse" />
+          BUILDER
+        </span>
       </div>
 
       {/* Tabs center */}
