@@ -13,6 +13,7 @@ import { fmt, fmtShortAddr, fmtPrice, getMarkPrice } from '@/lib/utils';
 import { Market, Ticker, AccountInfo, getAccountInfo, getPositions, getEquityHistory, getTradeHistory, getPortfolioStats, getTradesHistory, getOpenOrders, getOrderHistory, getFundingHistory, PortfolioStats } from '@/lib/pacifica';
 import { CalcResult } from './Calculator';
 import { submitMarketOrder, submitLimitOrder, toBase58 } from '@/lib/pacificaSigning';
+import { useOrderLog } from '@/hooks/useOrderLog';
 import { usePrivy, useSolanaWallets } from '@privy-io/react-auth';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -216,6 +217,12 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
   } = useCopyTrading();
 
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'favorites'>('leaderboard');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    minPnl7d: '', minPnl30d: '', minPnlAll: '',
+    minVolume: '', minEquity: '',
+    onlyProfitable: false,
+  });
   const [copyModal, setCopyModal] = useState<{ trade: TraderTrade; traderAddress: string; fav?: FavoriteTrader } | null>(null);
   const [selectedTrader, setSelectedTrader] = useState<string | null>(null);
   const [drawerAccount, setDrawerAccount] = useState<import('@/lib/pacifica').AccountInfo | null>(null);
@@ -246,7 +253,20 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
   // O(1) lookup map for leaderboard entries by address
   const leaderboardMap = new Map<string, LeaderboardEntry>(leaderboard.map(e => [e.account, e]));
 
+  // Apply filters on top of search
+  const filteredPagedList = pagedList.filter(e => {
+    if (filters.minPnl7d && e.pnl_7d < Number(filters.minPnl7d)) return false;
+    if (filters.minPnl30d && e.pnl_30d < Number(filters.minPnl30d)) return false;
+    if (filters.minPnlAll && e.pnl_all < Number(filters.minPnlAll)) return false;
+    if (filters.minVolume && e.volume_30d < Number(filters.minVolume)) return false;
+    if (filters.minEquity && e.equity_current < Number(filters.minEquity)) return false;
+    if (filters.onlyProfitable && e.pnl_30d <= 0) return false;
+    return true;
+  });
+  const hasActiveFilters = Object.values(filters).some(v => v !== '' && v !== false);
+
   const myBalance = accountInfo ? Number(accountInfo.available_to_spend || accountInfo.balance || 0) : 0;
+  const { addEntry, updateEntry } = useOrderLog(wallet);
 
   // Position mirroring
 
@@ -324,13 +344,23 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     const { isLong } = sideLabel(trade.side);
     const tk = tickers[trade.symbol];
     const markPrice = getMarkPrice(tk);
-    // Use market's max leverage — Pacifica caps it automatically
-    const maxLev = Number(market?.max_leverage || 20);
     const entryPrice = orderType === 'market' ? markPrice : (Number(limitPrice) || markPrice);
-    const contracts = entryPrice > 0 ? (amount * maxLev) / entryPrice : 0;
+    const contracts = entryPrice > 0 ? (amount * leverage) / entryPrice : 0;
     const decimals = market?.lot_size
       ? Math.max(0, Math.ceil(-Math.log10(Number(market.lot_size))))
       : 4;
+
+    // Log order
+    const logId = addEntry({
+      symbol: trade.symbol,
+      side: isLong ? 'bid' : 'ask',
+      amount: contracts.toFixed(decimals),
+      price: String(entryPrice.toFixed(4)),
+      orderType,
+      status: 'pending',
+      source: 'copy',
+      traderAddress,
+    });
 
     const slTpStr = [slPrice ? `SL $${slPrice.toFixed(2)}` : null, tpPrice ? `TP $${tpPrice.toFixed(2)}` : null].filter(Boolean).join(' · ');
     onToast(`Placing ${isLong ? 'LONG' : 'SHORT'} ${trade.symbol} ${leverage}×${slTpStr ? ' · ' + slTpStr : ''}...`, 'info');
@@ -363,8 +393,10 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
       }
 
       if (result.success) {
+        updateEntry(logId, { status: 'success', orderId: result.orderId });
         onToast(`✓ ${trade.symbol} ${isLong ? 'Long' : 'Short'} placed!`, 'success');
       } else {
+        updateEntry(logId, { status: 'failed', error: result.error });
         onToast(`Order error: ${result.error}`, 'error');
       }
     } catch (e) {
@@ -451,7 +483,20 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
             </div>
 
             <div className="ml-auto flex items-center gap-3">
-              <span className="text-[11px] text-text3">{filteredTotal.toLocaleString()} traders</span>
+              {/* Filter button */}
+              <button onClick={() => setShowFilters(v => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all ${
+                  showFilters || hasActiveFilters
+                    ? 'bg-accent/10 border-accent/30 text-accent'
+                    : 'border-border1 text-text3 hover:border-accent/40 hover:text-accent'
+                }`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                </svg>
+                Filter
+                {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+              </button>
+              <span className="text-[11px] text-text3">{filteredPagedList.length.toLocaleString()} traders</span>
               <button
                 onClick={fetchLeaderboard}
                 disabled={lbLoading}
@@ -466,6 +511,46 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
           </>
         )}
       </div>
+
+      {/* Filter panel */}
+      {showFilters && activeTab === 'leaderboard' && (
+        <div className="border-b border-border1 bg-surface2 px-4 py-3">
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            {[
+              { label: 'Min PnL 7D ($)', key: 'minPnl7d' },
+              { label: 'Min PnL 30D ($)', key: 'minPnl30d' },
+              { label: 'Min PnL All Time ($)', key: 'minPnlAll' },
+              { label: 'Min Volume 30D ($)', key: 'minVolume' },
+              { label: 'Min Equity ($)', key: 'minEquity' },
+            ].map(f => (
+              <div key={f.key}>
+                <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">{f.label}</label>
+                <input type="number" placeholder="0"
+                  value={filters[f.key as keyof typeof filters] as string}
+                  onChange={e => setFilters(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  className="w-full bg-surface border border-border1 rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-text1 outline-none focus:border-accent transition-colors" />
+              </div>
+            ))}
+            <div className="flex items-end">
+              <button onClick={() => setFilters(prev => ({ ...prev, onlyProfitable: !prev.onlyProfitable }))}
+                className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all ${
+                  filters.onlyProfitable ? 'bg-success/10 border-success/30 text-success' : 'border-border1 text-text3 hover:border-border2'
+                }`}>
+                <div className={`relative w-7 h-4 rounded-full transition-all ${filters.onlyProfitable ? 'bg-success' : 'bg-border2'}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${filters.onlyProfitable ? 'translate-x-3' : ''}`} />
+                </div>
+                Profitable only (30d)
+              </button>
+            </div>
+          </div>
+          {hasActiveFilters && (
+            <button onClick={() => setFilters({ minPnl7d: '', minPnl30d: '', minPnlAll: '', minVolume: '', minEquity: '', onlyProfitable: false })}
+              className="text-[11px] text-danger hover:underline">
+              Clear all filters
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto bg-bg">
@@ -500,7 +585,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                     </tr>
                   </thead>
                   <tbody>
-                    {pagedList.map((entry: LeaderboardEntry, i: number) => {
+                    {filteredPagedList.map((entry: LeaderboardEntry, i: number) => {
                       const rank = globalStart + i + 1;
                       const faved = isFavorite(entry.account);
                       return (

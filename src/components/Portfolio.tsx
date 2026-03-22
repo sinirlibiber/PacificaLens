@@ -708,7 +708,7 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                       <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">Symbol</label>
                       <select value={jSymbol} onChange={e => setJSymbol(e.target.value)}
                         className="w-full bg-surface2 border border-border1 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-accent">
-                        {['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','MATIC','LINK','UNI'].map(s => <option key={s}>{s}</option>)}
+                        {markets.map(m => <option key={m.symbol} value={m.symbol}>{m.symbol}</option>)}
                       </select>
                     </div>
                     <div>
@@ -767,7 +767,7 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                           <div className="flex items-center justify-between">
                             <span className="text-text3 truncate text-[11px]">{e.notes}</span>
                             <button onClick={() => deleteJournalEntry(e.id)}
-                              className="opacity-0 group-hover:opacity-100 text-text3 hover:text-danger transition-all text-[13px] ml-2">✕</button>
+                              className="opacity-0 group-hover:opacity-100 text-danger hover:text-danger/70 transition-all text-[13px] ml-2 font-bold">✕</button>
                           </div>
                         </div>
                       ))}
