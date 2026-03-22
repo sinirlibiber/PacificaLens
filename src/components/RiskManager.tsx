@@ -162,12 +162,7 @@ export function RiskManager({
   const wins = closed.filter(j => j.result === 'win').length;
   const winRate = closed.length > 0 ? (wins / closed.length * 100) : 0;
   const totalPnl = closed.reduce((s, j) => s + (j.pnl || 0), 0);
-    ? journal.reduce((s, j) => {
-        const reward = Math.abs(j.tp - j.entry);
-        const risk = Math.abs(j.riskAmt);
-        return s + (risk > 0 ? reward / risk : 0);
-      }, 0) / journal.length
-    : 0;
+
 
 
 
