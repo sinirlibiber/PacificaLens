@@ -1,16 +1,6 @@
-/**
- * router.ts — Gelen soruyu Elfa mı Groq mu yönlendirecek karar verir.
- * 
- * Kural:
- *   - Twitter/sosyal trend soruları  → Elfa  (1000 req/ay, cache 15dk)
- *   - Diğer her şey                  → Groq (ücretsiz, cache 5dk)
- * 
- * Güncelleme: Groq'a giden sorulara Pacifica'dan güncel piyasa verisi eklenir.
- */
-
 import { queryElfa, type ElfaResult } from './elfa';
 import { queryGemini, type GeminiResult } from './gemini';
-import { getTickers } from '../pacifica';   // bir üst klasör
+import { getTickers } from '../pacifica';
 
 export type AIResult = ElfaResult | GeminiResult;
 
@@ -24,7 +14,7 @@ function isElfaQuery(question: string): boolean {
     'kol', 'alpha', 'narrative',
     'gündemde', 'popüler coin', 'viral coin',
   ];
-  return elfaKeywords.some((kw) => q.includes(kw));
+  return elfaKeywords.some(kw => q.includes(kw));
 }
 
 async function enrichWithMarketData(question: string): Promise<string> {
@@ -45,12 +35,9 @@ async function enrichWithMarketData(question: string): Promise<string> {
       ? ((currentPrice - yesterdayPrice) / yesterdayPrice) * 100
       : 0;
 
-    // AGRESİF PROMPT – modelin kendi bilgilerini kullanmasını engeller
     const context = `
-SADECE AŞAĞIDA VERDİĞİM GÜNCEL VERİLERİ KULLAN. KENDİ BİLGİLERİNİ KESİNLİKLE KULLANMA.
-
-Güncel ${symbol} verileri (Pacifica DEX):
-- Fiyat: ${ticker.mark} USD
+GÜNCEL VERİLER (SADECE BUNLARI KULLAN, KENDİ BİLGİLERİNİ KULLANMA):
+- ${symbol} Fiyat: ${ticker.mark} USD
 - 24s Değişim: ${changePercent.toFixed(2)}%
 - 24s Hacim: ${ticker.volume_24h}
 - Fonlama Oranı: ${ticker.funding}
@@ -60,7 +47,7 @@ Bu verilere göre kullanıcının sorusunu yanıtla. Yatırım tavsiyesi verme.
 `;
     return `${context}\nKullanıcı sorusu: ${question}`;
   } catch (err) {
-    console.error('Pacifica veri çekme hatası:', err);
+    console.error('Pacifica hatası:', err);
     return question;
   }
 }
@@ -69,6 +56,6 @@ export async function routeQuery(question: string): Promise<AIResult> {
   if (isElfaQuery(question)) {
     return queryElfa(question);
   }
-  const enrichedQuestion = await enrichWithMarketData(question);
-  return queryGemini(enrichedQuestion);
+  const enriched = await enrichWithMarketData(question);
+  return queryGemini(enriched);
 }
