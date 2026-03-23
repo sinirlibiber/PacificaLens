@@ -24,26 +24,28 @@ interface AiAssistantProps {
   tickers?: Record<string, Ticker>;
 }
 
-// Build live price string from tickers prop
+// Build live price string from tickers prop (client-side, already live)
 function buildPriceContext(tickers: Record<string, Ticker>): string {
-  const TARGETS = ['BTC-PERP', 'ETH-PERP', 'SOL-PERP', 'BNB-PERP', 'XRP-PERP', 'DOGE-PERP', 'AVAX-PERP'];
+  const TARGETS = new Set(['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE', 'AVAX', 'LINK', 'OP', 'ARB']);
   const lines: string[] = [];
-  for (const sym of TARGETS) {
-    const t = tickers[sym] ?? tickers[sym.replace('-PERP', '')];
-    if (!t) continue;
+
+  for (const [key, t] of Object.entries(tickers)) {
+    const sym = key.replace(/-PERP$/i, '').toUpperCase();
+    if (!TARGETS.has(sym)) continue;
     const price = Number(t.mark ?? t.oracle ?? t.mid ?? 0);
     if (!price) continue;
-    const label = sym.replace('-PERP', '');
-    lines.push(`${label}: $${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
+    lines.push(`${sym}: $${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
   }
-  // Also try any key that looks like a major coin
+
+  // If still empty, just take first 15 tickers with valid prices
   if (!lines.length) {
-    for (const [key, t] of Object.entries(tickers).slice(0, 20)) {
-      const price = Number(t.mark ?? t.oracle ?? 0);
-      if (price > 0) lines.push(`${key.replace('-PERP', '')}: $${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
+    for (const [key, t] of Object.entries(tickers).slice(0, 15)) {
+      const price = Number(t.mark ?? t.oracle ?? t.mid ?? 0);
+      if (price > 0) lines.push(`${key.replace(/-PERP$/i, '')}: $${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
     }
   }
-  return lines.length ? `LIVE PRICES NOW: ${lines.join(' | ')}` : '';
+
+  return lines.join(' | ');
 }
 
 export default function AiAssistant({ tickers = {} }: AiAssistantProps) {
@@ -67,10 +69,12 @@ export default function AiAssistant({ tickers = {} }: AiAssistantProps) {
     setLoading(true);
     try {
       const priceContext = buildPriceContext(tickers);
+      const body: Record<string, string> = { question };
+      if (priceContext) body.priceContext = priceContext;
       const res  = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, priceContext }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Unknown error');

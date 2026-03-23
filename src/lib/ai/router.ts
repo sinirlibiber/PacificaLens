@@ -26,9 +26,15 @@ function isElfaQuery(question: string): boolean {
     'social media', 'hype', 'buzzing',
     // Duygu & akıllı para
     'sentiment', 'smart money', 'whale', 'influencer',
-    'kol', 'alpha', 'narrative',
-    // Türkçe trend ifadeler
+    'kol', 'alpha', 'narrative', 'narratives',
+    // Haberler
+    'news', 'haber', 'token news',
+    // Trending
     'gündemde', 'popüler coin', 'viral coin',
+    'hot coin', 'trending coin', 'most popular',
+    'where is smart money', 'akıllı para',
+    // Telegram
+    'telegram',
   ];
 
   return elfaKeywords.some((kw) => q.includes(kw));
