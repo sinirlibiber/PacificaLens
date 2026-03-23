@@ -7,8 +7,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { routeQuery } from '@/lib/ai/router';
 
-// Vercel max execution time
 export const maxDuration = 30;
+
+export async function GET() {
+  // Debug: env var var mı kontrol et
+  const hasKey = !!process.env.GEMINI_API_KEY;
+  const keyPreview = process.env.GEMINI_API_KEY
+    ? process.env.GEMINI_API_KEY.slice(0, 6) + '...'
+    : 'YOK';
+  return NextResponse.json({ hasKey, keyPreview });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,16 +24,13 @@ export async function POST(req: NextRequest) {
     const question: string = (body?.question ?? '').trim();
 
     if (!question) {
-      return NextResponse.json(
-        { error: 'Soru boş olamaz.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Soru boş olamaz.' }, { status: 400 });
     }
 
-    if (question.length > 500) {
+    if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: 'Soru 500 karakterden uzun olamaz.' },
-        { status: 400 }
+        { error: 'GEMINI_API_KEY Vercel ortamında tanımlı değil!' },
+        { status: 500 }
       );
     }
 
@@ -33,9 +38,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
 
   } catch (err) {
-    console.error('[AI Route Error]', err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[AI Route Error]', message);
     return NextResponse.json(
-      { error: 'AI servisi şu an yanıt vermiyor, lütfen tekrar dene.' },
+      { error: message },
       { status: 500 }
     );
   }

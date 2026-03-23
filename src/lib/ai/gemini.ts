@@ -1,16 +1,16 @@
 /**
- * gemini.ts — Google Gemini Flash client
+ * gemini.ts — Google Gemini 2.0 Flash client
  * Genel kripto soruları, analiz, hesaplama vb. için kullanılır.
- * Ücretsiz tier: dakikada 15 istek, günde ~1000 istek.
+ * Ücretsiz tier: dakikada 15 istek, günde ~1500 istek.
  *
  * Env var: GEMINI_API_KEY
  */
 
 import { cacheGet, cacheSet, makeCacheKey } from './cache';
 
-const GEMINI_KEY  = process.env.GEMINI_API_KEY!;
-const GEMINI_URL  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-const CACHE_TTL   = 300; // 5 dakika — genel sorular daha sık değişebilir
+const GEMINI_KEY = process.env.GEMINI_API_KEY!;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+const CACHE_TTL  = 300; // 5 dakika
 
 export interface GeminiResult {
   answer: string;
@@ -49,7 +49,8 @@ export async function queryGemini(userQuestion: string): Promise<GeminiResult> {
   });
 
   if (!res.ok) {
-    throw new Error(`Gemini API error: ${res.status}`);
+    const errBody = await res.text();
+    throw new Error(`Gemini API ${res.status}: ${errBody}`);
   }
 
   const data = await res.json();
