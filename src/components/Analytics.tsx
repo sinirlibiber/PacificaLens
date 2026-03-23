@@ -600,25 +600,42 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
+            {newsLoading && news.length === 0 && (
+              <div className="py-8 flex flex-col items-center gap-2">
+                <div className="w-4 h-4 border-2 border-border2 border-t-accent rounded-full animate-spin" />
+                <span className="text-[11px] text-text3">Loading news...</span>
+              </div>
+            )}
             {filteredNews.length === 0 && !newsLoading && (
               <div className="py-8 text-center text-[11px] text-text3">No news available</div>
             )}
             {filteredNews.map((n, i) => {
-              const url = (n as {url?: string; link?: string}).url || (n as {url?: string; link?: string}).link || '#';
+              const url = n.url || (n as {link?: string}).link || '#';
               const source = typeof n.source === 'object' ? (n.source as {title?: string})?.title : String(n.source || 'News');
               const img = (n as {image?: string; urlToImage?: string}).image || n.urlToImage;
+              const ago = (() => {
+                const d = new Date(n.published_at || (n as {pubDate?: string}).pubDate || '');
+                if (isNaN(d.getTime())) return '';
+                const diff = Math.floor((Date.now() - d.getTime()) / 60000);
+                if (diff < 60) return `${diff}m ago`;
+                if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
+                return `${Math.floor(diff / 1440)}d ago`;
+              })();
               return (
                 <a key={i} href={url} target="_blank" rel="noopener noreferrer"
                   className="flex gap-2.5 px-3 py-2.5 border-b border-border1 hover:bg-surface2/50 transition-colors group">
                   {img && (
-                    <img src={img} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0 bg-surface2"
+                    <img src={img} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0 bg-surface2"
                       onError={e => (e.currentTarget.style.display = 'none')} />
                   )}
                   <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-semibold text-text1 leading-snug mb-1 group-hover:text-accent transition-colors line-clamp-3">{n.title}</div>
-                    <div className="flex items-center gap-1.5 text-[10px] text-text3">
-                      <span>{source || 'News'}</span>
-                      {n.currencies?.[0] && <span className="px-1 py-0.5 rounded bg-surface2 border border-border1 text-[9px]">{n.currencies[0].code}</span>}
+                    <div className="text-[11px] font-semibold text-text1 leading-snug mb-1.5 group-hover:text-accent transition-colors line-clamp-2">{n.title}</div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-text3">{source || 'News'}</span>
+                      {ago && <span className="text-[9px] text-text3">· {ago}</span>}
+                      {n.currencies?.slice(0, 3).map(c => (
+                        <span key={c.code} className="px-1 py-0.5 rounded bg-accent/10 border border-accent/20 text-[9px] text-accent font-semibold">{c.code}</span>
+                      ))}
                     </div>
                   </div>
                 </a>
