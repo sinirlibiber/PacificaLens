@@ -229,15 +229,19 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
       const longRatio = funding >= 0
         ? 0.5 + Math.min(Math.abs(funding) * 500, 0.35)
         : 0.5 - Math.min(Math.abs(funding) * 500, 0.35);
+      const longVol = volume * longRatio;
+      const shortVol = volume * (1 - longRatio);
       return {
         symbol: m.symbol,
         long: Math.round(longRatio * 100),
         short: Math.round((1 - longRatio) * 100),
         volume,
+        longVol,
+        shortVol,
       };
     })
     .filter(Boolean)
-    .sort((a, b) => b!.volume - a!.volume) as { symbol: string; long: number; short: number; volume: number }[];
+    .sort((a, b) => b!.volume - a!.volume) as { symbol: string; long: number; short: number; volume: number; longVol: number; shortVol: number }[];
 
   // All markets funding rate — sorted for heatmap
   const allFundingData = [...markets]
@@ -393,17 +397,31 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
             <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
               {longShortData.map(m => (
-                <div key={m.symbol} className="flex items-center gap-2">
+                <div key={m.symbol} className="flex items-center gap-2 relative group">
                   <div className="flex items-center gap-1.5 w-16 shrink-0">
                     <CoinLogo symbol={m.symbol} size={14} />
                     <span className="text-[11px] font-semibold text-text1 truncate">{m.symbol}</span>
                   </div>
-                  <div className="flex-1 h-3.5 rounded-full overflow-hidden flex">
+                  <div className="flex-1 h-3.5 rounded-full overflow-hidden flex cursor-pointer">
                     <div className="h-full bg-success/70 transition-all" style={{ width: `${m.long}%` }} />
                     <div className="h-full bg-danger/70 transition-all" style={{ width: `${m.short}%` }} />
                   </div>
                   <span className="text-[10px] font-mono text-success w-7 text-right shrink-0">{m.long}%</span>
                   <span className="text-[10px] font-mono text-danger w-7 text-right shrink-0">{m.short}%</span>
+                  {/* Tooltip */}
+                  <div className="absolute left-16 bottom-full mb-1.5 hidden group-hover:flex flex-col bg-surface border border-border1 rounded-xl shadow-card-md px-3 py-2.5 z-50 min-w-[180px] pointer-events-none">
+                    <div className="text-[11px] font-bold text-text1 mb-1.5">{m.symbol} Position Bias</div>
+                    <div className="flex items-center justify-between gap-4 text-[10px] mb-1">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success/70 inline-block" />Long</span>
+                      <span className="font-mono font-semibold text-success">{fmtLarge(m.longVol)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 text-[10px] mb-1.5">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger/70 inline-block" />Short</span>
+                      <span className="font-mono font-semibold text-danger">{fmtLarge(m.shortVol)}</span>
+                    </div>
+                    <div className="text-[9px] text-text3 border-t border-border1 pt-1">Total vol: {fmtLarge(m.volume)}</div>
+                    <div className="text-[9px] text-text3">Estimated from funding bias</div>
+                  </div>
                 </div>
               ))}
             </div>
