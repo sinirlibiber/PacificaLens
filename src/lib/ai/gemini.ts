@@ -1,8 +1,7 @@
 /**
- * groq.ts — Groq API client (Llama 3.3 70B)
- * Genel kripto soruları, analiz, hesaplama vb. için kullanılır.
+ * groq.ts — Groq API client (Mixtral 8x7B, talimatlara daha duyarlı)
+ * 
  * Ücretsiz tier: dakikada 30 istek, günde 14.400 istek.
- *
  * Env var: GROQ_API_KEY
  */
 
@@ -35,11 +34,11 @@ export async function queryGemini(userQuestion: string): Promise<GeminiResult> {
       'Authorization': `Bearer ${GROQ_KEY}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'mixtral-8x7b-32768',  // Daha iyi talimat takibi
       messages: [
         {
           role: 'system',
-          content: 'You are a crypto trading assistant. Help with market analysis, DeFi concepts, portfolio advice, and general crypto questions. Be concise, practical, and clear. IMPORTANT: Always respond in the exact same language the user writes in. If the user writes in English, respond in English. If the user writes in Turkish, respond in Turkish. Never switch languages.',
+          content: `Sen bir kripto piyasası asistanısın. Sana verilen kullanıcı mesajında mutlaka güncel fiyat, hacim ve diğer veriler bulunacaktır. Kendi eğitim verilerindeki fiyatları veya piyasa koşullarını ASLA KULLANMA. Sadece mesajda yazılı olan verilere dayanarak yanıt ver. Yatırım tavsiyesi verme. Yanıtını kullanıcının yazdığı dilde ver.`,
         },
         {
           role: 'user',
