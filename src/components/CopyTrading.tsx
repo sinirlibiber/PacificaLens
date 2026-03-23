@@ -437,7 +437,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     const isUp = vals[vals.length - 1] >= vals[0];
     return (
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-        <polyline points={pts} fill="none" stroke={isUp ? 'var(--color-success)' : 'var(--color-danger)'} strokeWidth="1.5" strokeLinejoin="round" />
+        <polyline points={pts} fill="none" stroke={isUp ? 'var(--success)' : 'var(--danger)'} strokeWidth="1.5" strokeLinejoin="round" />
       </svg>
     );
   }

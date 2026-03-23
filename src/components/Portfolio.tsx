@@ -51,7 +51,7 @@ function Sparkline({ data }: { data: EquityHistory[] }) {
   const w = 400, h = 60;
   const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`).join(' ');
   const isUp = vals[vals.length - 1] >= vals[0];
-  const color = isUp ? 'var(--color-success)' : 'var(--color-danger)';
+  const color = isUp ? 'var(--success)' : 'var(--danger)';
   const areaId = `area-${Math.random().toString(36).slice(2)}`;
   return (
     <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="overflow-visible">

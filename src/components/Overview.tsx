@@ -384,7 +384,7 @@ export function Overview({ markets, tickers }: OverviewProps) {
 
                 return (
                   <tr key={m.symbol} onClick={() => setSelected(isActive ? null : m)}
-                    className={'border-b border-border1 cursor-pointer transition-colors ' + (isActive ? 'bg-accent/5' : 'hover:bg-slate-50/80')}>
+                    className={'border-b border-border1 cursor-pointer transition-colors ' + (isActive ? 'bg-accent/5' : 'hover:bg-surface2/60')}>
                     <td className="px-3 py-2 text-center w-8">
                       <button onClick={e => toggleFav(m.symbol, e)} className={'text-[13px] leading-none transition-colors ' + (isFav ? 'text-amber-400' : 'text-slate-200 hover:text-amber-300')}>
                         {isFav ? '★' : '☆'}
@@ -471,7 +471,7 @@ export function Overview({ markets, tickers }: OverviewProps) {
                         </defs>
                         <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                         <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => '$' + fmtPrice(v)} width={75} />
-                        <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border1)', borderRadius: 8, fontSize: 11, color: 'var(--color-text1)' }} formatter={(v: number) => ['$' + fmtPrice(v), 'Price']} />
+                        <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border1)', borderRadius: 8, fontSize: 11, color: 'var(--text1)' }} formatter={(v: number) => ['$' + fmtPrice(v), 'Price']} />
                         <Area type="monotone" dataKey="price" stroke={chartChange >= 0 ? '#10b981' : '#ef4444'} strokeWidth={2} fill={`url(#grad-${selected?.symbol}-${chartInterval})`} dot={false} />
                       </AreaChart>
                     </ResponsiveContainer>

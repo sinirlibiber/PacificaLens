@@ -303,7 +303,7 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
                 <div className="text-[10px] text-text3 uppercase font-semibold tracking-wide mb-2">Appearance</div>
                 <div className="flex bg-surface2 border border-border1 rounded-lg overflow-hidden">
                   <button onClick={() => { if (isDark) toggleTheme(); }}
-                    className={`flex-1 py-2 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all ${!isDark ? 'bg-white text-text1 shadow-sm' : 'text-text3 hover:text-text2'}`}>
+                    className={`flex-1 py-2 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all ${!isDark ? 'bg-surface text-text1 shadow-sm' : 'text-text3 hover:text-text2'}`}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
                     Light
                   </button>

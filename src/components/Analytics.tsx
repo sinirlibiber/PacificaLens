@@ -41,10 +41,10 @@ function fmtLarge(v: number) {
 }
 
 const TOOLTIP_STYLE = {
-  background: 'var(--color-surface)',
-  border: '1px solid var(--color-border1)',
+  background: 'var(--surface)',
+  border: '1px solid var(--border1)',
   borderRadius: 8, fontSize: 11,
-  color: 'var(--color-text1)',
+  color: 'var(--text1)',
 };
 
 export function Analytics({ markets: propMarkets, tickers: propTickers }: AnalyticsProps) {
@@ -92,6 +92,42 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   const [calFilter, setCalFilter] = useState('Global');
   const [newsLoading, setNewsLoading] = useState(true);
   const [calLoading, setCalLoading] = useState(true);
+
+  // CoinGecko global market data
+  interface GlobalData {
+    total_market_cap_usd: number;
+    total_volume_usd: number;
+    market_cap_change_24h: number;
+    btc_dominance: number;
+    eth_dominance: number;
+    active_cryptocurrencies: number;
+    markets: number;
+  }
+  const [globalData, setGlobalData] = useState<GlobalData | null>(null);
+
+  useEffect(() => {
+    async function loadGlobal() {
+      try {
+        const res = await fetch('https://api.coingecko.com/api/v3/global', { cache: 'no-store' });
+        if (!res.ok) return;
+        const json = await res.json();
+        const d = json?.data;
+        if (!d) return;
+        setGlobalData({
+          total_market_cap_usd: d.total_market_cap?.usd || 0,
+          total_volume_usd: d.total_volume?.usd || 0,
+          market_cap_change_24h: d.market_cap_change_percentage_24h_usd || 0,
+          btc_dominance: d.market_cap_percentage?.btc || 0,
+          eth_dominance: d.market_cap_percentage?.eth || 0,
+          active_cryptocurrencies: d.active_cryptocurrencies || 0,
+          markets: d.markets || 0,
+        });
+      } catch {}
+    }
+    loadGlobal();
+    const iv = setInterval(loadGlobal, 120000);
+    return () => clearInterval(iv);
+  }, []);
   
   // Liquidations state
   interface LiqEvent { symbol: string; side: string; price: string; amount: string; created_at: number; cause?: string; event_type?: string; }
@@ -534,6 +570,26 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               <div className="text-[12px] font-bold text-text1">Global News</div>
               {newsLoading && <div className="w-3 h-3 border border-border2 border-t-accent rounded-full animate-spin" />}
             </div>
+            {/* CoinGecko global stats strip */}
+            {globalData && (
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 pb-2 border-b border-border1">
+                <span className="text-[10px] text-text3">
+                  MCap: <span className="text-text2 font-semibold">{fmtLarge(globalData.total_market_cap_usd)}</span>
+                  <span className={`ml-1 font-semibold ${globalData.market_cap_change_24h >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {globalData.market_cap_change_24h >= 0 ? '+' : ''}{globalData.market_cap_change_24h.toFixed(2)}%
+                  </span>
+                </span>
+                <span className="text-[10px] text-text3">
+                  Vol: <span className="text-text2 font-semibold">{fmtLarge(globalData.total_volume_usd)}</span>
+                </span>
+                <span className="text-[10px] text-text3">
+                  BTC Dom: <span className="text-warn font-semibold">{globalData.btc_dominance.toFixed(1)}%</span>
+                </span>
+                <span className="text-[10px] text-text3">
+                  ETH Dom: <span className="text-accent font-semibold">{globalData.eth_dominance.toFixed(1)}%</span>
+                </span>
+              </div>
+            )}
             <div className="flex gap-1">
               {(['All', 'Crypto', 'Macro'] as const).map(f => (
                 <button key={f} onClick={() => setNewsFilter(f)}

@@ -36,7 +36,7 @@ export function CoinLogo({ symbol, size = 28 }: CoinLogoProps) {
       width={size}
       height={size}
       style={{ width: size, height: size }}
-      className="rounded-full flex-shrink-0 object-contain bg-white"
+      className="rounded-full flex-shrink-0 object-contain bg-surface2"
       onError={() => {
         if (stage === 'pacifica') setStage('coincap');
         else setStage('fallback');

@@ -57,14 +57,14 @@ export function ConnectScreen() {
       {/* Background grid */}
       <div className="pointer-events-none absolute inset-0 opacity-[0.03]"
         style={{
-          backgroundImage: 'linear-gradient(var(--color-text1) 1px, transparent 1px), linear-gradient(90deg, var(--color-text1) 1px, transparent 1px)',
+          backgroundImage: 'linear-gradient(var(--text1) 1px, transparent 1px), linear-gradient(90deg, var(--text1) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
         }}
       />
 
       {/* Glow */}
       <div className="pointer-events-none absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full opacity-10 blur-[120px]"
-        style={{ background: 'var(--color-accent)' }}
+        style={{ background: 'var(--accent)' }}
       />
 
       <div className="relative z-10 flex flex-col items-center text-center max-w-2xl w-full">
