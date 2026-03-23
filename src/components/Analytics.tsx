@@ -92,6 +92,10 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   const [calFilter, setCalFilter] = useState('Global');
   const [newsLoading, setNewsLoading] = useState(true);
   const [calLoading, setCalLoading] = useState(true);
+  
+  // Liquidations state
+  interface LiqEvent { symbol: string; side: string; price: string; amount: string; created_at: number; }
+  const [liquidations, setLiquidations] = useState<LiqEvent[]>([]);
 
   // Fetch news
   useEffect(() => {
@@ -102,7 +106,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
         if (!res.ok) return;
         const data = await res.json();
         const items: NewsItem[] = data.results || data.data || [];
-        setNews(items.slice(0, 30));
+        setNews(items.slice(0, 40));
       } catch {} finally { setNewsLoading(false); }
     }
     load();
@@ -141,6 +145,36 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     return () => clearInterval(iv);
   }, []);
 
+  // Fetch liquidations from top markets
+  useEffect(() => {
+    if (markets.length === 0) return;
+    async function loadLiqs() {
+      const topSymbols = [...markets]
+        .sort((a, b) => Number(tickers[b.symbol]?.open_interest || 0) - Number(tickers[a.symbol]?.open_interest || 0))
+        .slice(0, 5)
+        .map(m => m.symbol);
+      const results: LiqEvent[] = [];
+      await Promise.all(topSymbols.map(async sym => {
+        try {
+          const res = await fetch(`/api/proxy?path=${encodeURIComponent('trades?symbol=' + sym)}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.success && Array.isArray(data.data)) {
+            const liqs = data.data.filter((t: {cause?: string}) =>
+              t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation'
+            );
+            liqs.forEach((t: LiqEvent) => results.push({ ...t, symbol: sym }));
+          }
+        } catch {}
+      }));
+      results.sort((a, b) => b.created_at - a.created_at);
+      setLiquidations(results.slice(0, 50));
+    }
+    loadLiqs();
+    const iv = setInterval(loadLiqs, 15000);
+    return () => clearInterval(iv);
+  }, [markets, tickers]);
+
   // Computed market stats
   const totalVolume = Object.values(tickers).reduce((s, t) => s + Number(t?.volume_24h || 0), 0);
   const totalOI = Object.values(tickers).reduce((s, t) => s + Number(t?.open_interest || 0), 0);
@@ -168,6 +202,17 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     pct: totalVolume > 0 ? (m.volume / totalVolume * 100) : 0,
   }));
 
+  // Liquidation stats
+  const totalLiqValue = liquidations.reduce((s, l) => s + Number(l.price) * Number(l.amount), 0);
+  const liqBySymbol = liquidations.reduce((acc, l) => {
+    const key = l.symbol;
+    if (!acc[key]) acc[key] = { symbol: key, count: 0, value: 0 };
+    acc[key].count++;
+    acc[key].value += Number(l.price) * Number(l.amount);
+    return acc;
+  }, {} as Record<string, { symbol: string; count: number; value: number }>);
+  const liqHeatmap = Object.values(liqBySymbol).sort((a, b) => b.value - a.value);
+
   // Long/Short ratio from open interest (bid vs ask side approximation via funding)
   // Positive funding = more longs; negative = more shorts
   const longShortData = [...markets]
@@ -187,7 +232,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     })
     .filter(Boolean)
     .sort((a, b) => b!.oi - a!.oi)
-    .slice(0, 8) as { symbol: string; long: number; short: number; oi: number }[];
+    .slice(0, 30) as { symbol: string; long: number; short: number; oi: number }[];
 
   // All markets funding rate — sorted for heatmap
   const allFundingData = [...markets]
@@ -198,7 +243,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     }))
     .filter(d => d.oi > 0)
     .sort((a, b) => b.oi - a.oi)
-    .slice(0, 20);
+    ;  // all markets
 
   const filteredNews = newsFilter === 'All' ? news :
     news.filter(n => {
@@ -252,7 +297,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               <div className="text-[12px] font-bold text-text1">Volume by Market (24h)</div>
               <div className="text-[10px] text-text3">Top 10</div>
             </div>
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={280}>
               <BarChart data={topByVolume} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
                 <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false}
                   tickFormatter={v => fmtLarge(v)} />
@@ -385,6 +430,69 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
           </div>
 
+          {/* Total Liquidations + Heatmap */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Recent Liquidations */}
+            <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
+              <div className="flex justify-between items-center mb-3">
+                <div className="text-[12px] font-bold text-text1">Recent Liquidations</div>
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${totalLiqValue > 0 ? 'bg-danger/10 text-danger' : 'bg-surface2 text-text3'}`}>
+                  {totalLiqValue > 0 ? fmtLarge(totalLiqValue) + ' liquidated' : 'No liquidations'}
+                </span>
+              </div>
+              {liquidations.length === 0 ? (
+                <div className="py-8 text-center text-[11px] text-text3">No recent liquidations in top markets</div>
+              ) : (
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {liquidations.slice(0, 15).map((l, i) => {
+                    const isLong = l.side?.includes('long');
+                    const value = Number(l.price) * Number(l.amount);
+                    return (
+                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface2/50 transition-colors">
+                        <CoinLogo symbol={l.symbol} size={16} />
+                        <span className="text-[11px] font-semibold text-text1 w-12">{l.symbol}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isLong ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
+                          {isLong ? 'LONG LIQ' : 'SHORT LIQ'}
+                        </span>
+                        <span className="text-[10px] font-mono text-text2 ml-auto">{fmtLarge(value)}</span>
+                        <span className="text-[10px] text-text3">{new Date(l.created_at).toLocaleTimeString()}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Liquidation Heatmap */}
+            <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
+              <div className="text-[12px] font-bold text-text1 mb-3">Liquidation Heatmap</div>
+              {liqHeatmap.length === 0 ? (
+                <div className="py-8 text-center text-[11px] text-text3">No liquidation data available</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {liqHeatmap.map((l, i) => {
+                    const maxVal = liqHeatmap[0]?.value || 1;
+                    const intensity = Math.min(l.value / maxVal, 1);
+                    const size = Math.max(52, intensity * 100);
+                    return (
+                      <div key={l.symbol} title={`${l.symbol}: ${l.count} liqs · ${fmtLarge(l.value)}`}
+                        className="flex flex-col items-center justify-center rounded-xl cursor-default hover:opacity-80 transition-all"
+                        style={{
+                          width: size, height: size,
+                          background: `rgba(239,68,68,${0.15 + intensity * 0.6})`,
+                          border: '1px solid rgba(239,68,68,' + (0.2 + intensity * 0.5) + ')',
+                        }}>
+                        <CoinLogo symbol={l.symbol} size={Math.max(14, size * 0.28)} />
+                        <span className="text-[9px] font-bold text-text1 mt-0.5">{l.symbol}</span>
+                        <span className="text-[9px] text-danger font-mono">{fmtLarge(l.value)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -412,9 +520,9 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               <div className="py-8 text-center text-[11px] text-text3">No news available</div>
             )}
             {filteredNews.map((n, i) => {
-              const url = n.url || n.link || '#';
-              const source = typeof n.source === 'object' ? n.source?.title : n.source;
-              const img = n.image || n.urlToImage;
+              const url = (n as {url?: string; link?: string}).url || (n as {url?: string; link?: string}).link || '#';
+              const source = typeof n.source === 'object' ? (n.source as {title?: string})?.title : String(n.source || 'News');
+              const img = (n as {image?: string; urlToImage?: string}).image || n.urlToImage;
               return (
                 <a key={i} href={url} target="_blank" rel="noopener noreferrer"
                   className="flex gap-2.5 px-3 py-2.5 border-b border-border1 hover:bg-surface2/50 transition-colors group">
