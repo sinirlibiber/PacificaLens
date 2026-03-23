@@ -89,12 +89,9 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
     <header className="flex items-center h-12 border-b border-border1 bg-surface shadow-card sticky top-0 z-50 px-4">
       {/* Logo */}
       <div className="flex items-center gap-1.5 w-44 shrink-0">
-        <Image src="/pacificalens.ico" alt="PacificaLens" width={28} height={28} className="object-contain" />
-        <div className="font-bold text-[14px] tracking-tight text-text1 leading-none">PACIFICALENS</div>
-        <span className="hidden lg:flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-accent text-[8px] font-bold">
-          <span className="w-1 h-1 rounded-full bg-accent animate-pulse" />
-          BUILDER
-        </span>
+        <Image src="/logo.png" alt="PacificaLens" width={36} height={36} className="object-contain" />
+        <div className="font-bold text-[15px] tracking-tight text-text1 leading-none">PACIFICALENS</div>
+
       </div>
 
       {/* Tabs center */}

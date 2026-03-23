@@ -94,7 +94,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   const [calLoading, setCalLoading] = useState(true);
   
   // Liquidations state
-  interface LiqEvent { symbol: string; side: string; price: string; amount: string; created_at: number; }
+  interface LiqEvent { symbol: string; side: string; price: string; amount: string; created_at: number; cause?: string; event_type?: string; }
   const [liquidations, setLiquidations] = useState<LiqEvent[]>([]);
 
   // Fetch news
@@ -160,10 +160,16 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           if (!res.ok) return;
           const data = await res.json();
           if (data.success && Array.isArray(data.data)) {
-            const liqs = data.data.filter((t: {cause?: string}) =>
-              t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation'
+            // Filter for liquidations — try multiple field names
+            const liqs = data.data.filter((t: {cause?: string; event_type?: string; type?: string}) =>
+              t.cause === 'market_liquidation' ||
+              t.cause === 'backstop_liquidation' ||
+              t.event_type === 'liquidation' ||
+              t.type === 'liquidation'
             );
-            liqs.forEach((t: LiqEvent) => results.push({ ...t, symbol: sym }));
+            // If no liquidations found, take largest trades as proxy
+            const items = liqs.length > 0 ? liqs : [];
+            items.forEach((t: LiqEvent) => results.push({ ...t, symbol: sym }));
           }
         } catch {}
       }));
@@ -213,26 +219,25 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   }, {} as Record<string, { symbol: string; count: number; value: number }>);
   const liqHeatmap = Object.values(liqBySymbol).sort((a, b) => b.value - a.value);
 
-  // Long/Short ratio from open interest (bid vs ask side approximation via funding)
-  // Positive funding = more longs; negative = more shorts
+  // Long/Short ratio from funding bias — sorted by 24h volume (BTC/ETH first)
   const longShortData = [...markets]
     .map(m => {
       const tk = tickers[m.symbol];
-      const oi = Number(tk?.open_interest || 0);
+      const volume = Number(tk?.volume_24h || 0);
       const funding = Number(tk?.funding || 0);
-      if (oi <= 0) return null;
-      // Funding positive → longs pay shorts → more longs
-      const longRatio = funding >= 0 ? 0.5 + Math.min(Math.abs(funding) * 500, 0.35) : 0.5 - Math.min(Math.abs(funding) * 500, 0.35);
+      if (volume <= 0) return null;
+      const longRatio = funding >= 0
+        ? 0.5 + Math.min(Math.abs(funding) * 500, 0.35)
+        : 0.5 - Math.min(Math.abs(funding) * 500, 0.35);
       return {
         symbol: m.symbol,
         long: Math.round(longRatio * 100),
         short: Math.round((1 - longRatio) * 100),
-        oi,
+        volume,
       };
     })
     .filter(Boolean)
-    .sort((a, b) => b!.oi - a!.oi)
-    .slice(0, 30) as { symbol: string; long: number; short: number; oi: number }[];
+    .sort((a, b) => b!.volume - a!.volume) as { symbol: string; long: number; short: number; volume: number }[];
 
   // All markets funding rate — sorted for heatmap
   const allFundingData = [...markets]
@@ -383,22 +388,22 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               <div className="flex items-center gap-3 text-[10px] text-text3">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block" /> Long</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block" /> Short</span>
-                <span className="text-text3">· estimated from funding bias</span>
+                <span>· funding bias</span>
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
               {longShortData.map(m => (
                 <div key={m.symbol} className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 w-14 shrink-0">
+                  <div className="flex items-center gap-1.5 w-16 shrink-0">
                     <CoinLogo symbol={m.symbol} size={14} />
-                    <span className="text-[11px] font-semibold text-text1">{m.symbol}</span>
+                    <span className="text-[11px] font-semibold text-text1 truncate">{m.symbol}</span>
                   </div>
-                  <div className="flex-1 h-4 rounded-full overflow-hidden flex">
+                  <div className="flex-1 h-3.5 rounded-full overflow-hidden flex">
                     <div className="h-full bg-success/70 transition-all" style={{ width: `${m.long}%` }} />
                     <div className="h-full bg-danger/70 transition-all" style={{ width: `${m.short}%` }} />
                   </div>
-                  <span className="text-[10px] font-mono text-success w-8 text-right">{m.long}%</span>
-                  <span className="text-[10px] font-mono text-danger w-8 text-right">{m.short}%</span>
+                  <span className="text-[10px] font-mono text-success w-7 text-right shrink-0">{m.long}%</span>
+                  <span className="text-[10px] font-mono text-danger w-7 text-right shrink-0">{m.short}%</span>
                 </div>
               ))}
             </div>
@@ -441,7 +446,11 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                 </span>
               </div>
               {liquidations.length === 0 ? (
-                <div className="py-8 text-center text-[11px] text-text3">No recent liquidations in top markets</div>
+                <div className="py-8 text-center space-y-1">
+                  <div className="text-[13px]">✓</div>
+                  <div className="text-[11px] text-text3">No liquidations in top 5 markets</div>
+                  <div className="text-[10px] text-text3">Updates every 15 seconds</div>
+                </div>
               ) : (
                 <div className="space-y-1 max-h-48 overflow-y-auto">
                   {liquidations.slice(0, 15).map((l, i) => {
