@@ -1,14 +1,14 @@
 /**
  * elfa.ts — Elfa AI client
- * Kullanılan endpoint'ler: trending/tokens, smart-mentions
- * Cache TTL: 15 dakika
+ * Correct endpoints: /trending/tokens, /smart-mentions
+ * Base URL: https://api.elfa.ai (no /v1)
  */
 
 import { cacheGet, cacheSet, makeCacheKey } from './cache';
 
-const ELFA_BASE = 'https://api.elfa.ai/v1';
+const ELFA_BASE = 'https://api.elfa.ai';
 const ELFA_KEY  = process.env.ELFA_API_KEY;
-const CACHE_TTL = 900; // 15 dakika
+const CACHE_TTL = 900; // 15 minutes
 
 export interface ElfaResult {
   answer: string;
@@ -23,7 +23,8 @@ async function getTrendingTokens(): Promise<string> {
     headers: { 'x-elfa-api-key': ELFA_KEY }
   });
   if (!res.ok) {
-    throw new Error(`Elfa trending API error: ${res.status} ${await res.text()}`);
+    const text = await res.text();
+    throw new Error(`Elfa trending API error: ${res.status} ${text}`);
   }
   const json = await res.json();
   if (!json.data || json.data.length === 0) return 'No trending token data available.';
@@ -39,7 +40,8 @@ async function getSmartMentions(): Promise<string> {
     headers: { 'x-elfa-api-key': ELFA_KEY }
   });
   if (!res.ok) {
-    throw new Error(`Elfa smart-mentions API error: ${res.status} ${await res.text()}`);
+    const text = await res.text();
+    throw new Error(`Elfa smart-mentions API error: ${res.status} ${text}`);
   }
   const json = await res.json();
   if (!json.data || json.data.length === 0) return 'No smart mentions found.';
