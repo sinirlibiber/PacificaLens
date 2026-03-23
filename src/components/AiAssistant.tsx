@@ -163,7 +163,7 @@ export default function AiAssistant() {
             <div style={{ maxWidth: '78%' }}>
               <div style={{
                 padding: '10px 14px', borderRadius: 10, fontSize: 13,
-                lineHeight: 1.6, color: 'var(--text1)',
+                lineHeight: 1.6,
                 background: msg.role === 'user' ? 'var(--accent)' : 'var(--surface2)',
                 color: msg.role === 'user' ? '#fff' : 'var(--text1)',
                 border: msg.role === 'assistant' ? '1px solid var(--border1)' : 'none',
