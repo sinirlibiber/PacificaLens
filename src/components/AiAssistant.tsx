@@ -19,13 +19,33 @@ const SUGGESTIONS = [
   'What is open interest?',
 ];
 
+declare global {
+  interface Window {
+    puter: any;
+  }
+}
+
 export default function AiAssistant() {
   const [messages, setMessages]   = useState<Message[]>([]);
   const [input, setInput]         = useState('');
   const [loading, setLoading]     = useState(false);
   const [isOpen, setIsOpen]       = useState(true);
+  const [puterReady, setPuterReady] = useState(false);
   const messagesEndRef             = useRef<HTMLDivElement>(null);
   const messagesContainerRef       = useRef<HTMLDivElement>(null);
+
+  // Load Puter.js script once
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.puter) {
+      const script = document.createElement('script');
+      script.src = 'https://js.puter.com/v2/';
+      script.async = true;
+      script.onload = () => setPuterReady(true);
+      document.body.appendChild(script);
+    } else {
+      setPuterReady(true);
+    }
+  }, []);
 
   // Scroll only inside the messages container, never the page
   useEffect(() => {
@@ -34,23 +54,21 @@ export default function AiAssistant() {
   }, [messages, loading]);
 
   async function sendMessage(question: string) {
-    if (!question.trim() || loading) return;
+    if (!question.trim() || loading || !puterReady) return;
     setMessages(prev => [...prev, { role: 'user', content: question }]);
     setInput('');
     setLoading(true);
     try {
-      const res  = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+      // Puter AI call
+      const answer = await window.puter.ai.chat(question, {
+        model: 'ai21/jamba-large-1.7', // optional, defaults to a good model
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Unknown error');
-      setMessages(prev => [...prev, { role: 'assistant', content: data.answer }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
     } catch (err) {
+      console.error(err);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: err instanceof Error ? err.message : 'Something went wrong.',
+        content: 'AI yanıt verirken bir hata oluştu. Lütfen tekrar deneyin.',
       }]);
     } finally {
       setLoading(false);
@@ -79,8 +97,8 @@ export default function AiAssistant() {
         <Bot size={15} color="var(--accent)" />
         <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text1)', flex: 1 }}>AI Assistant</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text3)', marginRight: 8 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
-          Online
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: puterReady ? 'var(--success)' : 'var(--warning)', display: 'inline-block' }} />
+          {puterReady ? 'Online' : 'Loading...'}
         </span>
         <ChevronDown
           size={14}
@@ -108,13 +126,13 @@ export default function AiAssistant() {
               <button
                 key={s}
                 onClick={() => sendMessage(s)}
-                disabled={loading}
+                disabled={loading || !puterReady}
                 style={{
                   textAlign: 'left', fontSize: 11, padding: '7px 10px',
                   background: 'var(--surface)', border: '1px solid var(--border1)',
-                  borderRadius: 8, color: 'var(--text2)', cursor: loading ? 'not-allowed' : 'pointer',
+                  borderRadius: 8, color: 'var(--text2)', cursor: (loading || !puterReady) ? 'not-allowed' : 'pointer',
                   lineHeight: 1.4, transition: 'border-color 0.15s, color 0.15s',
-                  opacity: loading ? 0.5 : 1,
+                  opacity: (loading || !puterReady) ? 0.5 : 1,
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text1)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border1)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text2)'; }}
@@ -208,16 +226,16 @@ export default function AiAssistant() {
               />
               <button
                 onClick={() => sendMessage(input)}
-                disabled={loading || !input.trim()}
+                disabled={loading || !input.trim() || !puterReady}
                 style={{
                   padding: '8px 12px', borderRadius: 7,
-                  background: loading || !input.trim() ? 'var(--surface2)' : 'var(--accent)',
+                  background: (loading || !input.trim() || !puterReady) ? 'var(--surface2)' : 'var(--accent)',
                   border: '1px solid var(--border1)',
-                  cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+                  cursor: (loading || !input.trim() || !puterReady) ? 'not-allowed' : 'pointer',
                   display: 'flex', alignItems: 'center',
                 }}
               >
-                <Send size={13} color={loading || !input.trim() ? 'var(--text3)' : '#fff'} />
+                <Send size={13} color={(loading || !input.trim() || !puterReady) ? 'var(--text3)' : '#fff'} />
               </button>
             </div>
           </div>
