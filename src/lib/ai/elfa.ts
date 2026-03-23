@@ -1,14 +1,16 @@
 /**
  * elfa.ts — Elfa AI client
- * Correct endpoints: /trending/tokens, /smart-mentions
- * Base URL: https://api.elfa.ai (no /v1)
+ * Sadece Twitter/sosyal trend sorularında kullanılır.
+ * Cache TTL: 15 dakika (900s) — aynı soruyu 100 kişi sorsa 1 Elfa isteği gider.
+ *
+ * Env var: ELFA_API_KEY
  */
 
 import { cacheGet, cacheSet, makeCacheKey } from './cache';
 
-const ELFA_BASE = 'https://api.elfa.ai';
-const ELFA_KEY  = process.env.ELFA_API_KEY;
-const CACHE_TTL = 900; // 15 minutes
+const ELFA_BASE = 'https://api.elfa.ai/v1';
+const ELFA_KEY  = process.env.ELFA_API_KEY!;
+const CACHE_TTL = 900; // 15 dakika
 
 export interface ElfaResult {
   answer: string;
@@ -16,64 +18,48 @@ export interface ElfaResult {
   cached: boolean;
 }
 
-async function getTrendingTokens(): Promise<string> {
-  if (!ELFA_KEY) throw new Error('ELFA_API_KEY is not set');
-  const url = `${ELFA_BASE}/trending/tokens?limit=5`;
-  const res = await fetch(url, {
-    headers: { 'x-elfa-api-key': ELFA_KEY }
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Elfa trending API error: ${res.status} ${text}`);
-  }
-  const json = await res.json();
-  if (!json.data || json.data.length === 0) return 'No trending token data available.';
-  return json.data.map((t: any) => 
-    `- ${t.token}: ${t.current_count} mentions (${t.change_percent?.toFixed(1) ?? '?'}% change)`
-  ).join('\n');
-}
-
-async function getSmartMentions(): Promise<string> {
-  if (!ELFA_KEY) throw new Error('ELFA_API_KEY is not set');
-  const url = `${ELFA_BASE}/smart-mentions?limit=5`;
-  const res = await fetch(url, {
-    headers: { 'x-elfa-api-key': ELFA_KEY }
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Elfa smart-mentions API error: ${res.status} ${text}`);
-  }
-  const json = await res.json();
-  if (!json.data || json.data.length === 0) return 'No smart mentions found.';
-  return json.data.map((m: any) => {
-    const text = m.content?.substring(0, 120) ?? '';
-    return `- ${text}… (👍 ${m.likeCount ?? 0}, 🔁 ${m.repostCount ?? 0})`;
-  }).join('\n');
-}
-
 export async function queryElfa(userQuestion: string): Promise<ElfaResult> {
   const cacheKey = makeCacheKey('elfa', userQuestion);
+
+  // 1. Cache'de var mı?
   const cached = await cacheGet(cacheKey);
   if (cached) {
     return { answer: cached, source: 'elfa', cached: true };
   }
 
-  let answer = '';
-  const lower = userQuestion.toLowerCase();
+  // 2. Elfa API'ye sor
+  const res = await fetch(`${ELFA_BASE}/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-elfa-api-key': ELFA_KEY,
+    },
+    body: JSON.stringify({
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a crypto market intelligence assistant. Focus on Twitter/social sentiment, trending coins, and smart money signals. Be concise and data-driven.',
+        },
+        { role: 'user', content: userQuestion },
+      ],
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
 
-  try {
-    if (lower.includes('trend') || lower.includes('most talked') || lower.includes('en çok konuşulan')) {
-      answer = await getTrendingTokens();
-    } else if (lower.includes('smart money') || lower.includes('where is smart money')) {
-      answer = await getSmartMentions();
-    } else {
-      answer = await getTrendingTokens();
-    }
-  } catch (err) {
-    console.error('Elfa error:', err);
-    answer = `Elfa API error: ${err instanceof Error ? err.message : 'Unknown error'}`;
+  if (!res.ok) {
+    throw new Error(`Elfa API error: ${res.status}`);
   }
 
+  const data = await res.json();
+  // Elfa response şeması: { message: { content: string } }
+  const answer: string =
+    data?.message?.content ??
+    data?.choices?.[0]?.message?.content ??
+    'Elfa yanıt vermedi.';
+
+  // 3. Cache'e yaz
   await cacheSet(cacheKey, answer, CACHE_TTL);
+
   return { answer, source: 'elfa', cached: false };
 }

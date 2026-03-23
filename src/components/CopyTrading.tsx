@@ -94,11 +94,12 @@ function Th({ label, field, cur, dir, onClick }: {
 // ─── Favorite Card (expanded) ─────────────────────────────────────────────────
 
 function FavoriteCard({
-  fav, lbEntry, trades, tradesLoading, tickers,
+  fav, lbEntry, score, trades, tradesLoading, tickers,
   onRemove, onCopyTrade, onRefreshTrades,
 }: {
   fav: FavoriteTrader;
   lbEntry?: LeaderboardEntry;
+  score?: import('@/lib/traderScore').TraderScore | null;
   trades: TraderTrade[];
   tradesLoading: boolean;
   tickers: Record<string, Ticker>;
@@ -119,6 +120,7 @@ function FavoriteCard({
               {fav.account.slice(0, 2).toUpperCase()}
             </div>
             <span className="text-[12px] font-mono text-text1 font-semibold">{fmtShortAddr(fav.account)}</span>
+              {score && <ScoreBadge score={score} />}
 
           </div>
           {lbEntry && (
@@ -269,12 +271,17 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     return true;
   }) : pagedList;
 
-  // Score-aware sort override: when sortField === 'score', re-sort using live scores
+  // Score-aware sort override: when sortField === 'score' or 'watching', re-sort using live data
   const scoreSortedList = (() => {
-    if (sortField !== 'score') return null;
+    if (sortField !== 'score' && sortField !== 'watching') return null;
     return [...leaderboard]
       .filter(e => !searchQuery.trim() || e.account.toLowerCase().includes(searchQuery.trim().toLowerCase()))
       .sort((a, b) => {
+        if (sortField === 'watching') {
+          const wa = isFavorite(a.account) ? 1 : 0;
+          const wb = isFavorite(b.account) ? 1 : 0;
+          return sortDir === 'desc' ? wb - wa : wa - wb;
+        }
         const sa = getScore(a.account)?.score ?? -1;
         const sb = getScore(b.account)?.score ?? -1;
         return sortDir === 'desc' ? sb - sa : sa - sb;
@@ -629,7 +636,15 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                         <Th key={c.field} label={c.label} field={c.field}
                           cur={sortField} dir={sortDir} onClick={() => toggleSort(c.field)} />
                       ))}
-                      <th className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-center">Watch</th>
+                      <th
+                        onClick={() => toggleSort('watching' as SortField)}
+                        className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-center cursor-pointer hover:text-accent select-none transition-colors"
+                      >
+                        Watch
+                        <span className={`ml-1 ${sortField === 'watching' ? 'text-accent' : 'text-border2'}`}>
+                          {sortField === 'watching' ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -789,6 +804,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                       key={fav.account}
                       fav={fav}
                       lbEntry={lbEntry}
+                      score={getScore(fav.account)}
                       trades={traderTrades[fav.account] || []}
                       tradesLoading={!!tradesLoading[fav.account]}
                       tickers={tickers}

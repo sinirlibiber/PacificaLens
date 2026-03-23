@@ -113,9 +113,9 @@ export function scoreToTier(score: number): ScoreTier {
 }
 
 export const TIER_COLORS: Record<ScoreTier, { bg: string; text: string; border: string }> = {
-  S: { bg: 'bg-[#fef3c7]', text: 'text-[#92400e]', border: 'border-[#fbbf24]' },
-  A: { bg: 'bg-success/10',  text: 'text-success',  border: 'border-success/30' },
-  B: { bg: 'bg-accent/10',   text: 'text-accent',   border: 'border-accent/30' },
-  C: { bg: 'bg-warn/10',     text: 'text-warn',     border: 'border-warn/30' },
-  D: { bg: 'bg-danger/10',   text: 'text-danger',   border: 'border-danger/30' },
+  S: { bg: 'bg-[#fbbf24]/20', text: 'text-[#d97706]', border: 'border-[#fbbf24]' },
+  A: { bg: 'bg-success/10',   text: 'text-success',   border: 'border-success/30' },
+  B: { bg: 'bg-accent/10',    text: 'text-accent',    border: 'border-accent/30' },
+  C: { bg: 'bg-warn/10',      text: 'text-warn',      border: 'border-warn/30' },
+  D: { bg: 'bg-danger/10',    text: 'text-danger',    border: 'border-danger/30' },
 };
