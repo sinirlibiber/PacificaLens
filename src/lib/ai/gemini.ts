@@ -9,7 +9,7 @@
 import { cacheGet, cacheSet, makeCacheKey } from './cache';
 
 const GEMINI_KEY  = process.env.GEMINI_API_KEY!;
-const GEMINI_URL  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+const GEMINI_URL  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
 const CACHE_TTL   = 300; // 5 dakika — genel sorular daha sık değişebilir
 
 export interface GeminiResult {
@@ -32,12 +32,14 @@ export async function queryGemini(userQuestion: string): Promise<GeminiResult> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      system_instruction: {
-        parts: [{
-          text: 'You are a crypto trading assistant. Help with market analysis, DeFi concepts, portfolio advice, and general crypto questions. Be concise, practical, and clear. Always answer in the same language the user writes in.',
-        }],
-      },
-      contents: [{ parts: [{ text: userQuestion }] }],
+      contents: [
+        {
+          role: 'user',
+          parts: [{
+            text: `You are a crypto trading assistant. Help with market analysis, DeFi concepts, portfolio advice, and general crypto questions. Be concise, practical, and clear. IMPORTANT: Always respond in the exact same language the user writes in. If the user writes in English, respond in English. If the user writes in Turkish, respond in Turkish. Never switch languages.\n\nUser question: ${userQuestion}`,
+          }],
+        },
+      ],
       generationConfig: {
         maxOutputTokens: 512,
         temperature: 0.7,

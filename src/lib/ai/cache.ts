@@ -8,16 +8,12 @@
 const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL!;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN!;
 
-async function redisCommand<T>(command: unknown[]): Promise<T | null> {
+/** Upstash Redis REST API — GET */
+export async function cacheGet(key: string): Promise<string | null> {
   if (!REDIS_URL || !REDIS_TOKEN) return null;
   try {
-    const res = await fetch(`${REDIS_URL}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${REDIS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(command),
+    const res = await fetch(`${REDIS_URL}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
     });
     const json = await res.json();
     return json.result ?? null;
@@ -26,14 +22,20 @@ async function redisCommand<T>(command: unknown[]): Promise<T | null> {
   }
 }
 
-/** Cache'den oku. Yoksa null döner. */
-export async function cacheGet(key: string): Promise<string | null> {
-  return redisCommand<string>(['GET', key]);
-}
-
-/** Cache'e yaz. ttlSeconds sonra otomatik siler. */
+/** Upstash Redis REST API — SET with EX */
 export async function cacheSet(key: string, value: string, ttlSeconds: number): Promise<void> {
-  await redisCommand(['SET', key, value, 'EX', ttlSeconds]);
+  if (!REDIS_URL || !REDIS_TOKEN) return;
+  try {
+    await fetch(
+      `${REDIS_URL}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?EX=${ttlSeconds}`,
+      {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+      }
+    );
+  } catch {
+    // Cache yazma hatası kritik değil, sessizce geç
+  }
 }
 
 /** Cache key oluştur — soruyu normalize ederek hash'ler */
