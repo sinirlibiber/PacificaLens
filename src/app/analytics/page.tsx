@@ -1,8 +1,16 @@
 'use client';
+import { AppShell, useShell } from '@/components/AppShell';
 import { Analytics } from '@/components/Analytics';
-import { useShell } from '@/components/AppShell';
 
-export default function AnalyticsPage() {
+function AnalyticsInner() {
   const { markets, tickers, wallet } = useShell();
-  return <Analytics markets={markets} tickers={tickers} wallet={wallet} />;
+  return (
+    <div className="flex-1 overflow-hidden">
+      <Analytics markets={markets} tickers={tickers} wallet={wallet} />
+    </div>
+  );
+}
+
+export default function Page() {
+  return <AppShell><AnalyticsInner /></AppShell>;
 }
