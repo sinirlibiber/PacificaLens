@@ -8,16 +8,14 @@
  * Güncelleme: Groq'a giden sorulara Pacifica'dan güncel piyasa verisi eklenir.
  */
 
-import { queryElfa, type ElfaResult } from './elfa';
-import { queryGemini, type GeminiResult } from './gemini';
-import { getTickers } from './pacifica'; // Pacifica'dan ticker verilerini çekmek için
+import { queryElfa, type ElfaResult } from '../elfa';       // bir üst klasör
+import { queryGemini, type GeminiResult } from '../gemini'; // bir üst klasör
+import { getTickers } from '../pacifica';                   // bir üst klasör
 
 export type AIResult = ElfaResult | GeminiResult;
 
 /**
  * Sorunun Elfa'ya gitmesi gerekip gerekmediğini belirler.
- * Anahtar kelime tabanlı, kasıtlı olarak dar tutulmuştur —
- * Elfa kotasını korumak için yanlış pozitifleri minimumda tutar.
  */
 function isElfaQuery(question: string): boolean {
   const q = question.toLowerCase();
@@ -36,22 +34,19 @@ function isElfaQuery(question: string): boolean {
 
 /**
  * Pacifica'dan güncel piyasa verilerini çekip prompt'a ekler.
- * Sadece BTC, ETH, SOL, DOGE, XRP, BNB gibi büyük coin'leri tanır.
  */
 async function enrichWithMarketData(question: string): Promise<string> {
-  // Büyük coin'leri yakalayan regex
   const symbolRegex = /\b(BTC|ETH|SOL|DOGE|XRP|BNB|ADA|AVAX|LINK|DOT|MATIC|NEAR|ATOM|ALGO|VET|FIL)\b/i;
   const match = question.match(symbolRegex);
-  if (!match) return question; // Hiçbir coin geçmiyorsa olduğu gibi gönder
+  if (!match) return question;
 
   const symbol = match[0].toUpperCase();
 
   try {
-    const tickers = await getTickers(); // Tüm ticker'ları al
+    const tickers = await getTickers();
     const ticker = tickers[symbol];
-    if (!ticker) return question; // O coin için veri yoksa olduğu gibi gönder
+    if (!ticker) return question;
 
-    // 24s değişim yüzdesini hesapla
     const yesterdayPrice = parseFloat(ticker.yesterday_price);
     const currentPrice = parseFloat(ticker.mark);
     const changePercent = yesterdayPrice
@@ -71,17 +66,16 @@ Lütfen bu güncel verilere dayanarak kısa bir analiz yap. Yatırım tavsiyesi 
     return `${context}\nKullanıcı sorusu: ${question}`;
   } catch (err) {
     console.error('Pacifica veri çekme hatası:', err);
-    return question; // Hata durumunda soruyu olduğu gibi gönder
+    return question;
   }
 }
 
-/** Ana router fonksiyonu — component ve API route buraya erişir */
+/** Ana router fonksiyonu */
 export async function routeQuery(question: string): Promise<AIResult> {
   if (isElfaQuery(question)) {
     return queryElfa(question);
   }
 
-  // Diğer tüm sorular: önce piyasa verisi ekle, sonra Groq'a sor
   const enrichedQuestion = await enrichWithMarketData(question);
   return queryGemini(enrichedQuestion);
 }
