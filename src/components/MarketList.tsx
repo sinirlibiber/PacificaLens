@@ -29,7 +29,7 @@ export function MarketList({ markets, tickers, fundingRates, selected, onSelect,
       const next = new Set(prev);
       if (next.has(symbol)) next.delete(symbol);
       else next.add(symbol);
-      try { localStorage.setItem('pl_favorites', JSON.stringify([...next])); } catch { /* noop */ }
+      try { localStorage.setItem('pl_favorites', JSON.stringify(Array.from(next))); } catch { /* noop */ }
       return next;
     });
   }
