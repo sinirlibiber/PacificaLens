@@ -20,8 +20,7 @@ export interface ElfaResult {
 }
 
 async function queryElfaDirect(userQuestion: string): Promise<string> {
-  // Try Elfa v2 smart mentions endpoint
-  const res = await fetch(`${ELFA_BASE}/v2/trending-tokens`, {
+  const res = await fetch(`${ELFA_BASE}/v2/aggregations/trending-tokens?timeWindow=24h`, {
     headers: {
       'x-elfa-api-key': ELFA_KEY!,
       'Accept': 'application/json',
@@ -32,17 +31,20 @@ async function queryElfaDirect(userQuestion: string): Promise<string> {
   if (!res.ok) throw new Error(`Elfa trending API error: ${res.status}`);
   const data = await res.json();
 
-  // Format trending tokens into a readable answer
-  const tokens = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+  // v2 response: { success, data: [ { token, mentions, ... } ] }
+  const tokens: Record<string, unknown>[] =
+    Array.isArray(data?.data) ? data.data :
+    Array.isArray(data)       ? data : [];
+
   if (!tokens.length) throw new Error('No trending data');
 
-  const list = tokens.slice(0, 8).map((t: Record<string, unknown>, i: number) => {
-    const symbol = String(t.token ?? t.symbol ?? t.name ?? '?');
-    const mentions = Number(t.mentions ?? t.count ?? 0);
+  const list = tokens.slice(0, 8).map((t, i) => {
+    const symbol   = String(t.token ?? t.symbol ?? t.name ?? '?');
+    const mentions = Number(t.mentions ?? t.mention_count ?? t.count ?? 0);
     return `${i + 1}. $${symbol}${mentions ? ` (${mentions.toLocaleString()} mentions)` : ''}`;
   }).join('\n');
 
-  return `Currently trending on crypto Twitter/social media:\n\n${list}\n\nThese tokens are getting the most social attention right now.`;
+  return `Currently trending on crypto Twitter/social (last 24h):\n\n${list}\n\nThese tokens are getting the most social attention right now.`;
 }
 
 async function queryGroqForSocial(userQuestion: string): Promise<string> {

@@ -31,7 +31,7 @@ function buildPriceContext(tickers: Record<string, Ticker>): string {
   for (const sym of TARGETS) {
     const t = tickers[sym] ?? tickers[sym.replace('-PERP', '')];
     if (!t) continue;
-    const price = Number(t.mark ?? t.oracle ?? t.last ?? 0);
+    const price = Number(t.mark ?? t.oracle ?? t.mid ?? 0);
     if (!price) continue;
     const label = sym.replace('-PERP', '');
     lines.push(`${label}: $${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
