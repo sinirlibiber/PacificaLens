@@ -1,5 +1,5 @@
 /**
- * groq.ts — Groq API client (Mixtral 8x7B, talimatlara daha duyarlı)
+ * groq.ts — Groq API client (Mixtral 8x7B, talimatlara en duyarlı model)
  * 
  * Ücretsiz tier: dakikada 30 istek, günde 14.400 istek.
  * Env var: GROQ_API_KEY
@@ -20,13 +20,12 @@ export interface GeminiResult {
 export async function queryGemini(userQuestion: string): Promise<GeminiResult> {
   const cacheKey = makeCacheKey('groq', userQuestion);
 
-  // 1. Cache'de var mı?
+  // Cache kontrolü (isteğe bağlı, test için kapatabilirsiniz)
   const cached = await cacheGet(cacheKey);
   if (cached) {
     return { answer: cached, source: 'gemini', cached: true };
   }
 
-  // 2. Groq'a sor
   const res = await fetch(GROQ_URL, {
     method: 'POST',
     headers: {
@@ -34,11 +33,17 @@ export async function queryGemini(userQuestion: string): Promise<GeminiResult> {
       'Authorization': `Bearer ${GROQ_KEY}`,
     },
     body: JSON.stringify({
-      model: 'mixtral-8x7b-32768',  // Daha iyi talimat takibi
+      // Talimatlara en duyarlı model
+      model: 'mixtral-8x7b-32768',
       messages: [
         {
           role: 'system',
-          content: `Sen bir kripto piyasası asistanısın. Sana verilen kullanıcı mesajında mutlaka güncel fiyat, hacim ve diğer veriler bulunacaktır. Kendi eğitim verilerindeki fiyatları veya piyasa koşullarını ASLA KULLANMA. Sadece mesajda yazılı olan verilere dayanarak yanıt ver. Yatırım tavsiyesi verme. Yanıtını kullanıcının yazdığı dilde ver.`,
+          content: `Sen bir kripto piyasası asistanısın.
+KURAL 1: Sana verilen kullanıcı mesajında güncel fiyat, hacim, değişim yüzdesi gibi veriler olacaktır.
+KURAL 2: Kendi eğitim verilerindeki hiçbir fiyatı veya piyasa bilgisini KULLANMA.
+KURAL 3: Sadece mesajda yazılı olan rakamlara ve verilere dayanarak yanıt ver.
+KURAL 4: Yatırım tavsiyesi verme, sadece verileri yorumla.
+KURAL 5: Yanıtını kullanıcının yazdığı dilde ver.`,
         },
         {
           role: 'user',
@@ -46,7 +51,7 @@ export async function queryGemini(userQuestion: string): Promise<GeminiResult> {
         },
       ],
       max_tokens: 512,
-      temperature: 0.7,
+      temperature: 0.3, // Daha az yaratıcılık, daha çok talimat takibi
     }),
     signal: AbortSignal.timeout(20_000),
   });
@@ -60,7 +65,6 @@ export async function queryGemini(userQuestion: string): Promise<GeminiResult> {
   const answer: string =
     data?.choices?.[0]?.message?.content ?? 'Groq yanıt vermedi.';
 
-  // 3. Cache'e yaz
   await cacheSet(cacheKey, answer, CACHE_TTL);
 
   return { answer, source: 'gemini', cached: false };
