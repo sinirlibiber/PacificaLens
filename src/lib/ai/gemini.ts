@@ -10,7 +10,7 @@ import { cacheGet, cacheSet, makeCacheKey } from './cache';
 
 const GROQ_KEY = process.env.GROQ_API_KEY!;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const CACHE_TTL = 300; // 5 dakika
+const CACHE_TTL = 1800; // 30 dakika
 
 export interface GeminiResult {
   answer: string;

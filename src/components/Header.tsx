@@ -110,7 +110,7 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
             <button onClick={() => onTabChange('analytics')}
               className={'px-3 py-1.5 text-[11px] font-semibold rounded-md transition-all ' +
                 (tab === 'analytics' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2')}>
-              Analytics
+              Analytics & AI
             </button>
 
             {/* Risk Manager */}

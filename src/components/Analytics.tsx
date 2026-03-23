@@ -320,7 +320,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
         <div className="max-w-[920px] mx-auto px-6 py-5 space-y-5">
 
           {/* AI Assistant */}
-          <div className="bg-surface border border-border1 rounded-xl overflow-hidden" style={{ height: 360 }}>
+          <div className="bg-surface border border-border1 rounded-xl overflow-hidden" style={{ minHeight: 44 }}>
             <AiAssistant />
           </div>
 
