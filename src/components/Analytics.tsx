@@ -49,44 +49,6 @@ const TOOLTIP_STYLE = {
 };
 
 /* ─── AI Assistant collapsible section ─── */
-function AiAssistantSection() {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div>
-      {/* Toggle bar */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-surface2 transition-colors"
-        style={{ borderBottom: open ? '1px solid var(--border1)' : 'none' }}
-      >
-        <span className="text-[13px]">🤖</span>
-        <span className="text-[12px] font-bold text-text1">AI Asistan</span>
-        <span className="text-[10px] text-text3 flex items-center gap-1.5 ml-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-success inline-block animate-pulse" />
-          Elfa + Gemini
-        </span>
-        <span className="ml-auto text-[10px] text-text3 flex items-center gap-1">
-          {open ? 'Kapat' : 'Aç'}
-          <svg
-            width="12" height="12" viewBox="0 0 12 12" fill="none"
-            style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
-          >
-            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </span>
-      </button>
-
-      {/* Collapsible chat */}
-      {open && (
-        <div style={{ height: 380 }}>
-          <AiAssistant />
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function Analytics({ markets: propMarkets, tickers: propTickers }: AnalyticsProps) {
   // Self-fetch markets/tickers if not provided via props
   const [selfMarkets, setSelfMarkets] = useState<Market[]>([]);
@@ -351,19 +313,16 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   }
 
   return (
-    <div className="flex flex-col h-full bg-bg overflow-hidden">
-
-      {/* ─── TOP: AI Assistant ─── */}
-      <div className="shrink-0 border-b border-border1">
-        <AiAssistantSection />
-      </div>
-
-      {/* ─── BOTTOM: Market Analytics + News ─── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+    <div className="flex h-full bg-bg overflow-hidden">
 
       {/* ─── LEFT: Market Analytics ─── */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-[920px] mx-auto px-6 py-5 space-y-5">
+
+          {/* AI Assistant */}
+          <div className="bg-surface border border-border1 rounded-xl overflow-hidden" style={{ height: 360 }}>
+            <AiAssistant />
+          </div>
 
           {/* Stat cards */}
           <div className="grid grid-cols-4 gap-3">
@@ -755,7 +714,6 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
         </div>
 
       </div>
-      </div> {/* end bottom flex */}
     </div>
   );
 }
