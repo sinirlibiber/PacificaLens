@@ -84,11 +84,11 @@ function CopyModal({
       rrRatio: 0,
       fundingCostDaily: 0,
       fundingCostWeekly: 0,
+      breakEvenPrice: entryPrice,
       side,
-      breakEvenPrice: entryPrice,   // eksik alan
-      leverage,                     // eksik alan
-      entryPrice,                   // eksik alan
-      stopLoss: 0,                  // eksik alan
+      leverage,
+      entryPrice,
+      stopLoss: liqPrice,
     };
     await onExecute(r, pos.symbol);
     setPlacing(false);
