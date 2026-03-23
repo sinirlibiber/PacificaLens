@@ -9,7 +9,7 @@ async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   const url = 'https://api.pacifica.fi/api/v1/leaderboard?limit=25000';
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
-    next: { revalidate: 0 }, // bypass Next.js fetch cache — we handle caching ourselves
+    cache: 'no-store',
   });
 
   if (!res.ok) throw new Error(`Leaderboard fetch failed: ${res.status}`);

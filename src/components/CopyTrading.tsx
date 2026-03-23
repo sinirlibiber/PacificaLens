@@ -268,6 +268,19 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     if (filters.onlyProfitable && e.pnl_30d <= 0) return false;
     return true;
   }) : pagedList;
+
+  // Score-aware sort override: when sortField === 'score', re-sort using live scores
+  const scoreSortedList = (() => {
+    if (sortField !== 'score') return null;
+    return [...leaderboard]
+      .filter(e => !searchQuery.trim() || e.account.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+      .sort((a, b) => {
+        const sa = getScore(a.account)?.score ?? -1;
+        const sb = getScore(b.account)?.score ?? -1;
+        return sortDir === 'desc' ? sb - sa : sa - sb;
+      });
+  })();
+
   // When filters active: paginate filtered full list; otherwise use hook's pagedList
   const PAGE_SIZE_FILTER = 50;
   const filteredTotalPages = hasActiveFilters ? Math.ceil(filteredLeaderboard.length / PAGE_SIZE_FILTER) : totalPages;
@@ -286,18 +299,6 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
         return true;
       }).slice(page * PAGE_SIZE_FILTER, (page + 1) * PAGE_SIZE_FILTER)
     : pagedList;
-
-  // Score-aware sort override: when sortField === 'score', re-sort using live scores
-  const scoreSortedList = (() => {
-    if (sortField !== 'score') return null;
-    return [...leaderboard]
-      .filter(e => !searchQuery.trim() || e.account.toLowerCase().includes(searchQuery.trim().toLowerCase()))
-      .sort((a, b) => {
-        const sa = getScore(a.account)?.score ?? -1;
-        const sb = getScore(b.account)?.score ?? -1;
-        return sortDir === 'desc' ? sb - sa : sa - sb;
-      });
-  })();
 
   const myBalance = accountInfo ? Number(accountInfo.available_to_spend || accountInfo.balance || 0) : 0;
   const { addEntry, updateEntry } = useOrderLog(wallet);
