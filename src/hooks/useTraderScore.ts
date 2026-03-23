@@ -12,7 +12,7 @@ interface ScoreCache {
 }
 
 const LS_KEY = 'pacificalens_trader_scores_v1';
-const STALE_THRESHOLD = 13 * 60 * 60 * 1000; // 13 hours — slightly more than server TTL
+const STALE_THRESHOLD = 23 * 60 * 60 * 1000; // 23 hours — matches daily cron
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 

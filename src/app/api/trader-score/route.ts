@@ -50,7 +50,7 @@ const getCachedScores = unstable_cache(
     return { scores, computedAt: Date.now(), totalTraders: entries.length };
   },
   ['trader-scores-v1'],
-  { revalidate: 43200 } // 12 hours in seconds
+  { revalidate: 82800 } // 23 hours — matches daily cron
 );
 
 // ─── Route handlers ───────────────────────────────────────────────────────────
