@@ -7,13 +7,11 @@ export const metadata: Metadata = {
   description: 'Advanced analytics & risk management for Pacifica DEX',
   icons: {
     icon: [
-      { url: '/pacificalens.ico', sizes: '32x32' },
-      { url: '/pacificalens.ico', sizes: '64x64' },
-      { url: '/pacificalens.ico', sizes: '128x128' },
-      { url: '/pacificalens.ico', sizes: '256x256' },
+      { url: '/pacificalens.ico', sizes: '32x32', type: 'image/x-icon' },
+      { url: '/logo.png', sizes: '256x256', type: 'image/png' },
     ],
-    shortcut: '/pacificalens.ico',
-    apple: { url: '/pacificalens.ico', sizes: '256x256' },
+    shortcut: '/logo.png',
+    apple: { url: '/logo.png', sizes: '180x180' },
   },
 };
 

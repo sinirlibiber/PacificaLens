@@ -71,7 +71,7 @@ export function ConnectScreen() {
 
         {/* Logo */}
         <div className="flex items-center gap-3 mb-4">
-          <Image src="/pacificalens.ico" alt="PacificaLens" width={64} height={64} className="object-contain" />
+          <Image src="/logo.png" alt="PacificaLens" width={64} height={64} className="object-contain" />
           <span className="font-bold text-[28px] tracking-tight text-text1">PACIFICALENS</span>
         </div>
 

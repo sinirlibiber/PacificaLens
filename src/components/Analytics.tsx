@@ -396,7 +396,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               </div>
             </div>
             <div className="space-y-1.5 max-h-64 overflow-y-auto overflow-x-visible pr-1" style={{ overflowY: "auto", overflowX: "visible" }}>
-              {longShortData.map(m => (
+              {longShortData.map((m, idx) => (
                 <div key={m.symbol} className="flex items-center gap-2 relative group">
                   <div className="flex items-center gap-1.5 w-16 shrink-0">
                     <CoinLogo symbol={m.symbol} size={14} />
@@ -408,8 +408,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                   </div>
                   <span className="text-[10px] font-mono text-success w-7 text-right shrink-0">{m.long}%</span>
                   <span className="text-[10px] font-mono text-danger w-7 text-right shrink-0">{m.short}%</span>
-                  {/* Tooltip — above bar, escapes scroll container */}
-                  <div className="absolute left-16 bottom-6 hidden group-hover:flex flex-col bg-surface border border-border1 rounded-xl shadow-card-md px-3 py-2.5 z-[100] min-w-[180px] pointer-events-none">
+                  {/* Tooltip — top 5 show below, rest show above */}
+                  <div className={`absolute left-16 hidden group-hover:flex flex-col bg-surface border border-border1 rounded-xl shadow-card-md px-3 py-2.5 z-[100] min-w-[180px] pointer-events-none ${idx < 5 ? 'top-full mt-1' : 'bottom-6'}`}>
                     <div className="text-[11px] font-bold text-text1 mb-1.5">{m.symbol}</div>
                     <div className="flex items-center justify-between gap-6 text-[10px] mb-1">
                       <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-success inline-block" />Long</span>
