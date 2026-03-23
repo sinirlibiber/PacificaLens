@@ -1,3 +1,9 @@
 {
-  "regions": ["fra1"]
+  "regions": ["fra1"],
+  "crons": [
+    {
+      "path": "/api/trader-score",
+      "schedule": "0 */12 * * *"
+    }
+  ]
 }

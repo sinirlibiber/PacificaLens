@@ -32,7 +32,7 @@ export interface TraderTrade {
 export type SortField =
   | 'pnl_7d' | 'pnl_30d' | 'pnl_all'
   | 'volume_7d' | 'volume_30d' | 'volume_all'
-  | 'equity_current' | 'oi_current';
+  | 'equity_current' | 'oi_current' | 'score';
 
 export type SortDir = 'desc' | 'asc';
 
@@ -193,8 +193,9 @@ export function useCopyTrading() {
       list = list.filter(e => e.account.toLowerCase().includes(q));
     }
     list = [...list].sort((a, b) => {
-      const va = a[sortField];
-      const vb = b[sortField];
+      if (sortField === 'score') return 0; // score sort handled in component
+      const va = a[sortField as Exclude<SortField, 'score'>];
+      const vb = b[sortField as Exclude<SortField, 'score'>];
       return sortDir === 'desc' ? vb - va : va - vb;
     });
     return list;

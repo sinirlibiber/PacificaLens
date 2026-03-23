@@ -15,6 +15,8 @@ import { CalcResult } from './Calculator';
 import { submitMarketOrder, submitLimitOrder, toBase58 } from '@/lib/pacificaSigning';
 import { useOrderLog } from '@/hooks/useOrderLog';
 import { usePrivy, useSolanaWallets } from '@privy-io/react-auth';
+import { useTraderScore } from '@/hooks/useTraderScore';
+import { ScoreBadge, ScoreCard } from '@/components/ScoreBadge';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -205,6 +207,8 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
   const { signMessage } = usePrivy();
   const { wallets: solanaWallets } = useSolanaWallets();
 
+  const { getScore, loading: scoresLoading, refreshScores, computedAt: scoresComputedAt } = useTraderScore();
+
   const {
     leaderboard,
     lbLoading, lbError, fetchLeaderboard,
@@ -267,9 +271,33 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
   // When filters active: paginate filtered full list; otherwise use hook's pagedList
   const PAGE_SIZE_FILTER = 50;
   const filteredTotalPages = hasActiveFilters ? Math.ceil(filteredLeaderboard.length / PAGE_SIZE_FILTER) : totalPages;
-  const filteredPagedList = hasActiveFilters
-    ? filteredLeaderboard.slice(page * PAGE_SIZE_FILTER, (page + 1) * PAGE_SIZE_FILTER)
+
+  // When score sort: use scoreSortedList; when other filters: use filteredLeaderboard; else hook's pagedList
+  const activeList = scoreSortedList ?? (hasActiveFilters ? filteredLeaderboard : null);
+  const filteredPagedList = activeList
+    ? activeList.filter(e => {
+        if (!hasActiveFilters) return true;
+        if (filters.minPnl7d && e.pnl_7d < Number(filters.minPnl7d)) return false;
+        if (filters.minPnl30d && e.pnl_30d < Number(filters.minPnl30d)) return false;
+        if (filters.minPnlAll && e.pnl_all < Number(filters.minPnlAll)) return false;
+        if (filters.minVolume && e.volume_30d < Number(filters.minVolume)) return false;
+        if (filters.minEquity && e.equity_current < Number(filters.minEquity)) return false;
+        if (filters.onlyProfitable && e.pnl_30d <= 0) return false;
+        return true;
+      }).slice(page * PAGE_SIZE_FILTER, (page + 1) * PAGE_SIZE_FILTER)
     : pagedList;
+
+  // Score-aware sort override: when sortField === 'score', re-sort using live scores
+  const scoreSortedList = (() => {
+    if (sortField !== 'score') return null;
+    return [...leaderboard]
+      .filter(e => !searchQuery.trim() || e.account.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+      .sort((a, b) => {
+        const sa = getScore(a.account)?.score ?? -1;
+        const sb = getScore(b.account)?.score ?? -1;
+        return sortDir === 'desc' ? sb - sa : sa - sb;
+      });
+  })();
 
   const myBalance = accountInfo ? Number(accountInfo.available_to_spend || accountInfo.balance || 0) : 0;
   const { addEntry, updateEntry } = useOrderLog(wallet);
@@ -413,6 +441,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
   // ─── Sort columns config ──────────────────────────────────────────────────
 
   const sortCols: { label: string; field: SortField }[] = [
+    { label: 'Score', field: 'score' },
     { label: 'PnL 7D', field: 'pnl_7d' },
     { label: 'PnL 30D', field: 'pnl_30d' },
     { label: 'PnL All Time', field: 'pnl_all' },
@@ -513,6 +542,15 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                     : <>↻ Refresh</>
                   }
                 </button>
+                {scoresComputedAt && (
+                  <span className="text-[10px] text-text3 border-l border-border1 pl-3">
+                    Skor: {new Date(scoresComputedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                    {' '}
+                    <button onClick={refreshScores} disabled={scoresLoading} className="text-accent hover:underline disabled:opacity-50">
+                      {scoresLoading ? '...' : '↻'}
+                    </button>
+                  </span>
+                )}
               </div>
             </>
           )}
@@ -616,6 +654,11 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                                 </button>
                               </div>
                             </div>
+                          </td>
+
+                          {/* Score */}
+                          <td className={`px-3 py-2 text-right ${sortField === 'score' ? 'bg-accent/3' : ''}`}>
+                            <ScoreBadge score={getScore(entry.account)} />
                           </td>
 
                           {/* PnL cols */}
@@ -837,6 +880,13 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                     </div>
                   ))}
                 </div>
+
+                {/* ── Trader Score Card ── */}
+                {getScore(selectedTrader!) && (
+                  <div className="p-3 border-b border-border1">
+                    <ScoreCard score={getScore(selectedTrader!)!} />
+                  </div>
+                )}
 
                 {/* ── Performance grid — 2. fotoğraf layout ── */}
                 {lbEntry && (
