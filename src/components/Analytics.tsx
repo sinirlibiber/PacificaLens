@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { Market, Ticker } from '@/lib/pacifica';
-import { fmt, fmtPrice } from '@/lib/utils';
+import { fmt } from '@/lib/utils';
 import { CoinLogo } from './CoinLogo';
 import AiAssistant from './AiAssistant';
+import { useWhaleWatcher } from '@/hooks/useWhaleWatcher';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
@@ -88,6 +89,9 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   const markets = selfMarkets.length > 0 ? selfMarkets : (propMarkets || []);
   const tickers = Object.keys(selfTickers).length > 0 ? selfTickers : (propTickers || {});
 
+  // Market Signals — reuse WhaleWatcher hook for OI/Funding alerts + liquidations
+  const { whaleTrades, oiAlerts, fundingAlerts, isScanning, lastScan } = useWhaleWatcher(markets, tickers, 5000);
+
   const [news, setNews] = useState<NewsItem[]>([]);
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
   const [newsFilter, setNewsFilter] = useState<'All' | 'Crypto' | 'Macro'>('All');
@@ -131,9 +135,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     return () => clearInterval(iv);
   }, []);
   
-  // Liquidations state
-  interface LiqEvent { symbol: string; side: string; price: string; amount: string; created_at: number; cause?: string; event_type?: string; }
-  const [liquidations, setLiquidations] = useState<LiqEvent[]>([]);
+  // Liquidations — derived from whaleTrades (useWhaleWatcher hook)
+  const liquidations = whaleTrades.filter(t => t.isLiquidation);
 
   // Fetch news
   useEffect(() => {
@@ -183,41 +186,6 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     return () => clearInterval(iv);
   }, []);
 
-  // Fetch liquidations from top markets
-  useEffect(() => {
-    if (markets.length === 0) return;
-    async function loadLiqs() {
-      const topSymbols = [...markets]
-        .sort((a, b) => Number(tickers[b.symbol]?.open_interest || 0) - Number(tickers[a.symbol]?.open_interest || 0))
-        .slice(0, 5)
-        .map(m => m.symbol);
-      const results: LiqEvent[] = [];
-      await Promise.all(topSymbols.map(async sym => {
-        try {
-          const res = await fetch(`/api/proxy?path=${encodeURIComponent('trades?symbol=' + sym)}`);
-          if (!res.ok) return;
-          const data = await res.json();
-          if (data.success && Array.isArray(data.data)) {
-            // Filter for liquidations — try multiple field names
-            const liqs = data.data.filter((t: {cause?: string; event_type?: string; type?: string}) =>
-              t.cause === 'market_liquidation' ||
-              t.cause === 'backstop_liquidation' ||
-              t.event_type === 'liquidation' ||
-              t.type === 'liquidation'
-            );
-            // If no liquidations found, take largest trades as proxy
-            const items = liqs.length > 0 ? liqs : [];
-            items.forEach((t: LiqEvent) => results.push({ ...t, symbol: sym }));
-          }
-        } catch {}
-      }));
-      results.sort((a, b) => b.created_at - a.created_at);
-      setLiquidations(results.slice(0, 50));
-    }
-    loadLiqs();
-    const iv = setInterval(loadLiqs, 15000);
-    return () => clearInterval(iv);
-  }, [markets, tickers]);
 
   // Computed market stats
   const totalVolume = Object.values(tickers).reduce((s, t) => s + Number(t?.volume_24h || 0), 0);
@@ -247,12 +215,12 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   }));
 
   // Liquidation stats
-  const totalLiqValue = liquidations.reduce((s, l) => s + Number(l.price) * Number(l.amount), 0);
+  const totalLiqValue = liquidations.reduce((s, l) => s + l.notional, 0);
   const liqBySymbol = liquidations.reduce((acc, l) => {
     const key = l.symbol;
     if (!acc[key]) acc[key] = { symbol: key, count: 0, value: 0 };
     acc[key].count++;
-    acc[key].value += Number(l.price) * Number(l.amount);
+    acc[key].value += l.notional;
     return acc;
   }, {} as Record<string, { symbol: string; count: number; value: number }>);
   const liqHeatmap = Object.values(liqBySymbol).sort((a, b) => b.value - a.value);
@@ -497,6 +465,62 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
           </div>
 
+          {/* ─── Market Signals ─── */}
+          <div className="bg-surface border border-border1 rounded-xl shadow-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-border1 bg-surface2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-accent" />
+                <span className="text-[12px] font-bold text-text1">Market Signals</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-text3">
+                {isScanning && <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />}
+                {lastScan ? `Updated ${lastScan.toLocaleTimeString()}` : 'Starting scan...'}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-border1">
+              {/* OI Alerts */}
+              <div>
+                <div className="px-4 py-2.5 border-b border-border1 bg-surface2/40">
+                  <h4 className="text-[11px] font-bold text-text1 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />OI Alerts ({oiAlerts.length})
+                  </h4>
+                </div>
+                <div className="overflow-auto" style={{ maxHeight: 200 }}>
+                  {oiAlerts.length > 0 ? oiAlerts.map((a, i) => (
+                    <div key={i} className="flex items-center justify-between px-4 py-2.5 border-b border-border1 last:border-0 hover:bg-surface2/40">
+                      <div className="flex items-center gap-2"><CoinLogo symbol={a.symbol} size={16} /><span className="font-semibold text-[11px]">{a.symbol}</span></div>
+                      <span className={`text-[11px] font-bold ${a.direction === 'up' ? 'text-success' : 'text-danger'}`}>
+                        {a.direction === 'up' ? '↑' : '↓'} {fmt(Math.abs(a.changePercent), 1)}%
+                      </span>
+                      <span className="text-[10px] text-text3">{new Date(a.ts).toLocaleTimeString()}</span>
+                    </div>
+                  )) : <div className="py-6 text-center text-text3 text-[11px]">No OI spikes detected yet</div>}
+                </div>
+              </div>
+              {/* Funding Spikes */}
+              <div>
+                <div className="px-4 py-2.5 border-b border-border1 bg-surface2/40">
+                  <h4 className="text-[11px] font-bold text-text1 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-warn" />Funding Spikes ({fundingAlerts.length})
+                  </h4>
+                </div>
+                <div className="overflow-auto" style={{ maxHeight: 200 }}>
+                  {fundingAlerts.length > 0 ? fundingAlerts.map((a, i) => (
+                    <div key={i} className="flex items-center justify-between px-4 py-2.5 border-b border-border1 last:border-0 hover:bg-surface2/40">
+                      <div className="flex items-center gap-2"><CoinLogo symbol={a.symbol} size={16} /><span className="font-semibold text-[11px]">{a.symbol}</span></div>
+                      <span className={`text-[11px] font-bold ${a.rate >= 0 ? 'text-danger' : 'text-success'}`}>
+                        {a.rate >= 0 ? '+' : ''}{fmt(a.rate, 4)}%/8h
+                      </span>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold ${Math.abs(a.rate) >= 0.1 ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn'}`}>
+                        {Math.abs(a.rate) >= 0.1 ? 'HIGH' : 'SPIKE'}
+                      </span>
+                    </div>
+                  )) : <div className="py-6 text-center text-text3 text-[11px]">No funding spikes detected yet</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Total Liquidations + Heatmap */}
           <div className="grid grid-cols-2 gap-4">
             {/* Recent Liquidations */}
@@ -509,15 +533,14 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               </div>
               {liquidations.length === 0 ? (
                 <div className="py-8 text-center space-y-1">
-                  <div className="text-[13px]">✓</div>
-                  <div className="text-[11px] text-text3">No liquidations in top 5 markets</div>
-                  <div className="text-[10px] text-text3">Updates every 15 seconds</div>
+                  <div className="text-[13px]">{isScanning ? '🔍' : '✓'}</div>
+                  <div className="text-[11px] text-text3">{isScanning ? 'Scanning markets...' : 'No liquidations detected'}</div>
+                  <div className="text-[10px] text-text3">{lastScan ? `Updated ${lastScan.toLocaleTimeString()}` : 'Starting scan...'}</div>
                 </div>
               ) : (
                 <div className="space-y-1 max-h-48 overflow-y-auto">
                   {liquidations.slice(0, 15).map((l, i) => {
                     const isLong = l.side?.includes('long');
-                    const value = Number(l.price) * Number(l.amount);
                     return (
                       <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface2/50 transition-colors">
                         <CoinLogo symbol={l.symbol} size={16} />
@@ -525,8 +548,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isLong ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
                           {isLong ? 'LONG LIQ' : 'SHORT LIQ'}
                         </span>
-                        <span className="text-[10px] font-mono text-text2 ml-auto">{fmtLarge(value)}</span>
-                        <span className="text-[10px] text-text3">{new Date(l.created_at).toLocaleTimeString()}</span>
+                        <span className="text-[10px] font-mono text-text2 ml-auto">{fmtLarge(l.notional)}</span>
+                        <span className="text-[10px] text-text3">{new Date(l.ts).toLocaleTimeString()}</span>
                       </div>
                     );
                   })}

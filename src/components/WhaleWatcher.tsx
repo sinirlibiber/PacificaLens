@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { Market, Ticker, getRecentTrades } from '@/lib/pacifica';
+import { useState, useMemo } from 'react';
+import { Market, Ticker } from '@/lib/pacifica';
 import { useWhaleWatcher, WhaleTrade, SymbolPressure } from '@/hooks/useWhaleWatcher';
 import { CoinLogo } from './CoinLogo';
 import { fmt, fmtPrice, getMarkPrice, get24hChange } from '@/lib/utils';
@@ -264,7 +264,7 @@ function TradeDetailModal({ t, onClose }: { t: WhaleTrade; onClose: () => void }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export function WhaleWatcher({ markets, tickers, wallet, onExecute, accountInfo }: Props) {
-  const { whaleTrades, pressureMap, oiAlerts, fundingAlerts, isScanning, lastScan } = useWhaleWatcher(markets, tickers, 5000);
+  const { whaleTrades, pressureMap, isScanning, lastScan } = useWhaleWatcher(markets, tickers, 5000);
 
   const [posModal, setPosModal] = useState<SymbolPressure | null>(null);
   const [traderWallet, setTraderWallet] = useState<string | null>(null);
@@ -277,13 +277,6 @@ export function WhaleWatcher({ markets, tickers, wallet, onExecute, accountInfo 
   const [bpMinFlow, setBpMinFlow] = useState(0);
   const [bpSort, setBpSort] = useState<'flow' | 'bull' | 'trades' | 'liq'>('flow');
   const [bpDir, setBpDir] = useState<SortDir>('desc');
-
-  // Whale Feed
-  const [wfSearch, setWfSearch] = useState('');
-  const [wfSide, setWfSide] = useState<'all' | 'long' | 'short'>('all');
-  const [wfMin, setWfMin] = useState(10000);
-  const [wfSort, setWfSort] = useState<'ts' | 'notional'>('ts');
-  const [wfDir, setWfDir] = useState<SortDir>('desc');
 
   // Liquidations
   const [liqSearch, setLiqSearch] = useState('');
@@ -313,17 +306,6 @@ export function WhaleWatcher({ markets, tickers, wallet, onExecute, accountInfo 
     return rows;
   }, [pressureMap, bpSearch, bpSide, bpMinFlow, bpSort, bpDir]);
 
-  const whaleFeed = useMemo(() => {
-    let rows = whaleTrades.filter(t => !t.isLiquidation && t.notional >= wfMin);
-    if (wfSearch) rows = rows.filter(t => t.symbol.toLowerCase().includes(wfSearch.toLowerCase()));
-    if (wfSide === 'long') rows = rows.filter(t => t.side.includes('long'));
-    if (wfSide === 'short') rows = rows.filter(t => t.side.includes('short'));
-    return rows.sort((a, b) => {
-      const d = wfDir === 'desc' ? -1 : 1;
-      return wfSort === 'ts' ? (a.ts - b.ts) * d : (a.notional - b.notional) * d;
-    });
-  }, [whaleTrades, wfSearch, wfSide, wfMin, wfSort, wfDir]);
-
   const liquidations = useMemo(() => {
     let rows = whaleTrades.filter(t => t.isLiquidation && t.notional >= liqMin);
     if (liqSearch) rows = rows.filter(t => t.symbol.toLowerCase().includes(liqSearch.toLowerCase()));
@@ -335,14 +317,7 @@ export function WhaleWatcher({ markets, tickers, wallet, onExecute, accountInfo 
     });
   }, [whaleTrades, liqSearch, liqSide, liqMin, liqSort, liqDir]);
 
-  const pressureSorted = useMemo(() =>
-    Object.values(pressureMap).filter(p => p.totalWhaleFlow > 0 || p.tradeCount > 0)
-      .sort((a, b) => b.totalWhaleFlow - a.totalWhaleFlow).slice(0, 24),
-    [pressureMap]
-  );
-
   const totalLiqVol = whaleTrades.filter(t => t.isLiquidation).reduce((s, t) => s + t.notional, 0);
-  const totalFlow = whaleTrades.filter(t => !t.isLiquidation).reduce((s, t) => s + t.notional, 0);
 
   const filterBtn = (active: boolean, color = 'accent') =>
     'px-2.5 py-1 text-[10px] font-semibold rounded transition-colors ' +
@@ -380,8 +355,7 @@ export function WhaleWatcher({ markets, tickers, wallet, onExecute, accountInfo 
         </div>
         <div className="flex gap-2 flex-wrap">
           {[
-            { l: 'Whale Flow', v: fmtN(totalFlow), c: 'text-accent' },
-            { l: 'Liquidations', v: fmtN(totalLiqVol), c: 'text-danger' },
+            { l: 'Liq Volume', v: fmtN(totalLiqVol), c: 'text-danger' },
             { l: 'Liq Events', v: String(whaleTrades.filter(t => t.isLiquidation).length), c: 'text-danger' },
             { l: 'Markets', v: String(Object.keys(pressureMap).length), c: 'text-text1' },
           ].map(s => (
@@ -482,88 +456,6 @@ export function WhaleWatcher({ markets, tickers, wallet, onExecute, accountInfo 
         </div>
       </div>
 
-      {/* Whale Feed + Pressure Map */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-surface border border-border1 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border1 bg-surface2 flex items-center justify-between gap-2 flex-wrap">
-            <h3 className="text-[12px] font-bold text-text1 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-success" />Whale Feed ({whaleFeed.length})
-            </h3>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <input value={wfSearch} onChange={e => setWfSearch(e.target.value)} placeholder="Symbol"
-                className="bg-bg border border-border1 rounded px-2 py-1 text-[10px] outline-none focus:border-accent w-16" />
-              <select value={wfMin} onChange={e => setWfMin(Number(e.target.value))}
-                className="bg-bg border border-border1 rounded px-1.5 py-1 text-[10px] text-text2 outline-none">
-                <option value={1000}>≥$1K</option>
-                <option value={10000}>≥$10K</option>
-                <option value={50000}>≥$50K</option>
-                <option value={100000}>≥$100K</option>
-              </select>
-              <div className="flex bg-bg border border-border1 rounded overflow-hidden">
-                {(['all', 'long', 'short'] as const).map(s => (
-                  <button key={s} onClick={() => setWfSide(s)} className={filterBtn(wfSide === s) + ' capitalize text-[10px]'}>{s}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="overflow-auto" style={{ maxHeight: 260 }}>
-            <table className="w-full text-[11px]">
-              <thead className="sticky top-0 bg-surface2">
-                <tr>
-                  <th className="px-3 py-2 text-[10px] text-text3 font-semibold uppercase text-left">Symbol</th>
-                  <th className="px-3 py-2 text-[10px] text-text3 font-semibold uppercase text-left">Action</th>
-                  <Th label="Size" sortKey="notional" cur={wfSort} dir={wfDir} onClick={() => tog(wfSort, 'notional', wfDir, setWfSort, setWfDir)} />
-                  <Th label="Time" sortKey="ts" cur={wfSort} dir={wfDir} onClick={() => tog(wfSort, 'ts', wfDir, setWfSort, setWfDir)} />
-                </tr>
-              </thead>
-              <tbody>
-                {whaleFeed.length > 0 ? whaleFeed.map(t => (
-                  <tr key={t.id} className="hover:bg-surface2/40 cursor-pointer border-b border-border1 last:border-0" onClick={() => setTradeModal(t)}>
-                    <td className="px-3 py-2"><div className="flex items-center gap-1.5"><CoinLogo symbol={t.symbol} size={16} /><span className="font-semibold">{t.symbol}</span></div></td>
-                    <td className="px-3 py-2">
-                      <span className={'text-[9px] font-bold px-1.5 py-0.5 rounded-full ' + (t.side.includes('long') && t.side.startsWith('open') ? 'bg-success/10 text-success' : t.side.includes('short') && t.side.startsWith('open') ? 'bg-danger/10 text-danger' : 'bg-surface2 text-text3')}>
-                        {t.side.replace('_', ' ').toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 font-mono font-semibold text-accent">{fmtN(t.notional)}</td>
-                    <td className="px-3 py-2 text-text3 text-[10px]">{new Date(t.ts).toLocaleTimeString()}</td>
-                  </tr>
-                )) : <tr><td colSpan={4} className="py-8 text-center text-text3">No whale trades yet</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="bg-surface border border-border1 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border1 bg-surface2">
-            <h3 className="text-[12px] font-bold text-text1 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-warn" />Pressure Map ({pressureSorted.length})
-            </h3>
-          </div>
-          <div className="p-3 grid grid-cols-4 gap-1.5 overflow-auto" style={{ maxHeight: 276 }}>
-            {pressureSorted.map(p => {
-              const isL = p.bullScore >= 55, isS = p.bearScore >= 55;
-              return (
-                <button key={p.symbol} onClick={() => setPosModal(p)}
-                  className={'flex flex-col gap-1 p-2 rounded-xl border transition-all hover:scale-[1.03] text-left ' +
-                    (isL ? 'border-success/30 bg-success/5' : isS ? 'border-danger/30 bg-danger/5' : 'border-border1 bg-surface2')}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-text1">{p.symbol}</span>
-                    <span className={'text-[8px] font-bold ' + (isL ? 'text-success' : isS ? 'text-danger' : 'text-text3')}>{p.bullScore}%</span>
-                  </div>
-                  <div className="flex h-1 rounded-full overflow-hidden">
-                    <div className="bg-success" style={{ width: p.bullScore + '%' }} />
-                    <div className="bg-danger" style={{ width: p.bearScore + '%' }} />
-                  </div>
-                  <div className="text-[8px] text-text3">{fmtN(p.totalWhaleFlow)}</div>
-                </button>
-              );
-            })}
-            {pressureSorted.length === 0 && <div className="col-span-4 py-8 text-center text-text3 text-sm">Scanning...</div>}
-          </div>
-        </div>
-      </div>
-
       {/* Liquidations */}
       <div className="bg-surface border border-border1 rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-border1 bg-surface2 flex items-center justify-between gap-3 flex-wrap">
@@ -624,48 +516,6 @@ export function WhaleWatcher({ markets, tickers, wallet, onExecute, accountInfo 
         </div>
       </div>
 
-      {/* OI Alerts + Funding */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-surface border border-border1 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border1 bg-surface2">
-            <h3 className="text-[12px] font-bold text-text1 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-accent" />OI Alerts ({oiAlerts.length})
-            </h3>
-          </div>
-          <div className="overflow-auto" style={{ maxHeight: 180 }}>
-            {oiAlerts.length > 0 ? oiAlerts.map((a, i) => (
-              <div key={i} className="flex items-center justify-between px-4 py-2.5 border-b border-border1 last:border-0 hover:bg-surface2/40">
-                <div className="flex items-center gap-2"><CoinLogo symbol={a.symbol} size={16} /><span className="font-semibold text-[11px]">{a.symbol}</span></div>
-                <span className={'text-[11px] font-bold ' + (a.direction === 'up' ? 'text-success' : 'text-danger')}>
-                  {a.direction === 'up' ? '↑' : '↓'} {fmt(Math.abs(a.changePercent), 1)}%
-                </span>
-                <span className="text-[10px] text-text3">{new Date(a.ts).toLocaleTimeString()}</span>
-              </div>
-            )) : <div className="py-6 text-center text-text3 text-[11px]">No OI spikes detected yet</div>}
-          </div>
-        </div>
-        <div className="bg-surface border border-border1 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border1 bg-surface2">
-            <h3 className="text-[12px] font-bold text-text1 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-warn" />Funding Spikes ({fundingAlerts.length})
-            </h3>
-          </div>
-          <div className="overflow-auto" style={{ maxHeight: 180 }}>
-            {fundingAlerts.length > 0 ? fundingAlerts.map((a, i) => (
-              <div key={i} className="flex items-center justify-between px-4 py-2.5 border-b border-border1 last:border-0 hover:bg-surface2/40">
-                <div className="flex items-center gap-2"><CoinLogo symbol={a.symbol} size={16} /><span className="font-semibold text-[11px]">{a.symbol}</span></div>
-                <span className={'text-[11px] font-bold ' + (a.rate >= 0 ? 'text-danger' : 'text-success')}>
-                  {a.rate >= 0 ? '+' : ''}{fmt(a.rate, 4)}%/8h
-                </span>
-                <span className={'text-[9px] px-2 py-0.5 rounded-full font-semibold ' + (Math.abs(a.rate) >= 0.1 ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn')}>
-                  {Math.abs(a.rate) >= 0.1 ? 'HIGH' : 'SPIKE'}
-                </span>
-              </div>
-            )) : <div className="py-6 text-center text-text3 text-[11px]">No funding spikes detected yet</div>}
-          </div>
-        </div>
-      </div>
-
       {/* Trader lookup — redirects to Copy tab */}
       {traderWallet && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -691,7 +541,7 @@ export function WhaleWatcher({ markets, tickers, wallet, onExecute, accountInfo 
                 View on Pacifica →
               </a>
               <div className="text-[10px] text-text3 text-center mt-2">
-                To copy trades from this trader, add them from the <span className="text-accent font-semibold">Copy</span> tab leaderboard
+                To copy trades from this trader, add them from the <span className="text-accent font-semibold">Smart Money</span> tab leaderboard
               </div>
             </div>
           </div>

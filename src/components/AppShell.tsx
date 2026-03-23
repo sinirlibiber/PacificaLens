@@ -15,15 +15,14 @@ import { CalcResult } from '@/components/Calculator';
 import { useOrderLog } from '@/hooks/useOrderLog';
 
 interface ToastState { message: string; type: 'success' | 'error' | 'info' | 'loading'; duration?: number; action?: { label: string; href: string }; }
-type Tab = 'overview' | 'risk' | 'arbitrage' | 'arbitrage-bot' | 'whale' | 'copy' | 'portfolio' | 'analytics';
+type Tab = 'overview' | 'risk' | 'arbitrage' | 'arbitrage-bot' | 'copy' | 'portfolio' | 'analytics';
 
 const ROUTE_MAP: Record<string, Tab> = {
   '/overview': 'overview',
   '/risk': 'risk',
   '/arbitrage': 'arbitrage',
   '/arbitrage/bot': 'arbitrage-bot',
-  '/smart-money': 'whale',
-  '/copy-trading': 'copy',
+  '/smart-money': 'copy',
   '/portfolio': 'portfolio',
   '/analytics': 'analytics',
 };
@@ -33,8 +32,7 @@ const TAB_ROUTE: Record<Tab, string> = {
   'risk': '/risk',
   'arbitrage': '/arbitrage',
   'arbitrage-bot': '/arbitrage/bot',
-  'whale': '/smart-money',
-  'copy': '/copy-trading',
+  'copy': '/smart-money',
   'portfolio': '/portfolio',
   'analytics': '/analytics',
 };
