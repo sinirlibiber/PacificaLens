@@ -139,9 +139,17 @@ export function TradingPanel({ markets, tickers, wallet, onExecute }: TradingPan
       marginPct: 0,
       slPct: 0,
       liquidationPrice: liqPrice,
-      tp2: Number(tpPrice) || 0,
+      tp1: Number(tpPrice) || 0,
+      tp2: 0,
       tp3: 0,
+      rrRatio: 0,
+      fundingCostDaily: 0,
+      fundingCostWeekly: 0,
+      breakEvenPrice: entryPrice,
       side,
+      leverage,
+      entryPrice,
+      stopLoss: liqPrice,
     };
     await onExecute(r, selected.symbol);
     setPlacing(false);
