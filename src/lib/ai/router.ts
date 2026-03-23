@@ -1,16 +1,16 @@
 /**
- * router.ts — Gelen soruyu Elfa mı Groq mu yönlendirecek karar verir.
+ * router.ts — Gelen soruyu Elfa mı Gemini mi yönlendirecek karar verir.
  * 
  * Kural:
  *   - Twitter/sosyal trend soruları  → Elfa  (1000 req/ay, cache 15dk)
- *   - Diğer her şey                  → Groq (ücretsiz, cache 5dk)
+ *   - Diğer her şey                  → Gemini (ücretsiz, cache 5dk)
  * 
- * Güncelleme: Groq'a giden sorulara Pacifica'dan güncel piyasa verisi eklenir.
+ * Güncelleme: Gemini'ye giden sorulara Pacifica'dan güncel piyasa verisi eklenir.
  */
 
-import { queryElfa, type ElfaResult } from '../elfa';       // bir üst klasör
-import { queryGemini, type GeminiResult } from '../gemini'; // bir üst klasör
-import { getTickers } from '../pacifica';                   // bir üst klasör
+import { queryElfa, type ElfaResult } from './elfa';
+import { queryGemini, type GeminiResult } from './gemini';
+import { getTickers } from './pacifica';
 
 export type AIResult = ElfaResult | GeminiResult;
 
