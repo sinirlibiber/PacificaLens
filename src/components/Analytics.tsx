@@ -408,19 +408,20 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                   </div>
                   <span className="text-[10px] font-mono text-success w-7 text-right shrink-0">{m.long}%</span>
                   <span className="text-[10px] font-mono text-danger w-7 text-right shrink-0">{m.short}%</span>
-                  {/* Tooltip */}
-                  <div className="absolute left-16 bottom-full mb-1.5 hidden group-hover:flex flex-col bg-surface border border-border1 rounded-xl shadow-card-md px-3 py-2.5 z-50 min-w-[180px] pointer-events-none">
-                    <div className="text-[11px] font-bold text-text1 mb-1.5">{m.symbol} Position Bias</div>
-                    <div className="flex items-center justify-between gap-4 text-[10px] mb-1">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success/70 inline-block" />Long</span>
-                      <span className="font-mono font-semibold text-success">{fmtLarge(m.longVol)}</span>
+                  {/* Tooltip — fixed position inline, no overflow */}
+                  <div className="absolute left-16 top-full mt-1 hidden group-hover:flex flex-col bg-surface border border-border1 rounded-xl shadow-card-md px-3 py-2.5 z-[100] min-w-[180px] pointer-events-none">
+                    <div className="text-[11px] font-bold text-text1 mb-1.5">{m.symbol}</div>
+                    <div className="flex items-center justify-between gap-6 text-[10px] mb-1">
+                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-success inline-block" />Long</span>
+                      <span className="font-mono font-bold text-success">{fmtLarge(m.longVol)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-4 text-[10px] mb-1.5">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger/70 inline-block" />Short</span>
-                      <span className="font-mono font-semibold text-danger">{fmtLarge(m.shortVol)}</span>
+                    <div className="flex items-center justify-between gap-6 text-[10px] mb-1.5">
+                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-danger inline-block" />Short</span>
+                      <span className="font-mono font-bold text-danger">{fmtLarge(m.shortVol)}</span>
                     </div>
-                    <div className="text-[9px] text-text3 border-t border-border1 pt-1">Total vol: {fmtLarge(m.volume)}</div>
-                    <div className="text-[9px] text-text3">Estimated from funding bias</div>
+                    <div className="text-[9px] text-text3 border-t border-border1 pt-1.5">
+                      Total 24h vol: {fmtLarge(m.volume)} · est. from funding
+                    </div>
                   </div>
                 </div>
               ))}
