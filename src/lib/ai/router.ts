@@ -1,21 +1,28 @@
 /**
- * router.ts — Gelen soruyu Elfa mı Gemini mi yönlendirecek karar verir.
+ * router.ts — Gelen soruyu Elfa mı Groq mu yönlendirecek karar verir.
  * 
  * Kural:
  *   - Twitter/sosyal trend soruları  → Elfa  (1000 req/ay, cache 15dk)
- *   - Diğer her şey                  → Gemini (ücretsiz, cache 5dk)
+ *   - Diğer her şey                  → Groq (ücretsiz, cache 5dk)
  * 
- * Güncelleme: Gemini'ye giden sorulara Pacifica'dan güncel piyasa verisi eklenir.
+ * Güncelleme: Groq'a giden sorulara Pacifica'dan güncel piyasa verisi eklenir.
+ * 
+ * Dosya yapısı:
+ *   src/lib/pacifica.ts           (bir üst klasör)
+ *   src/lib/ai/elfa.ts            (aynı klasör)
+ *   src/lib/ai/gemini.ts          (aynı klasör)
+ *   src/lib/ai/router.ts          (bu dosya)
  */
 
 import { queryElfa, type ElfaResult } from './elfa';
 import { queryGemini, type GeminiResult } from './gemini';
-import { getTickers } from './pacifica';
+import { getTickers } from '../pacifica';   // bir üst klasör
 
 export type AIResult = ElfaResult | GeminiResult;
 
 /**
  * Sorunun Elfa'ya gitmesi gerekip gerekmediğini belirler.
+ * Anahtar kelime tabanlı, kasıtlı olarak dar tutulmuştur.
  */
 function isElfaQuery(question: string): boolean {
   const q = question.toLowerCase();
@@ -34,18 +41,20 @@ function isElfaQuery(question: string): boolean {
 
 /**
  * Pacifica'dan güncel piyasa verilerini çekip prompt'a ekler.
+ * Sadece BTC, ETH, SOL gibi büyük coin'ler için çalışır.
  */
 async function enrichWithMarketData(question: string): Promise<string> {
   const symbolRegex = /\b(BTC|ETH|SOL|DOGE|XRP|BNB|ADA|AVAX|LINK|DOT|MATIC|NEAR|ATOM|ALGO|VET|FIL)\b/i;
   const match = question.match(symbolRegex);
-  if (!match) return question;
+  if (!match) return question; // coin tespit edilemedi
 
   const symbol = match[0].toUpperCase();
 
   try {
+    // Tüm ticker'ları al
     const tickers = await getTickers();
     const ticker = tickers[symbol];
-    if (!ticker) return question;
+    if (!ticker) return question; // bu coin için veri yok
 
     const yesterdayPrice = parseFloat(ticker.yesterday_price);
     const currentPrice = parseFloat(ticker.mark);
@@ -66,11 +75,11 @@ Lütfen bu güncel verilere dayanarak kısa bir analiz yap. Yatırım tavsiyesi 
     return `${context}\nKullanıcı sorusu: ${question}`;
   } catch (err) {
     console.error('Pacifica veri çekme hatası:', err);
-    return question;
+    return question; // hata durumunda soruyu olduğu gibi gönder
   }
 }
 
-/** Ana router fonksiyonu */
+/** Ana router fonksiyonu — component ve API route buraya erişir */
 export async function routeQuery(question: string): Promise<AIResult> {
   if (isElfaQuery(question)) {
     return queryElfa(question);
