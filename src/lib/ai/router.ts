@@ -47,7 +47,7 @@ Bu verilere göre kullanıcının sorusunu yanıtla. Yatırım tavsiyesi verme.
 `;
     return `${context}\nKullanıcı sorusu: ${question}`;
   } catch (err) {
-    console.error('Pacifica hatası:', err);
+    console.error('Pacifica veri çekme hatası:', err);
     return question;
   }
 }
