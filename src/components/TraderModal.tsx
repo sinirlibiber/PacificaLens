@@ -1,84 +1,145 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import {
-  Position, Ticker, TradeHistory, AccountInfo,
-  getPositions, getTradeHistory, getAccountInfo
-} from '@/lib/pacifica';
+import { useState, useEffect, useRef } from 'react';
+import { Market, Ticker, getOrderbook, Orderbook } from '@/lib/pacifica';
 import { CoinLogo } from './CoinLogo';
-import { fmt, fmtPrice, getMarkPrice, fmtShortAddr } from '@/lib/utils';
+import { fmt, fmtPrice, getMarkPrice, get24hChange } from '@/lib/utils';
 import { CalcResult } from './Calculator';
-import { Market } from '@/lib/pacifica';
 
-interface TraderModalProps {
-  walletAddress: string;
-  myWallet: string | null;
-  myAccountInfo: AccountInfo | null;
-  tickers: Record<string, Ticker>;
+interface TradingPanelProps {
   markets: Market[];
-  onExecute: (r: CalcResult, symbol: string) => void;
-  onClose: () => void;
-}
-
-function fmtN(n: number) {
-  if (n >= 1e9) return '$' + fmt(n / 1e9, 2) + 'B';
-  if (n >= 1e6) return '$' + fmt(n / 1e6, 2) + 'M';
-  if (n >= 1e3) return '$' + fmt(n / 1e3, 1) + 'K';
-  return '$' + fmt(n, 2);
-}
-
-// Copy Trade sub-modal
-function CopyModal({
-  pos, myBalance, myWallet, market, tickers, onExecute, onClose
-}: {
-  pos: Position;
-  myBalance: number;
-  myWallet: string | null;
-  market: Market | undefined;
   tickers: Record<string, Ticker>;
+  wallet: string | null;
   onExecute: (r: CalcResult, symbol: string) => void;
-  onClose: () => void;
-}) {
-  const tk = tickers[pos.symbol];
-  const markPrice = getMarkPrice(tk);
-  const isLong = pos.side === 'bid';
-  const side: 'long' | 'short' = isLong ? 'long' : 'short';
+}
 
-  // Auto-fill from copied position
-  const traderEntry = Number(pos.entry_price || markPrice);
-  const traderMargin = Number(pos.margin || 0);
-  const traderLeverage = pos.leverage ? Number(pos.leverage) : 
-    traderMargin > 0 ? Math.round((Number(pos.amount) * traderEntry) / traderMargin) : 10;
-  const clampedLeverage = Math.max(1, Math.min(traderLeverage, market?.max_leverage || 50));
+function OrderbookPanel({ orderbook, markPrice }: { orderbook: Orderbook | null; markPrice: number }) {
+  if (!orderbook) return (
+    <div className="flex items-center justify-center h-full text-text3 text-sm">Loading...</div>
+  );
+  const maxAsk = Math.max(...orderbook.asks.slice(0, 15).map(l => Number(l.a)), 1);
+  const maxBid = Math.max(...orderbook.bids.slice(0, 15).map(l => Number(l.a)), 1);
+  return (
+    <div className="flex flex-col h-full text-[11px] overflow-hidden">
+      <div className="grid px-3 py-1 border-b border-border1 bg-surface2 text-[10px] text-text3 font-semibold uppercase shrink-0"
+        style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+        <span>Price</span><span className="text-right">Size</span><span className="text-right">Total</span>
+      </div>
+      <div className="flex-1 overflow-hidden flex flex-col-reverse">
+        {orderbook.asks.slice(0, 15).map((l, i) => (
+          <div key={i} className="relative grid px-3 py-0.5 hover:bg-danger/5"
+            style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div className="absolute inset-y-0 right-0 bg-danger/8"
+              style={{ width: (Number(l.a) / maxAsk * 100) + '%' }} />
+            <span className="text-danger font-mono relative">${fmtPrice(l.p)}</span>
+            <span className="text-right font-mono relative text-text2">{fmt(Number(l.a), 4)}</span>
+            <span className="text-right font-mono relative text-text3">{fmt(Number(l.a) * Number(l.p), 0)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="px-3 py-1.5 border-y border-border1 bg-surface2 flex justify-between shrink-0">
+        <span className="text-[13px] font-bold">${fmtPrice(markPrice)}</span>
+        <span className="text-[10px] text-text3">
+          Spread: {orderbook.asks[0] && orderbook.bids[0]
+            ? fmtPrice(Number(orderbook.asks[0].p) - Number(orderbook.bids[0].p)) : '—'}
+        </span>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        {orderbook.bids.slice(0, 15).map((l, i) => (
+          <div key={i} className="relative grid px-3 py-0.5 hover:bg-success/5"
+            style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div className="absolute inset-y-0 right-0 bg-success/8"
+              style={{ width: (Number(l.a) / maxBid * 100) + '%' }} />
+            <span className="text-success font-mono relative">${fmtPrice(l.p)}</span>
+            <span className="text-right font-mono relative text-text2">{fmt(Number(l.a), 4)}</span>
+            <span className="text-right font-mono relative text-text3">{fmt(Number(l.a) * Number(l.p), 0)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  const [usdcAmount, setUsdcAmount] = useState(Math.min(100, myBalance));
-  const [leverage, setLeverage] = useState(clampedLeverage);
-  const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
-  const [limitPrice, setLimitPrice] = useState(String(traderEntry));
+export function TradingPanel({ markets, tickers, wallet, onExecute }: TradingPanelProps) {
+  const [selected, setSelected] = useState<Market | null>(null);
+  const [search, setSearch] = useState('');
+  const [rightTab, setRightTab] = useState<'orderbook' | 'trade'>('trade');
+  const [marginMode, setMarginMode] = useState<'cross' | 'isolated'>('cross');
+  const [side, setSide] = useState<'long' | 'short'>('long');
+  const [orderType, setOrderType] = useState<'market' | 'limit'>('limit');
+  const [amount, setAmount] = useState('');
+  const [price, setPrice] = useState('');
+  const [leverage, setLeverage] = useState(10);
+  const [reduceOnly, setReduceOnly] = useState(false);
+  const [tpEnabled, setTpEnabled] = useState(false);
+  const [slEnabled, setSlEnabled] = useState(false);
+  const [tpPrice, setTpPrice] = useState('');
+  const [slPrice, setSlPrice] = useState('');
   const [placing, setPlacing] = useState(false);
+  const [orderbook, setOrderbook] = useState<Orderbook | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const maxLev = market?.max_leverage || 50;
-  const entryPrice = orderType === 'market' ? markPrice : (Number(limitPrice) || markPrice);
-  const positionValue = usdcAmount * leverage;
-  const contracts = entryPrice > 0 ? positionValue / entryPrice : 0;
+  const tk = selected ? tickers[selected.symbol] : null;
+  const markPrice = getMarkPrice(tk ?? undefined);
+  const change24h = get24hChange(tk ?? undefined);
+  const volume24h = Number(tk?.volume_24h || 0);
+  const oi = Number(tk?.open_interest || 0);
+  const funding = Number(tk?.funding || 0) * 100;
+  const nextFunding = Number(tk?.next_funding || tk?.funding || 0) * 100;
+
+  // Init with BTC
+  useEffect(() => {
+    if (!selected && markets.length) {
+      setSelected(markets.find(m => m.symbol === 'BTC') || markets[0]);
+    }
+  }, [markets, selected]);
+
+  // Set limit price to mark
+  useEffect(() => {
+    if (markPrice > 0 && orderType === 'limit' && !price) {
+      setPrice(String(markPrice));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, markPrice]);
+
+  // Orderbook polling
+  useEffect(() => {
+    if (!selected) return;
+    let cancelled = false;
+    const load = async () => {
+      const ob = await getOrderbook(selected.symbol);
+      if (!cancelled) setOrderbook(ob);
+    };
+    load();
+    const iv = window.setInterval(load, 2000);
+    return () => { cancelled = true; window.clearInterval(iv); };
+  }, [selected]);
+
+  const filteredMarkets = markets
+    .filter(m => m.symbol.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => Number(tickers[b.symbol]?.volume_24h || 0) - Number(tickers[a.symbol]?.volume_24h || 0));
+
+  const entryPrice = orderType === 'market' ? markPrice : (Number(price) || markPrice);
+  const amountNum = Number(amount) || 0;
+  const positionValue = amountNum * entryPrice;
+  const requiredMargin = leverage > 0 ? positionValue / leverage : positionValue;
   const liqPrice = side === 'long'
     ? entryPrice * (1 - 0.9 / leverage)
     : entryPrice * (1 + 0.9 / leverage);
+  const maxLev = selected?.max_leverage || 20;
 
-  const presets = [50, 100, 250, 500, 1000].filter(p => p <= myBalance * 1.1);
-
-  async function handleCopy() {
-    if (!myWallet) return;
+  async function handlePlaceOrder() {
+    if (!wallet || !selected || amountNum <= 0) return;
     setPlacing(true);
     const r: CalcResult = {
-      riskAmount: usdcAmount,
-      positionSize: contracts,
+      riskAmount: requiredMargin,
+      positionSize: amountNum,
       positionValue,
-      requiredMargin: usdcAmount,
+      requiredMargin,
       marginPct: 0,
       slPct: 0,
       liquidationPrice: liqPrice,
-      tp1: 0,
+      tp1: Number(tpPrice) || 0,
       tp2: 0,
       tp3: 0,
       rrRatio: 0,
@@ -90,448 +151,288 @@ function CopyModal({
       entryPrice,
       stopLoss: liqPrice,
     };
-    await onExecute(r, pos.symbol);
+    await onExecute(r, selected.symbol);
     setPlacing(false);
-    onClose();
+  }
+
+  // Quick amount buttons (% of available)
+  const available = 11.60; // placeholder — ideally from accountInfo
+  function setAmountPct(pct: number) {
+    if (!markPrice || !leverage) return;
+    const usd = available * pct / 100 * leverage;
+    setAmount((usd / markPrice).toFixed(4));
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface border border-border1 rounded-2xl shadow-card-md w-[460px] overflow-hidden" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className={'px-6 py-4 border-b border-border1 flex items-center justify-between ' + (isLong ? 'bg-success/6' : 'bg-danger/6')}>
-          <div className="flex items-center gap-3">
-            <CoinLogo symbol={pos.symbol} size={36} />
-            <div>
-              <div className="text-[15px] font-bold text-text1">Copy Trade · {pos.symbol}-PERP</div>
-              <div className={'text-[11px] font-semibold ' + (isLong ? 'text-success' : 'text-danger')}>
-                {isLong ? '↑ LONG' : '↓ SHORT'} · ${fmtPrice(markPrice)}
-              </div>
-            </div>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface2 text-text3 text-xl">×</button>
+    <div className="flex flex-1 overflow-hidden bg-bg">
+
+      {/* LEFT: Market list */}
+      <div className="w-48 shrink-0 border-r border-border1 flex flex-col bg-surface overflow-hidden">
+        <div className="px-2 py-2 border-b border-border1 shrink-0">
+          <input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full bg-surface2 border border-border1 rounded px-2 py-1.5 text-[11px] text-text2 outline-none focus:border-accent placeholder-white/30" />
         </div>
-
-        <div className="p-5 space-y-4">
-          {/* Wallet balance */}
-          {myBalance > 0 && (
-            <div className="flex items-center justify-between bg-accent/5 border border-accent/20 rounded-xl px-4 py-2.5">
-              <span className="text-[11px] text-text2">My Balance</span>
-              <span className="text-[14px] font-bold text-accent">${fmt(myBalance, 2)} USDC</span>
-            </div>
-          )}
-
-          {/* Trader's original position info */}
-          <div className="bg-surface2 border border-border1 rounded-xl px-4 py-3 space-y-1">
-            <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-2">Trader's Original Position</div>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              {[
-                { l: 'Entry', v: '$' + fmtPrice(traderEntry) },
-                { l: 'Leverage', v: clampedLeverage + 'x' },
-                { l: 'Margin', v: traderMargin > 0 ? fmtN(traderMargin) : '—' },
-              ].map(s => (
-                <div key={s.l}>
-                  <div className="text-[9px] text-text3 uppercase font-semibold">{s.l}</div>
-                  <div className="text-[12px] font-bold text-text1">{s.v}</div>
+        <div className="flex-1 overflow-y-auto">
+          {filteredMarkets.map(m => {
+            const t = tickers[m.symbol];
+            const p = getMarkPrice(t);
+            const chg = get24hChange(t);
+            const active = selected?.symbol === m.symbol;
+            return (
+              <button key={m.symbol} onClick={() => { setSelected(m); setPrice(''); }}
+                className={'w-full flex items-center gap-2 px-2 py-2 border-b border-border1/50 hover:bg-surface2 text-left transition-colors ' + (active ? 'bg-accent/15 border-l-2 border-l-accent' : '')}>
+                <CoinLogo symbol={m.symbol} size={18} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-semibold text-text1">{m.symbol}</div>
+                  <div className="text-[9px] text-text3">{m.max_leverage}x</div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Order type */}
-          <div className="flex bg-surface2 border border-border1 rounded-xl overflow-hidden">
-            {(['market', 'limit'] as const).map(t => (
-              <button key={t} onClick={() => setOrderType(t)}
-                className={'flex-1 py-2 text-[12px] font-semibold capitalize transition-all ' +
-                  (orderType === t ? 'bg-surface text-text1 shadow-sm' : 'text-text3 hover:text-text2')}>
-                {t}
+                <div className="text-right shrink-0">
+                  <div className="text-[10px] font-mono text-text2">${fmtPrice(p)}</div>
+                  <div className={'text-[9px] font-semibold ' + (chg >= 0 ? 'text-success' : 'text-danger')}>
+                    {chg >= 0 ? '+' : ''}{fmt(chg, 2)}%
+                  </div>
+                </div>
               </button>
-            ))}
-          </div>
-
-          {orderType === 'limit' && (
-            <div>
-              <label className="text-[10px] text-text3 uppercase font-semibold block mb-1.5">Limit Price (USD)</label>
-              <div className="relative">
-                <input type="number" value={limitPrice} onChange={e => setLimitPrice(e.target.value)}
-                  className="w-full bg-surface2 border border-border1 rounded-xl px-3 py-2.5 text-[13px] font-mono text-text1 outline-none focus:border-accent" />
-                <button onClick={() => setLimitPrice(String(markPrice))}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-accent hover:underline font-semibold">
-                  Mark
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* USDC Amount */}
-          <div>
-            <label className="text-[10px] text-text3 uppercase font-semibold block mb-1.5">Margin (USDC)</label>
-            <div className="flex gap-1.5 mb-2 flex-wrap">
-              {presets.map(p => (
-                <button key={p} onClick={() => setUsdcAmount(p)}
-                  className={'px-3 py-1.5 text-[11px] font-semibold rounded-lg border transition-all ' +
-                    (usdcAmount === p ? 'bg-accent text-white border-accent' : 'bg-surface2 border-border1 text-text3 hover:border-accent hover:text-accent')}>
-                  ${p}
-                </button>
-              ))}
-            </div>
-            <input type="number" value={usdcAmount} onChange={e => setUsdcAmount(Number(e.target.value))}
-              className="w-full bg-surface2 border border-border1 rounded-xl px-3 py-2.5 text-[13px] font-mono text-text1 outline-none focus:border-accent" />
-          </div>
-
-          {/* Leverage */}
-          <div>
-            <div className="flex justify-between mb-1.5">
-              <label className="text-[10px] text-text3 uppercase font-semibold">Leverage</label>
-              <span className={'text-[12px] font-bold ' + (leverage > maxLev * 0.7 ? 'text-danger' : 'text-accent')}>{leverage}x</span>
-            </div>
-            <input type="range" min={1} max={maxLev} value={leverage}
-              onChange={e => setLeverage(Number(e.target.value))} className="w-full" />
-            <div className="flex justify-between text-[9px] text-text3 mt-1">
-              <span>1x</span>
-              {[Math.round(maxLev/4), Math.round(maxLev/2), Math.round(maxLev*3/4)].map(v => (
-                <button key={v} onClick={() => setLeverage(v)} className="hover:text-accent transition-colors">{v}x</button>
-              ))}
-              <span className={leverage >= maxLev ? 'text-danger font-bold' : ''}>{maxLev}x</span>
-            </div>
-          </div>
-
-          {/* Preview */}
-          <div className="bg-surface2 border border-border1 rounded-xl p-3.5 space-y-2">
-            {[
-              { l: 'Position Value', v: '$' + fmt(positionValue, 2) },
-              { l: 'Contracts', v: fmt(contracts, 4) + ' ' + pos.symbol },
-              { l: 'Est. Liq. Price', v: '$' + fmtPrice(liqPrice), c: 'text-danger' },
-              { l: 'Entry Price', v: orderType === 'market' ? 'Market (~$' + fmtPrice(markPrice) + ')' : '$' + fmtPrice(Number(limitPrice)) },
-            ].map(row => (
-              <div key={row.l} className="flex justify-between">
-                <span className="text-[11px] text-text3">{row.l}</span>
-                <span className={'text-[12px] font-semibold ' + (row.c || 'text-text1')}>{row.v}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Execute */}
-          <button onClick={handleCopy} disabled={!myWallet || placing || usdcAmount <= 0}
-            className={'w-full py-3.5 rounded-xl font-bold text-[14px] transition-all disabled:opacity-40 ' +
-              (isLong ? 'bg-success text-white hover:opacity-90' : 'bg-danger text-white hover:opacity-90')}>
-            {placing ? 'Opening Position...' : !myWallet ? 'Connect Wallet' :
-              `Copy ${isLong ? 'Long' : 'Short'} ${pos.symbol} · $${usdcAmount} ${leverage}x`}
-          </button>
-          <p className="text-[10px] text-text3 text-center">Position will be opened on Pacifica DEX</p>
+            );
+          })}
         </div>
       </div>
-    </div>
-  );
-}
 
-// Main Trader Modal
-export function TraderModal({ walletAddress, myWallet, myAccountInfo, tickers, markets, onExecute, onClose }: TraderModalProps) {
-  const [tab, setTab] = useState<'positions' | 'history'>('positions');
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [tradeHistory, setTradeHistory] = useState<TradeHistory[]>([]);
-  const [traderAccount, setTraderAccount] = useState<AccountInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [copyPos, setCopyPos] = useState<Position | null>(null);
-
-  const myBalance = myAccountInfo
-    ? Number(myAccountInfo.available_to_spend || myAccountInfo.account_equity || 0)
-    : 0;
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const [pos, acc] = await Promise.all([
-        getPositions(walletAddress),
-        getAccountInfo(walletAddress),
-      ]);
-      setPositions(pos);
-      setTraderAccount(acc);
-      setLoading(false);
-    }
-    load();
-  }, [walletAddress]);
-
-  useEffect(() => {
-    if (tab === 'history' && tradeHistory.length === 0) {
-      getTradeHistory(walletAddress, 50).then(setTradeHistory);
-    }
-  }, [tab, walletAddress, tradeHistory.length]);
-
-  // Calculate trader stats
-  const totalUnrealizedPnl = positions.reduce((s, p) => {
-    const tk = tickers[p.symbol];
-    const mark = getMarkPrice(tk);
-    const entry = Number(p.entry_price || 0);
-    const size = Number(p.amount || 0);
-    const isLong = p.side === 'bid';
-    return s + (isLong ? (mark - entry) * size : (entry - mark) * size);
-  }, 0);
-
-  const totalMargin = positions.reduce((s, p) => s + Number(p.margin || 0), 0);
-  const winTrades = tradeHistory.filter(t => Number(t.realized_pnl || 0) > 0).length;
-  const winRate = tradeHistory.length > 0 ? Math.round((winTrades / tradeHistory.length) * 100) : 0;
-  const totalPnl = tradeHistory.reduce((s, t) => s + Number(t.realized_pnl || 0), 0);
-
-  return (
-    <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-        <div className="bg-surface border border-border1 rounded-2xl shadow-card-md w-[680px] max-h-[88vh] flex flex-col overflow-hidden"
-          onClick={e => e.stopPropagation()}>
-
-          {/* Header */}
-          <div className="px-6 py-4 border-b border-border1 bg-surface2 flex items-center justify-between shrink-0">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-[14px]">
-                  {walletAddress.slice(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <div className="text-[15px] font-bold text-text1 font-mono">{fmtShortAddr(walletAddress)}</div>
-                  <div className="text-[10px] text-text3 mt-0.5">{walletAddress}</div>
-                </div>
-              </div>
+      {/* CENTER: Pacifica iframe chart */}
+      <div className="flex-1 flex flex-col overflow-hidden border-r border-border1">
+        {/* Market stats bar */}
+        {selected && (
+          <div className="flex items-center gap-4 px-4 py-2 border-b border-border1 bg-surface shrink-0">
+            <div className="flex items-center gap-2">
+              <CoinLogo symbol={selected.symbol} size={22} />
+              <span className="text-[13px] font-bold text-white">{selected.symbol}-PERP</span>
             </div>
-            <div className="flex items-center gap-4">
-              {/* Trader stats */}
-              {!loading && traderAccount && (
-                <div className="flex gap-3 text-right">
-                  <div>
-                    <div className="text-[9px] text-text3 uppercase font-semibold">Equity</div>
-                    <div className="text-[13px] font-bold text-text1">${fmt(Number(traderAccount.account_equity || 0), 2)}</div>
-                  </div>
-                  {tradeHistory.length > 0 && (
-                    <>
-                      <div>
-                        <div className="text-[9px] text-text3 uppercase font-semibold">Win Rate</div>
-                        <div className={'text-[13px] font-bold ' + (winRate >= 50 ? 'text-success' : 'text-danger')}>{winRate}%</div>
-                      </div>
-                      <div>
-                        <div className="text-[9px] text-text3 uppercase font-semibold">Total PnL</div>
-                        <div className={'text-[13px] font-bold ' + (totalPnl >= 0 ? 'text-success' : 'text-danger')}>
-                          {totalPnl >= 0 ? '+' : ''}${fmt(totalPnl, 2)}
-                        </div>
-                      </div>
-                    </>
-                  )}
+            <span className={'text-[18px] font-bold ' + (change24h >= 0 ? 'text-success' : 'text-danger')}>
+              ${fmtPrice(markPrice)}
+            </span>
+            <span className={'text-[12px] font-semibold ' + (change24h >= 0 ? 'text-success' : 'text-danger')}>
+              {change24h >= 0 ? '+' : ''}{fmt(change24h, 2)}%
+            </span>
+            <div className="flex gap-5 ml-2 text-[11px]">
+              {[
+                { label: '24h Vol', value: '$' + fmt(volume24h / 1e6, 2) + 'M' },
+                { label: 'OI', value: '$' + fmt(oi / 1e6, 2) + 'M' },
+                { label: 'Funding/8h', value: (funding >= 0 ? '+' : '') + fmt(funding, 4) + '%', color: funding >= 0 ? 'text-danger' : 'text-success' },
+                { label: 'Next Funding', value: (nextFunding >= 0 ? '+' : '') + fmt(nextFunding, 4) + '%', color: nextFunding >= 0 ? 'text-danger' : 'text-success' },
+              ].map(s => (
+                <div key={s.label}>
+                  <div className="text-[9px] text-text3 uppercase">{s.label}</div>
+                  <div className={'text-[11px] font-semibold ' + (s.color || 'text-text2')}>{s.value}</div>
                 </div>
-              )}
-              <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface2 text-text3 text-xl ml-2">×</button>
+              ))}
             </div>
           </div>
+        )}
 
-          {/* Summary bar */}
-          {!loading && positions.length > 0 && (
-            <div className="px-6 py-3 border-b border-border1 bg-surface flex items-center gap-6 shrink-0 text-[11px]">
-              <span className="text-text3">
-                <span className="font-semibold text-accent">{positions.length}</span> open positions
-              </span>
-              <span className="text-text3">
-                Unrealized PnL: <span className={'font-bold ' + (totalUnrealizedPnl >= 0 ? 'text-success' : 'text-danger')}>
-                  {totalUnrealizedPnl >= 0 ? '+' : ''}${fmt(totalUnrealizedPnl, 2)}
-                </span>
-              </span>
-              {totalMargin > 0 && (
-                <span className="text-text3">Margin: <span className="font-semibold text-warn">${fmt(totalMargin, 2)}</span></span>
-              )}
-              {myBalance > 0 && (
-                <span className="ml-auto text-text3">My balance: <span className="font-bold text-accent">${fmt(myBalance, 2)}</span></span>
-              )}
-            </div>
+        {/* Pacifica iframe — full TradingView with indicators */}
+        <div className="flex-1 relative overflow-hidden">
+          {selected ? (
+            <iframe
+              ref={iframeRef}
+              key={selected.symbol}
+              src={`https://app.pacifica.fi/trade/${selected.symbol}`}
+              className="w-full h-full border-0"
+              allow="clipboard-read; clipboard-write"
+              title={`${selected.symbol} Chart`}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-text3">Select a market</div>
           )}
+        </div>
+      </div>
 
-          {/* Tab bar */}
-          <div className="flex border-b border-border1 bg-surface shrink-0">
-            <button onClick={() => setTab('positions')}
-              className={'px-5 py-2.5 text-[11px] font-semibold border-b-2 transition-all flex items-center gap-1.5 ' +
-                (tab === 'positions' ? 'border-accent text-accent' : 'border-transparent text-text3 hover:text-text2')}>
-              Open Positions
-              {positions.length > 0 && (
-                <span className={'text-[9px] px-1.5 py-0.5 rounded-full font-bold ' + (tab === 'positions' ? 'bg-accent/15 text-accent' : 'bg-surface2 text-text3')}>
-                  {positions.length}
-                </span>
-              )}
+      {/* RIGHT: Orderbook + Order form */}
+      <div className="w-72 shrink-0 flex flex-col bg-surface overflow-hidden">
+        {/* Tab switcher */}
+        <div className="flex border-b border-border1 shrink-0">
+          {([['orderbook', 'Order Book'], ['trade', 'Place Order']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setRightTab(k)}
+              className={'flex-1 py-2.5 text-[11px] font-semibold border-b-2 transition-all ' +
+                (rightTab === k ? 'border-accent text-accent' : 'border-transparent text-text3 hover:text-white/70')}>
+              {l}
             </button>
-            <button onClick={() => setTab('history')}
-              className={'px-5 py-2.5 text-[11px] font-semibold border-b-2 transition-all ' +
-                (tab === 'history' ? 'border-accent text-accent' : 'border-transparent text-text3 hover:text-text2')}>
-              Trade History
-            </button>
+          ))}
+        </div>
+
+        {/* ORDERBOOK */}
+        {rightTab === 'orderbook' && (
+          <div className="flex-1 overflow-hidden">
+            <OrderbookPanel orderbook={orderbook} markPrice={markPrice} />
           </div>
+        )}
 
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="flex items-center justify-center h-32 gap-2 text-text3">
-                <div className="w-5 h-5 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-                <span className="text-sm">Loading trader data...</span>
+        {/* ORDER FORM */}
+        {rightTab === 'trade' && (
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            {/* Cross / Isolated + Leverage */}
+            <div className="flex items-center gap-2">
+              <div className="flex bg-surface2 border border-border1 rounded-lg overflow-hidden text-[11px]">
+                <button onClick={() => setMarginMode('cross')}
+                  className={'px-3 py-1.5 font-semibold transition-all ' +
+                    (marginMode === 'cross' ? 'bg-surface text-white' : 'text-text3 hover:text-white/70')}>
+                  Cross
+                </button>
+                <button onClick={() => setMarginMode('isolated')}
+                  className={'px-3 py-1.5 font-semibold transition-all ' +
+                    (marginMode === 'isolated' ? 'bg-surface text-white' : 'text-text3 hover:text-white/70')}>
+                  Isolated
+                </button>
               </div>
-            ) : tab === 'positions' ? (
-              positions.length > 0 ? (
-                <div className="divide-y divide-border1">
-                  {positions.map((p, i) => {
-                    const tk = tickers[p.symbol];
-                    const mark = getMarkPrice(tk);
-                    const entry = Number(p.entry_price || 0);
-                    const size = Number(p.amount || 0);
-                    const margin = Number(p.margin || 0);
-                    const isLong = p.side === 'bid';
-                    const pnl = isLong ? (mark - entry) * size : (entry - mark) * size;
-                    const pnlPct = margin > 0 ? (pnl / margin) * 100 : 0;
-                    const posValue = size * mark;
-                    const leverage = p.leverage ? Number(p.leverage) : (margin > 0 ? Math.round(posValue / margin) : '?');
-                    const liqPrice = p.liquidation_price ? Number(p.liquidation_price) :
-                      (typeof leverage === 'number' && leverage > 0
-                        ? isLong ? entry * (1 - 0.9 / leverage) : entry * (1 + 0.9 / leverage)
-                        : 0);
-                    const market = markets.find(m => m.symbol === p.symbol);
+              <div className="flex items-center gap-1.5 ml-auto bg-surface2 border border-border1 rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-surface2"
+                onClick={() => {
+                  const next = leverage < maxLev ? Math.min(leverage + 5, maxLev) : 1;
+                  setLeverage(next);
+                }}>
+                <span className="text-[12px] font-bold text-accent">{leverage}x</span>
+              </div>
+            </div>
 
-                    return (
-                      <div key={i} className="px-5 py-4 hover:bg-surface2/30 transition-colors">
-                        {/* Position header */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <CoinLogo symbol={p.symbol} size={32} />
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-text1 text-[14px]">{p.symbol}-PERP</span>
-                                <span className={'text-[10px] font-bold px-2 py-0.5 rounded-full ' + (isLong ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger')}>
-                                  {isLong ? '↑ LONG' : '↓ SHORT'}
-                                </span>
-                                {leverage !== '?' && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">
-                                    {leverage}x
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-text3 mt-0.5">
-                                {fmt(size, 4)} contracts · ${fmtPrice(posValue)} value
-                              </div>
-                            </div>
-                          </div>
-                          {/* PnL */}
-                          <div className="text-right">
-                            <div className={'text-[18px] font-bold ' + (pnl >= 0 ? 'text-success' : 'text-danger')}>
-                              {pnl !== 0 ? (pnl >= 0 ? '+' : '') + '$' + fmt(pnl, 2) : '—'}
-                            </div>
-                            {pnlPct !== 0 && (
-                              <div className={'text-[11px] font-semibold ' + (pnlPct >= 0 ? 'text-success' : 'text-danger')}>
-                                {pnlPct >= 0 ? '+' : ''}{fmt(pnlPct, 2)}%
-                              </div>
-                            )}
-                          </div>
-                        </div>
+            {/* Long / Short */}
+            <div className="flex rounded-lg overflow-hidden border border-border1">
+              <button onClick={() => setSide('long')}
+                className={'flex-1 py-2.5 text-[13px] font-bold transition-all ' +
+                  (side === 'long' ? 'bg-success text-white' : 'bg-transparent text-text3 hover:text-success')}>
+                Buy / Long
+              </button>
+              <button onClick={() => setSide('short')}
+                className={'flex-1 py-2.5 text-[13px] font-bold transition-all ' +
+                  (side === 'short' ? 'bg-danger text-white' : 'bg-transparent text-text3 hover:text-danger')}>
+                Sell / Short
+              </button>
+            </div>
 
-                        {/* Position details grid */}
-                        <div className="grid grid-cols-4 gap-2 mb-3">
-                          {[
-                            { l: 'Entry Price', v: '$' + fmtPrice(entry) },
-                            { l: 'Mark Price', v: '$' + fmtPrice(mark) },
-                            { l: 'Liq. Price', v: liqPrice > 0 ? '$' + fmtPrice(liqPrice) : '—', c: 'text-danger' },
-                            { l: 'Margin', v: margin > 0 ? '$' + fmt(margin, 2) : '—' },
-                          ].map(f => (
-                            <div key={f.l} className="bg-surface2 rounded-xl p-2.5 border border-border1">
-                              <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-0.5">{f.l}</div>
-                              <div className={'text-[12px] font-bold ' + (f.c || 'text-text1')}>{f.v}</div>
-                            </div>
-                          ))}
-                        </div>
+            {/* Order type */}
+            <div className="flex bg-surface2 border border-border1 rounded-lg overflow-hidden text-[11px]">
+              {(['limit', 'market'] as const).map(t => (
+                <button key={t} onClick={() => setOrderType(t)}
+                  className={'flex-1 py-1.5 font-semibold capitalize transition-all ' +
+                    (orderType === t ? 'bg-surface text-white' : 'text-text3 hover:text-white/70')}>
+                  {t}
+                </button>
+              ))}
+            </div>
 
-                        {/* Copy trade button */}
-                        <button
-                          onClick={() => setCopyPos(p)}
-                          className={'w-full py-2.5 rounded-xl text-[12px] font-bold border transition-all ' +
-                            (isLong
-                              ? 'border-success/30 text-success hover:bg-success/10'
-                              : 'border-danger/30 text-danger hover:bg-danger/10')}>
-                          Copy This {isLong ? 'Long' : 'Short'} Position →
-                        </button>
-                      </div>
-                    );
-                  })}
+            {/* Leverage slider */}
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-[10px] text-text3 uppercase">Leverage</span>
+                <span className="text-[11px] font-bold text-accent">{leverage}x</span>
+              </div>
+              <input type="range" min={1} max={maxLev} value={leverage}
+                onChange={e => setLeverage(Number(e.target.value))}
+                className="w-full accent-accent h-1" />
+              <div className="flex justify-between text-[9px] text-text3 mt-1">
+                <span>1x</span><span>{Math.round(maxLev / 4)}x</span><span>{Math.round(maxLev / 2)}x</span><span>{Math.round(maxLev * 3 / 4)}x</span><span>{maxLev}x</span>
+              </div>
+            </div>
+
+            {/* Price (limit) */}
+            {orderType === 'limit' && (
+              <div>
+                <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">Price (USD)</label>
+                <div className="relative">
+                  <input type="number" value={price} onChange={e => setPrice(e.target.value)}
+                    placeholder={String(markPrice)}
+                    className="w-full bg-surface2 border border-border1 rounded-lg px-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-accent" />
+                  <button onClick={() => setPrice(String(markPrice))}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-accent hover:underline">
+                    Mark
+                  </button>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-text3 gap-3">
-                  <div className="text-4xl">◎</div>
-                  <p className="font-semibold text-text2">No open positions</p>
-                  <p className="text-sm">This trader has no active positions</p>
-                </div>
-              )
-            ) : (
-              /* Trade History */
-              <div className="overflow-x-auto">
-                {tradeHistory.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-text3 gap-2">
-                    <div className="w-5 h-5 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-                    <span className="text-sm">Loading history...</span>
-                  </div>
-                ) : (
-                  <table className="w-full text-[11px]">
-                    <thead className="sticky top-0 bg-surface2 border-b border-border1">
-                      <tr>
-                        <th className="px-4 py-2.5 text-[10px] text-text3 font-semibold uppercase text-left">Time</th>
-                        <th className="px-4 py-2.5 text-[10px] text-text3 font-semibold uppercase text-left">Market</th>
-                        <th className="px-4 py-2.5 text-[10px] text-text3 font-semibold uppercase text-left">Side</th>
-                        <th className="px-4 py-2.5 text-[10px] text-text3 font-semibold uppercase text-right">Price</th>
-                        <th className="px-4 py-2.5 text-[10px] text-text3 font-semibold uppercase text-right">Size</th>
-                        <th className="px-4 py-2.5 text-[10px] text-text3 font-semibold uppercase text-right">Realized PnL</th>
-                        <th className="px-4 py-2.5 text-[10px] text-text3 font-semibold uppercase text-right">Fee</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tradeHistory.map((t, i) => {
-                        const pnl = Number(t.realized_pnl || 0);
-                        const isLong = t.side.includes('long');
-                        const isOpen = t.side.startsWith('open');
-                        return (
-                          <tr key={i} className="border-b border-border1 hover:bg-surface2/40">
-                            <td className="px-4 py-2.5 text-text3">
-                              {t.created_at ? new Date(t.created_at).toLocaleString() : '—'}
-                            </td>
-                            <td className="px-4 py-2.5">
-                              <div className="flex items-center gap-2">
-                                <CoinLogo symbol={t.symbol} size={16} />
-                                <span className="font-semibold text-text1">{t.symbol}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-2.5">
-                              <span className={'text-[9px] font-bold px-1.5 py-0.5 rounded-full ' +
-                                (isLong && isOpen ? 'bg-success/10 text-success' : !isLong && isOpen ? 'bg-danger/10 text-danger' : 'bg-surface2 text-text3')}>
-                                {t.side.replace('_', ' ').toUpperCase()}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2.5 text-right font-mono text-text2">${fmtPrice(Number(t.price))}</td>
-                            <td className="px-4 py-2.5 text-right font-mono text-text2">{fmt(Number(t.amount), 4)}</td>
-                            <td className={'px-4 py-2.5 text-right font-mono font-bold ' + (pnl >= 0 ? 'text-success' : 'text-danger')}>
-                              {pnl !== 0 ? (pnl >= 0 ? '+' : '') + '$' + fmt(pnl, 2) : '—'}
-                            </td>
-                            <td className="px-4 py-2.5 text-right font-mono text-warn text-[10px]">
-                              {Number(t.fee || 0) > 0 ? '$' + fmt(Number(t.fee), 4) : '—'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              </div>
+            )}
+
+            {/* Amount */}
+            <div>
+              <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">
+                Amount ({selected?.symbol || '—'})
+              </label>
+              <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full bg-surface2 border border-border1 rounded-lg px-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-accent" />
+              <div className="flex gap-1 mt-1.5">
+                {[25, 50, 75, 100].map(pct => (
+                  <button key={pct} onClick={() => setAmountPct(pct)}
+                    className="flex-1 py-1 text-[10px] font-semibold bg-surface2 border border-border1 rounded hover:bg-surface2 text-text2 transition-colors">
+                    {pct}%
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* TP / SL toggles */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setTpEnabled(v => !v)}
+                  className={'relative w-8 h-4 rounded-full transition-colors ' + (tpEnabled ? 'bg-success' : 'bg-surface2')}>
+                  <div className={'absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ' + (tpEnabled ? 'translate-x-4' : 'translate-x-0.5')} />
+                </button>
+                <span className="text-[11px] text-text2">Take Profit</span>
+                {tpEnabled && (
+                  <input type="number" value={tpPrice} onChange={e => setTpPrice(e.target.value)}
+                    placeholder="Price" className="ml-auto w-28 bg-surface2 border border-border1 rounded px-2 py-1 text-[11px] font-mono text-text1 outline-none focus:border-success" />
                 )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSlEnabled(v => !v)}
+                  className={'relative w-8 h-4 rounded-full transition-colors ' + (slEnabled ? 'bg-danger' : 'bg-surface2')}>
+                  <div className={'absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ' + (slEnabled ? 'translate-x-4' : 'translate-x-0.5')} />
+                </button>
+                <span className="text-[11px] text-text2">Stop Loss</span>
+                {slEnabled && (
+                  <input type="number" value={slPrice} onChange={e => setSlPrice(e.target.value)}
+                    placeholder="Price" className="ml-auto w-28 bg-surface2 border border-border1 rounded px-2 py-1 text-[11px] font-mono text-text1 outline-none focus:border-danger" />
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setReduceOnly(v => !v)}
+                  className={'relative w-8 h-4 rounded-full transition-colors ' + (reduceOnly ? 'bg-accent' : 'bg-surface2')}>
+                  <div className={'absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ' + (reduceOnly ? 'translate-x-4' : 'translate-x-0.5')} />
+                </button>
+                <span className="text-[11px] text-text2">Reduce Only</span>
+              </div>
+            </div>
+
+            {/* Order preview */}
+            {amountNum > 0 && (
+              <div className="bg-surface2 rounded-lg border border-border1 p-3 space-y-1.5">
+                {[
+                  { label: 'Position Value', value: '$' + fmt(positionValue, 2) },
+                  { label: 'Required Margin', value: '$' + fmt(requiredMargin, 2) },
+                  { label: 'Max Slippage', value: orderType === 'market' ? '3%' : '—' },
+                  { label: 'Liq. Price (est.)', value: '$' + fmtPrice(liqPrice), color: 'text-danger' },
+                  { label: 'Funding/8h', value: (funding >= 0 ? '+' : '') + fmt(funding, 4) + '%', color: funding >= 0 ? 'text-danger' : 'text-success' },
+                ].map(row => (
+                  <div key={row.label} className="flex justify-between">
+                    <span className="text-[10px] text-text3">{row.label}</span>
+                    <span className={'text-[11px] font-semibold ' + (row.color || 'text-text2')}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Place order */}
+            <button onClick={handlePlaceOrder}
+              disabled={!wallet || amountNum <= 0 || placing}
+              className={'w-full py-3 rounded-xl text-[13px] font-bold transition-all disabled:opacity-40 ' +
+                (side === 'long' ? 'bg-success hover:bg-success text-white' : 'bg-danger hover:bg-danger text-white')}>
+              {placing ? 'Signing...' : !wallet ? 'Connect Wallet' :
+                `${side === 'long' ? 'Buy / Long' : 'Sell / Short'} ${selected?.symbol || ''}`}
+            </button>
+
+            {amountNum > 0 && (
+              <div className="text-[10px] text-text3 text-center">
+                {marginMode === 'cross' ? 'Cross margin' : 'Isolated margin'} · {leverage}x leverage
               </div>
             )}
           </div>
-        </div>
+        )}
       </div>
-
-      {/* Copy Modal */}
-      {copyPos && (
-        <CopyModal
-          pos={copyPos}
-          myBalance={myBalance}
-          myWallet={myWallet}
-          market={markets.find(m => m.symbol === copyPos.symbol)}
-          tickers={tickers}
-          onExecute={onExecute}
-          onClose={() => setCopyPos(null)}
-        />
-      )}
-    </>
+    </div>
   );
 }
