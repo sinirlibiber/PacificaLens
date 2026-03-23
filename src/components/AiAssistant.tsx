@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Brain, ChevronDown } from 'lucide-react';
+import { Ticker } from '@/lib/pacifica';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -19,7 +20,33 @@ const SUGGESTIONS = [
   'What is open interest?',
 ];
 
-export default function AiAssistant() {
+interface AiAssistantProps {
+  tickers?: Record<string, Ticker>;
+}
+
+// Build live price string from tickers prop
+function buildPriceContext(tickers: Record<string, Ticker>): string {
+  const TARGETS = ['BTC-PERP', 'ETH-PERP', 'SOL-PERP', 'BNB-PERP', 'XRP-PERP', 'DOGE-PERP', 'AVAX-PERP'];
+  const lines: string[] = [];
+  for (const sym of TARGETS) {
+    const t = tickers[sym] ?? tickers[sym.replace('-PERP', '')];
+    if (!t) continue;
+    const price = Number(t.mark ?? t.oracle ?? t.last ?? 0);
+    if (!price) continue;
+    const label = sym.replace('-PERP', '');
+    lines.push(`${label}: $${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
+  }
+  // Also try any key that looks like a major coin
+  if (!lines.length) {
+    for (const [key, t] of Object.entries(tickers).slice(0, 20)) {
+      const price = Number(t.mark ?? t.oracle ?? 0);
+      if (price > 0) lines.push(`${key.replace('-PERP', '')}: $${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
+    }
+  }
+  return lines.length ? `LIVE PRICES NOW: ${lines.join(' | ')}` : '';
+}
+
+export default function AiAssistant({ tickers = {} }: AiAssistantProps) {
   const [messages, setMessages]   = useState<Message[]>([]);
   const [input, setInput]         = useState('');
   const [loading, setLoading]     = useState(false);
@@ -39,10 +66,11 @@ export default function AiAssistant() {
     setInput('');
     setLoading(true);
     try {
+      const priceContext = buildPriceContext(tickers);
       const res  = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, priceContext }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Unknown error');

@@ -321,7 +321,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
 
           {/* AI Assistant */}
           <div className="bg-surface border border-border1 rounded-xl overflow-hidden" style={{ minHeight: 44 }}>
-            <AiAssistant />
+            <AiAssistant tickers={tickers} />
           </div>
 
           {/* Stat cards */}

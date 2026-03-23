@@ -15,33 +15,38 @@ async function getLivePriceContext(): Promise<string> {
     const res = await fetch('https://api.pacifica.fi/api/v1/tickers', {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return '';
     const json = await res.json();
 
-    const tickers: Record<string, unknown>[] =
-      json.success && Array.isArray(json.data) ? json.data :
-      Array.isArray(json) ? json : [];
+    const raw = json.success && Array.isArray(json.data) ? json.data :
+                Array.isArray(json) ? json :
+                json.data && Array.isArray(json.data) ? json.data : [];
 
-    // Key coins to include in context
-    const TARGETS = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE', 'AVAX', 'LINK'];
+    const TARGETS = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE', 'AVAX', 'LINK', 'OP', 'ARB'];
 
-    const lines = tickers
-      .filter((t: Record<string, unknown>) => TARGETS.includes(String(t.symbol ?? '').replace('-PERP', '').replace('USDT', '').replace('USD', '')))
-      .slice(0, 10)
-      .map((t: Record<string, unknown>) => {
-        const symbol = String(t.symbol ?? '').replace('-PERP', '');
-        const price = Number(t.mark || t.oracle || t.last || 0);
-        const change = Number(t.change_24h ?? t.price_change_pct_24h ?? 0);
-        if (!price) return null;
-        const changeStr = change >= 0 ? `+${change.toFixed(2)}%` : `${change.toFixed(2)}%`;
-        return `${symbol}: $${price.toLocaleString('en-US', { maximumFractionDigits: 2 })} (24h: ${changeStr})`;
-      })
-      .filter(Boolean);
+    const lines: string[] = [];
+    for (const t of raw as Record<string, unknown>[]) {
+      // Symbol can be "BTC-PERP", "BTCUSDT", "BTC" etc.
+      const rawSym = String(t.symbol ?? t.market ?? '');
+      const sym = rawSym.replace(/-PERP$/, '').replace(/USDT$/, '').replace(/USD$/, '').toUpperCase();
+      if (!TARGETS.includes(sym)) continue;
+
+      const price = Number(t.mark ?? t.oracle ?? t.last ?? t.price ?? t.index ?? 0);
+      if (!price) continue;
+
+      const change24h = Number(t.change_24h ?? t.price_change_pct ?? t.change_pct_24h ?? 0);
+      const changeStr = change24h !== 0
+        ? ` (24h: ${change24h >= 0 ? '+' : ''}${change24h.toFixed(2)}%)`
+        : '';
+
+      lines.push(`${sym}: $${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}${changeStr}`);
+    }
 
     if (!lines.length) return '';
-    return `\n\nLIVE MARKET PRICES (as of now — use these, not your training data):\n${lines.join('\n')}`;
+
+    return `\n\nLIVE MARKET PRICES RIGHT NOW (use ONLY these prices, ignore your training data for prices):\n${lines.join('\n')}\nTimestamp: ${new Date().toUTCString()}`;
   } catch {
     return '';
   }
@@ -51,6 +56,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const question: string = (body?.question ?? '').trim();
+    const clientPriceContext: string = (body?.priceContext ?? '').trim();
 
     if (!question) {
       return NextResponse.json({ error: 'Soru boş olamaz.' }, { status: 400 });
@@ -67,8 +73,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Fetch live prices in parallel with query routing setup
-    const priceContext = await getLivePriceContext();
+    // Use client-provided prices (already have live tickers) or fetch from server as fallback
+    const priceContext = clientPriceContext
+      ? `\n\nLIVE MARKET PRICES RIGHT NOW (use ONLY these, ignore training data for prices):\n${clientPriceContext}`
+      : await getLivePriceContext();
     const result = await routeQuery(question, priceContext);
     return NextResponse.json(result);
 
