@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Market, Ticker } from '@/lib/pacifica';
 import { fmt, fmtPrice } from '@/lib/utils';
 import { CoinLogo } from './CoinLogo';
+import AiAssistant from './AiAssistant';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
@@ -33,20 +34,6 @@ interface CalEvent {
 const COLORS = ['#00b4d8','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16'];
 const FLAG: Record<string, string> = { USD: '🇺🇸', EUR: '🇪🇺', JPY: '🇯🇵', CNY: '🇨🇳', GBP: '🇬🇧', AUD: '🇦🇺', CAD: '🇨🇦', NZD: '🇳🇿', CHF: '🇨🇭' };
 
-function InfoTooltip({ text }: { text: string }) {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative inline-flex items-center" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-      <span className="w-4 h-4 rounded-full border border-border2 text-text3 text-[10px] font-bold flex items-center justify-center cursor-default select-none hover:border-accent hover:text-accent transition-colors">?</span>
-      {show && (
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-[200] pointer-events-none w-48 bg-surface border border-border1 rounded-lg px-2.5 py-2 shadow-md">
-          <p className="text-[11px] text-text2 leading-relaxed">{text}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function fmtLarge(v: number) {
   if (v >= 1e9) return '$' + fmt(v / 1e9, 2) + 'B';
   if (v >= 1e6) return '$' + fmt(v / 1e6, 2) + 'M';
@@ -60,6 +47,45 @@ const TOOLTIP_STYLE = {
   borderRadius: 8, fontSize: 11,
   color: 'var(--text1)',
 };
+
+/* ─── AI Assistant collapsible section ─── */
+function AiAssistantSection() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      {/* Toggle bar */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-surface2 transition-colors"
+        style={{ borderBottom: open ? '1px solid var(--border1)' : 'none' }}
+      >
+        <span className="text-[13px]">🤖</span>
+        <span className="text-[12px] font-bold text-text1">AI Asistan</span>
+        <span className="text-[10px] text-text3 flex items-center gap-1.5 ml-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-success inline-block animate-pulse" />
+          Elfa + Gemini
+        </span>
+        <span className="ml-auto text-[10px] text-text3 flex items-center gap-1">
+          {open ? 'Kapat' : 'Aç'}
+          <svg
+            width="12" height="12" viewBox="0 0 12 12" fill="none"
+            style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+          >
+            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </span>
+      </button>
+
+      {/* Collapsible chat */}
+      {open && (
+        <div style={{ height: 380 }}>
+          <AiAssistant />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Analytics({ markets: propMarkets, tickers: propTickers }: AnalyticsProps) {
   // Self-fetch markets/tickers if not provided via props
@@ -325,7 +351,15 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   }
 
   return (
-    <div className="flex h-full bg-bg overflow-hidden">
+    <div className="flex flex-col h-full bg-bg overflow-hidden">
+
+      {/* ─── TOP: AI Assistant ─── */}
+      <div className="shrink-0 border-b border-border1">
+        <AiAssistantSection />
+      </div>
+
+      {/* ─── BOTTOM: Market Analytics + News ─── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
       {/* ─── LEFT: Market Analytics ─── */}
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -334,13 +368,14 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           {/* Stat cards */}
           <div className="grid grid-cols-4 gap-3">
             {[
-              { label: '24h Volume', value: fmtLarge(totalVolume), sub: 'across all markets', color: 'text-accent' },
-              { label: 'Open Interest', value: fmtLarge(totalOI), sub: 'across all markets', color: 'text-success' },
-              { label: 'Active Markets', value: String(activeMarkets), sub: 'perpetuals', color: 'text-warn' },
-              { label: 'Top Volume', value: topByVolume[0]?.symbol || '—', sub: topByVolume[0] ? fmtLarge(topByVolume[0].volume) : '', color: 'text-accent' },
+              { icon: '📊', label: '24h Volume', value: fmtLarge(totalVolume), sub: 'across all markets', color: 'text-accent' },
+              { icon: '🔮', label: 'Open Interest', value: fmtLarge(totalOI), sub: 'across all markets', color: 'text-success' },
+              { icon: '📈', label: 'Active Markets', value: String(activeMarkets), sub: 'perpetuals', color: 'text-warn' },
+              { icon: '🏆', label: 'Top Volume', value: topByVolume[0]?.symbol || '—', sub: topByVolume[0] ? fmtLarge(topByVolume[0].volume) : '', color: 'text-accent' },
             ].map(s => (
               <div key={s.label} className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
                 <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[16px]">{s.icon}</span>
                   <span className="text-[10px] text-text3 uppercase font-semibold tracking-wide">{s.label}</span>
                 </div>
                 <div className={`text-[22px] font-bold leading-none ${s.color}`}>{s.value}</div>
@@ -357,9 +392,9 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={topByVolume} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
-                <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text3)' }} tickLine={false} axisLine={false}
+                <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false}
                   tickFormatter={v => fmtLarge(v)} />
-                <YAxis type="category" dataKey="symbol" tick={{ fontSize: 11, fill: 'var(--text2)', fontWeight: 600 }} tickLine={false} axisLine={false} width={52} />
+                <YAxis type="category" dataKey="symbol" tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} tickLine={false} axisLine={false} width={52} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [fmtLarge(v), 'Volume']} />
                 <Bar dataKey="volume" radius={[0, 4, 4, 0]}>
                   {topByVolume.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} fillOpacity={0.85} />)}
@@ -372,10 +407,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           <div className="grid grid-cols-2 gap-4">
             {/* OI Donut */}
             <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="text-[12px] font-bold text-text1">OI Distribution</div>
-                <InfoTooltip text="Open Interest Distribution — shows how much collateral is locked across the top markets. Larger slice = more capital at risk in that market." />
-              </div>
+              <div className="text-[12px] font-bold text-text1 mb-3">OI Distribution</div>
               <div className="flex items-center gap-4">
                 <PieChart width={140} height={140}>
                   <Pie data={topByOI.slice(0, 8)} cx={65} cy={65} innerRadius={40} outerRadius={65}
@@ -418,10 +450,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           {/* Funding Rates (top extreme) */}
           <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
             <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2">
-                <div className="text-[12px] font-bold text-text1">Funding Rates — Most Extreme</div>
-                <InfoTooltip text="Funding rate is a periodic payment between longs and shorts. Positive = longs pay shorts (market is bullish). Negative = shorts pay longs (market is bearish). Extreme rates often signal overheating." />
-              </div>
+              <div className="text-[12px] font-bold text-text1">Funding Rates — Most Extreme</div>
               <div className="flex items-center gap-3 text-[10px] text-text3">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block" /> Positive (longs pay)</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block" /> Negative (shorts pay)</span>
@@ -429,8 +458,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={fundingData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
-                <XAxis dataKey="symbol" tick={{ fontSize: 9, fill: 'var(--text3)' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 9, fill: 'var(--text3)' }} tickLine={false} axisLine={false}
+                <XAxis dataKey="symbol" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false}
                   tickFormatter={v => v.toFixed(3) + '%'} width={56} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v.toFixed(4) + '%', 'Funding/hr']} />
                 <Bar dataKey="funding" radius={[3, 3, 0, 0]}>
@@ -485,10 +514,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
 
           {/* All Markets Funding Rate Heatmap */}
           <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="text-[12px] font-bold text-text1">All Markets Funding Rate</div>
-              <InfoTooltip text="Heatmap of funding rates across all markets. Green = positive (longs pay shorts), Red = negative (shorts pay longs). Darker color = more extreme rate. Sorted by Open Interest." />
-            </div>
+            <div className="text-[12px] font-bold text-text1 mb-3">All Markets Funding Rate</div>
             <div className="flex flex-wrap gap-1.5">
               {allFundingData.map(m => {
                 const absF = Math.abs(m.funding);
@@ -729,6 +755,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
         </div>
 
       </div>
+      </div> {/* end bottom flex */}
     </div>
   );
 }
