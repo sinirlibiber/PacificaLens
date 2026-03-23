@@ -13,6 +13,7 @@ function RiskPage() {
     />
   );
 }
+
 export default function Page() {
   return <AppShell><RiskPage /></AppShell>;
 }
