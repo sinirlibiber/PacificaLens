@@ -6,10 +6,14 @@ export const metadata: Metadata = {
   title: 'PacificaLens',
   description: 'Advanced analytics & risk management for Pacifica DEX',
   icons: {
-    icon: '/pacificalens.ico',
+    icon: [
+      { url: '/pacificalens.ico', sizes: '32x32' },
+      { url: '/pacificalens.ico', sizes: '64x64' },
+      { url: '/pacificalens.ico', sizes: '128x128' },
+      { url: '/pacificalens.ico', sizes: '256x256' },
+    ],
     shortcut: '/pacificalens.ico',
-    apple: '/pacificalens.ico',
-    other: [{ rel: 'icon', url: '/pacificalens.ico', sizes: '256x256' }],
+    apple: { url: '/pacificalens.ico', sizes: '256x256' },
   },
 };
 
