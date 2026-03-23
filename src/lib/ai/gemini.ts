@@ -1,5 +1,5 @@
 /**
- * groq.ts — Groq API client (Mixtral 8x7B, talimatlara en duyarlı model)
+ * groq.ts — Groq API client (Llama 3.1 8B Instant, talimatlara en duyarlı)
  * 
  * Ücretsiz tier: dakikada 30 istek, günde 14.400 istek.
  * Env var: GROQ_API_KEY
@@ -20,11 +20,9 @@ export interface GeminiResult {
 export async function queryGemini(userQuestion: string): Promise<GeminiResult> {
   const cacheKey = makeCacheKey('groq', userQuestion);
 
-  // Cache kontrolü (isteğe bağlı, test için kapatabilirsiniz)
-  const cached = await cacheGet(cacheKey);
-  if (cached) {
-    return { answer: cached, source: 'gemini', cached: true };
-  }
+  // 🔥 GEÇİCİ OLARAK CACHE KAPATILDI (test için)
+  // const cached = await cacheGet(cacheKey);
+  // if (cached) return { answer: cached, source: 'gemini', cached: true };
 
   const res = await fetch(GROQ_URL, {
     method: 'POST',
@@ -33,17 +31,24 @@ export async function queryGemini(userQuestion: string): Promise<GeminiResult> {
       'Authorization': `Bearer ${GROQ_KEY}`,
     },
     body: JSON.stringify({
-      // Talimatlara en duyarlı model
-      model: 'mixtral-8x7b-32768',
+      model: 'llama-3.1-8b-instant', // Talimatlara çok iyi uyar
       messages: [
         {
           role: 'system',
-          content: `Sen bir kripto piyasası asistanısın.
-KURAL 1: Sana verilen kullanıcı mesajında güncel fiyat, hacim, değişim yüzdesi gibi veriler olacaktır.
-KURAL 2: Kendi eğitim verilerindeki hiçbir fiyatı veya piyasa bilgisini KULLANMA.
-KURAL 3: Sadece mesajda yazılı olan rakamlara ve verilere dayanarak yanıt ver.
-KURAL 4: Yatırım tavsiyesi verme, sadece verileri yorumla.
-KURAL 5: Yanıtını kullanıcının yazdığı dilde ver.`,
+          content: `Sana verilen kullanıcı mesajında mutlaka şu başlık altında güncel veriler olacaktır:
+GÜNCEL VERİLER (SADECE BUNLARI KULLAN):
+- Fiyat: xxx USD
+- 24s Değişim: xx%
+- 24s Hacim: xxx
+- Fonlama Oranı: xxx
+- Açık Pozisyon: xxx
+
+KURALLAR:
+1. SADECE bu verilerde yazan rakamları kullan.
+2. Kendi eğitim verilerindeki hiçbir fiyatı veya piyasa bilgisini KULLANMA.
+3. Eğer verilerde olmayan bir şey sorulursa, "Bu konuda verim yok" de.
+4. Yatırım tavsiyesi verme.
+5. Yanıtını kullanıcının yazdığı dilde ver.`,
         },
         {
           role: 'user',
@@ -51,7 +56,7 @@ KURAL 5: Yanıtını kullanıcının yazdığı dilde ver.`,
         },
       ],
       max_tokens: 512,
-      temperature: 0.3, // Daha az yaratıcılık, daha çok talimat takibi
+      temperature: 0.2, // çok düşük, talimatlara sadık kal
     }),
     signal: AbortSignal.timeout(20_000),
   });
@@ -65,7 +70,8 @@ KURAL 5: Yanıtını kullanıcının yazdığı dilde ver.`,
   const answer: string =
     data?.choices?.[0]?.message?.content ?? 'Groq yanıt vermedi.';
 
-  await cacheSet(cacheKey, answer, CACHE_TTL);
+  // 🔥 CACHE YAZMA DA GEÇİCİ KAPATILDI
+  // await cacheSet(cacheKey, answer, CACHE_TTL);
 
   return { answer, source: 'gemini', cached: false };
 }
