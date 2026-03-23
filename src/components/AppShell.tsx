@@ -185,7 +185,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         symbol, price: orderPrice, amount: orderAmount,
         side: r.side === 'long' ? 'bid' : 'ask',
         tif: 'GTC', reduce_only: false,
-        take_profit: r.tp2 > 0 ? { stop_price: String(r.tp2) } : undefined,
+        take_profit: r.tp1 > 0 ? { stop_price: String(r.tp1) } : undefined,
       }, privySign);
       if (result.success) {
         updateEntry(logId, { status: 'success', orderId: result.orderId });
