@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Market, Ticker } from '@/lib/pacifica';
-import { fmt, fmtPrice, getMarkPrice, get24hChange } from '@/lib/utils';
+import { fmt, fmtPrice } from '@/lib/utils';
 import { CoinLogo } from './CoinLogo';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -119,13 +119,16 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
         if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data)) {
-          setCalEvents(data.slice(0, 50).map((e: Record<string, string>) => ({
+          setCalEvents(data.slice(0, 60).map((e: Record<string, string>) => ({
+            // ForexFactory fields: title, country, date, time, impact, forecast, previous, actual
+            // Fallback fields: event, name, currency
             title: e.title || e.event || e.name || '',
             country: e.country || e.currency || '',
             currency: e.currency || e.country || '',
             date: e.date || '',
             time: e.time || '',
-            impact: e.impact || '1',
+            // ForexFactory impact: 'High', 'Medium', 'Low', 'Holiday'
+            impact: e.impact === 'High' ? '3' : e.impact === 'Medium' ? '2' : e.impact === 'Low' ? '1' : (e.impact || '1'),
             forecast: e.forecast || '',
             previous: e.previous || '',
             actual: e.actual || '',
@@ -159,17 +162,43 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     .sort((a, b) => Math.abs(b.funding) - Math.abs(a.funding))
     .slice(0, 12);
 
-  const gainers = [...markets]
-    .map(m => ({ symbol: m.symbol, change: get24hChange(tickers[m.symbol]), price: getMarkPrice(tickers[m.symbol]) }))
-    .filter(m => m.price > 0)
-    .sort((a, b) => b.change - a.change);
-  const top5Gainers = gainers.slice(0, 5);
-  const top5Losers = gainers.slice(-5).reverse();
 
   const volDominance = topByVolume.slice(0, 8).map(m => ({
     name: m.symbol, value: m.volume,
     pct: totalVolume > 0 ? (m.volume / totalVolume * 100) : 0,
   }));
+
+  // Long/Short ratio from open interest (bid vs ask side approximation via funding)
+  // Positive funding = more longs; negative = more shorts
+  const longShortData = [...markets]
+    .map(m => {
+      const tk = tickers[m.symbol];
+      const oi = Number(tk?.open_interest || 0);
+      const funding = Number(tk?.funding || 0);
+      if (oi <= 0) return null;
+      // Funding positive → longs pay shorts → more longs
+      const longRatio = funding >= 0 ? 0.5 + Math.min(Math.abs(funding) * 500, 0.35) : 0.5 - Math.min(Math.abs(funding) * 500, 0.35);
+      return {
+        symbol: m.symbol,
+        long: Math.round(longRatio * 100),
+        short: Math.round((1 - longRatio) * 100),
+        oi,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b!.oi - a!.oi)
+    .slice(0, 8) as { symbol: string; long: number; short: number; oi: number }[];
+
+  // All markets funding rate — sorted for heatmap
+  const allFundingData = [...markets]
+    .map(m => ({
+      symbol: m.symbol,
+      funding: Number(tickers[m.symbol]?.funding || 0) * 100,
+      oi: Number(tickers[m.symbol]?.open_interest || 0),
+    }))
+    .filter(d => d.oi > 0)
+    .sort((a, b) => b.oi - a.oi)
+    .slice(0, 20);
 
   const filteredNews = newsFilter === 'All' ? news :
     news.filter(n => {
@@ -192,10 +221,10 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-bg">
+    <div className="flex h-full bg-bg overflow-hidden">
 
       {/* ─── LEFT: Market Analytics ─── */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-[920px] mx-auto px-6 py-5 space-y-5">
 
           {/* Stat cards */}
@@ -224,10 +253,10 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               <div className="text-[10px] text-text3">Top 10</div>
             </div>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={topByVolume} layout="vertical" margin={{ left: 8, right: 20, top: 0, bottom: 0 }}>
+              <BarChart data={topByVolume} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
                 <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false}
                   tickFormatter={v => fmtLarge(v)} />
-                <YAxis type="category" dataKey="symbol" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={40} />
+                <YAxis type="category" dataKey="symbol" tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} tickLine={false} axisLine={false} width={52} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [fmtLarge(v), 'Volume']} />
                 <Bar dataKey="volume" radius={[0, 4, 4, 0]}>
                   {topByVolume.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} fillOpacity={0.85} />)}
@@ -280,52 +309,79 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
           </div>
 
-          {/* Funding Rates + Gainers/Losers */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Funding */}
-            <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-              <div className="text-[12px] font-bold text-text1 mb-3">Funding Rates</div>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={fundingData} margin={{ left: 0, right: 8, top: 0, bottom: 0 }}>
-                  <XAxis dataKey="symbol" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false}
-                    tickFormatter={v => v.toFixed(3) + '%'} width={52} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v.toFixed(4) + '%', 'Funding']} />
-                  <Bar dataKey="funding" radius={[3, 3, 0, 0]}>
-                    {fundingData.map((d, i) => <Cell key={i} fill={d.funding >= 0 ? '#10b981' : '#ef4444'} fillOpacity={0.8} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Gainers / Losers */}
-            <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-              <div className="grid grid-cols-2 gap-3 h-full">
-                <div>
-                  <div className="text-[11px] font-bold text-success mb-2">🚀 Top Gainers</div>
-                  {top5Gainers.map(m => (
-                    <div key={m.symbol} className="flex items-center justify-between py-1.5 border-b border-border1 last:border-0">
-                      <div className="flex items-center gap-1.5">
-                        <CoinLogo symbol={m.symbol} size={16} />
-                        <span className="text-[11px] font-semibold text-text1">{m.symbol}</span>
-                      </div>
-                      <span className="text-[11px] font-bold text-success">+{fmt(m.change, 2)}%</span>
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <div className="text-[11px] font-bold text-danger mb-2">📉 Top Losers</div>
-                  {top5Losers.map(m => (
-                    <div key={m.symbol} className="flex items-center justify-between py-1.5 border-b border-border1 last:border-0">
-                      <div className="flex items-center gap-1.5">
-                        <CoinLogo symbol={m.symbol} size={16} />
-                        <span className="text-[11px] font-semibold text-text1">{m.symbol}</span>
-                      </div>
-                      <span className="text-[11px] font-bold text-danger">{fmt(m.change, 2)}%</span>
-                    </div>
-                  ))}
-                </div>
+          {/* Funding Rates (top extreme) */}
+          <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
+            <div className="flex justify-between items-center mb-3">
+              <div className="text-[12px] font-bold text-text1">Funding Rates — Most Extreme</div>
+              <div className="flex items-center gap-3 text-[10px] text-text3">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block" /> Positive (longs pay)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block" /> Negative (shorts pay)</span>
               </div>
+            </div>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={fundingData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                <XAxis dataKey="symbol" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false}
+                  tickFormatter={v => v.toFixed(3) + '%'} width={56} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v.toFixed(4) + '%', 'Funding/hr']} />
+                <Bar dataKey="funding" radius={[3, 3, 0, 0]}>
+                  {fundingData.map((d, i) => <Cell key={i} fill={d.funding >= 0 ? '#10b981' : '#ef4444'} fillOpacity={0.85} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Long/Short Ratio */}
+          <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
+            <div className="flex justify-between items-center mb-3">
+              <div className="text-[12px] font-bold text-text1">Long / Short Ratio</div>
+              <div className="flex items-center gap-3 text-[10px] text-text3">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block" /> Long</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block" /> Short</span>
+                <span className="text-text3">· estimated from funding bias</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {longShortData.map(m => (
+                <div key={m.symbol} className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 w-14 shrink-0">
+                    <CoinLogo symbol={m.symbol} size={14} />
+                    <span className="text-[11px] font-semibold text-text1">{m.symbol}</span>
+                  </div>
+                  <div className="flex-1 h-4 rounded-full overflow-hidden flex">
+                    <div className="h-full bg-success/70 transition-all" style={{ width: `${m.long}%` }} />
+                    <div className="h-full bg-danger/70 transition-all" style={{ width: `${m.short}%` }} />
+                  </div>
+                  <span className="text-[10px] font-mono text-success w-8 text-right">{m.long}%</span>
+                  <span className="text-[10px] font-mono text-danger w-8 text-right">{m.short}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* All Markets Funding Rate Heatmap */}
+          <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
+            <div className="text-[12px] font-bold text-text1 mb-3">All Markets Funding Rate</div>
+            <div className="flex flex-wrap gap-1.5">
+              {allFundingData.map(m => {
+                const absF = Math.abs(m.funding);
+                const intensity = Math.min(absF / 0.05, 1);
+                const isPos = m.funding >= 0;
+                const bg = isPos
+                  ? `rgba(16,185,129,${0.1 + intensity * 0.7})`
+                  : `rgba(239,68,68,${0.1 + intensity * 0.7})`;
+                return (
+                  <div key={m.symbol} title={`${m.symbol}: ${m.funding.toFixed(4)}%/hr`}
+                    className="flex flex-col items-center px-2 py-1.5 rounded-lg cursor-default transition-all hover:opacity-80"
+                    style={{ background: bg, minWidth: 52 }}>
+                    <CoinLogo symbol={m.symbol} size={14} />
+                    <span className="text-[9px] font-bold text-text1 mt-0.5">{m.symbol}</span>
+                    <span className={`text-[9px] font-mono font-bold ${isPos ? 'text-success' : 'text-danger'}`}>
+                      {isPos ? '+' : ''}{m.funding.toFixed(4)}%
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -333,7 +389,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
       </div>
 
       {/* ─── RIGHT: News + Calendar ─── */}
-      <div className="w-[320px] shrink-0 border-l border-border1 flex flex-col overflow-hidden">
+      <div className="w-[320px] shrink-0 border-l border-border1 flex flex-col min-h-0">
 
         {/* News */}
         <div className="flex-1 flex flex-col overflow-hidden border-b border-border1" style={{ flex: '1 1 0' }}>
