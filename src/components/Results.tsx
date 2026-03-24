@@ -17,8 +17,8 @@ interface ResultsProps {
   onWinRateChange: (v: number) => void;
 }
 
-function StatRow({ label, value, color, highlight, copyValue }: {
-  label: string; value: string; color?: string; highlight?: boolean; copyValue?: string;
+function StatRow({ label, value, color, highlight, copyValue, sublabel }: {
+  label: string; value: string; color?: string; highlight?: boolean; copyValue?: string; sublabel?: string;
 }) {
   const [copied, setCopied] = useState(false);
   function copy() {
@@ -30,7 +30,10 @@ function StatRow({ label, value, color, highlight, copyValue }: {
   }
   return (
     <div className={`flex justify-between items-center px-4 py-2.5 hover:bg-surface2/50 transition-colors group ${highlight ? 'bg-accent/5' : ''}`}>
-      <span className="text-[12px] text-text3">{label}</span>
+      <div>
+        <span className="text-[12px] text-text3">{label}</span>
+        {sublabel && <div className="text-[9px] text-text3/60 mt-0.5">{sublabel}</div>}
+      </div>
       <div className="flex items-center gap-1.5">
         <span className={`text-[13px] font-semibold ${color || 'text-text1'}`}>{value}</span>
         {copyValue && (
@@ -47,11 +50,19 @@ function StatRow({ label, value, color, highlight, copyValue }: {
 }
 
 function WarningBanner({ msg, type }: { msg: string; type: 'warn' | 'danger' | 'info' }) {
-  const s = type === 'danger' ? 'bg-danger/8 border-danger/30 text-danger' : type === 'warn' ? 'bg-warn/8 border-warn/30 text-warn' : 'bg-accent/8 border-accent/30 text-accent';
-  const icon = type === 'danger' ? '⚡' : type === 'warn' ? '⚠' : 'ℹ';
+  const s = type === 'danger'
+    ? 'bg-danger/10 border-danger/40 text-danger'
+    : type === 'warn'
+      ? 'bg-warn/10 border-warn/40 text-warn'
+      : 'bg-accent/10 border-accent/40 text-accent';
+  const iconStyle = type === 'danger'
+    ? 'bg-danger/20 text-danger'
+    : type === 'warn'
+      ? 'bg-warn/20 text-warn'
+      : 'bg-accent/20 text-accent';
   return (
-    <div className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-[11px] font-semibold ${s}`}>
-      <span className="shrink-0 mt-0.5">{icon}</span>
+    <div className={`flex items-start gap-2.5 px-3 py-2.5 rounded-lg border text-[11px] font-medium ${s}`}>
+      <span className={`shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5 ${iconStyle}`}>!</span>
       <span>{msg}</span>
     </div>
   );
@@ -63,15 +74,14 @@ export function Results({ result, accountInfo, accountSize, onExecute, walletCon
 
   const warnings: { msg: string; type: 'warn' | 'danger' | 'info' }[] = [];
   if (result) {
-    if (result.marginPct > 50) warnings.push({ msg: 'Bu pozisyon hesabının %50\'sinden fazlasını margin olarak kullanıyor', type: 'danger' });
-    if (result.leverage > 20) warnings.push({ msg: `${result.leverage}x kaldıraç çok yüksek — küçük hareketler likidasyon yaratabilir`, type: 'danger' });
-    if (result.rrRatio < 1.5) warnings.push({ msg: 'Risk:Ödül 1.5 altında — bu trade olumsuz ödeme oranına sahip', type: 'warn' });
-    if (result.fundingCostDaily > result.riskAmount * 0.1) warnings.push({ msg: `Günlük funding ($${fmt(result.fundingCostDaily, 2)}) risk tutarının %10\'undan fazla`, type: 'warn' });
-    if (totalMarginUsed > 0 && equity > 0 && (totalMarginUsed + result.requiredMargin) / equity > 0.5) warnings.push({ msg: 'Bu pozisyon eklenince toplam margin kullanımı %50\'yi aşacak', type: 'warn' });
-    if (result.slPct < 0.3) warnings.push({ msg: 'Stop loss çok sıkışık — normal volatilite tarafından tetiklenebilir', type: 'warn' });
+    if (result.marginPct > 50) warnings.push({ msg: 'This position uses more than 50% of your account as margin', type: 'danger' });
+    if (result.leverage > 20) warnings.push({ msg: `${result.leverage}x leverage is very high — small price moves can trigger liquidation`, type: 'danger' });
+    if (result.rrRatio < 1.5) warnings.push({ msg: 'Risk:Reward below 1.5 — this trade has an unfavorable payout ratio', type: 'warn' });
+    if (result.fundingCostDaily > result.riskAmount * 0.1) warnings.push({ msg: `Daily funding ($${fmt(result.fundingCostDaily, 2)}) exceeds 10% of your risk amount`, type: 'warn' });
+    if (totalMarginUsed > 0 && equity > 0 && (totalMarginUsed + result.requiredMargin) / equity > 0.5) warnings.push({ msg: 'Adding this position will push total margin usage above 50%', type: 'warn' });
+    if (result.slPct < 0.3) warnings.push({ msg: 'Stop loss is very tight — may be triggered by normal volatility', type: 'warn' });
   }
 
-  // Win-rate adjusted EV
   const wr = winRate / 100;
   const ev = result ? (wr * result.riskAmount * result.rrRatio) - ((1 - wr) * result.riskAmount) : 0;
   const evPositive = ev >= 0;
@@ -100,7 +110,6 @@ export function Results({ result, accountInfo, accountSize, onExecute, walletCon
                 <div className={`text-[18px] font-bold ${evPositive ? 'text-success' : 'text-danger'}`}>
                   {evPositive ? '+' : ''}${fmt(ev, 2)}
                 </div>
-                {/* Win rate input */}
                 <div className="flex items-center gap-1.5 justify-end mt-1">
                   <span className="text-[9px] text-text3">Win rate</span>
                   <input
@@ -141,17 +150,27 @@ export function Results({ result, accountInfo, accountSize, onExecute, walletCon
             </div>
           </div>
 
-          {/* Risk / Reward — with copy buttons on SL/TP */}
+          {/* Risk / Reward Levels */}
           <div className="bg-surface rounded-xl border border-border1 shadow-card overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border1 bg-surface2">
-              <span className="text-[10px] font-semibold text-text2 uppercase tracking-wide">Risk / Reward</span>
+              <span className="text-[10px] font-semibold text-text2 uppercase tracking-wide">Risk / Reward Levels</span>
             </div>
             <div className="divide-y divide-border1">
-              <StatRow label="Max Risk ($)" value={'$' + fmt(result.riskAmount, 2)} color="text-danger" />
+              <StatRow label="Max Risk" value={'$' + fmt(result.riskAmount, 2)} color="text-danger" />
               <StatRow label="Stop Loss" value={'$' + fmtPrice(result.stopLoss)} color="text-danger" copyValue={String(result.stopLoss)} />
               <StatRow label="SL Distance" value={fmt(result.slPct, 2) + '%'} />
-              <StatRow label="Liquidation Price" value={'$' + fmtPrice(result.liquidationPrice)} color="text-danger" />
-              <StatRow label="Break-Even Price" value={'$' + fmtPrice(result.breakEvenPrice)} color="text-text3" />
+              <StatRow
+                label="Liquidation Price"
+                value={'$' + fmtPrice(result.liquidationPrice)}
+                color="text-danger"
+                sublabel="Estimated — varies by exchange"
+              />
+              <StatRow
+                label="Break-Even Price"
+                value={'$' + fmtPrice(result.breakEvenPrice)}
+                color="text-text3"
+                sublabel="After entry + exit fees"
+              />
               <StatRow
                 label={`TP @ 1:${fmt(result.rrRatio, 1)}`}
                 value={'$' + fmtPrice(result.tp1)}
@@ -171,16 +190,26 @@ export function Results({ result, accountInfo, accountSize, onExecute, walletCon
           {/* Funding Cost */}
           <div className="bg-surface rounded-xl border border-border1 shadow-card overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border1 bg-surface2 flex items-center justify-between">
-              <span className="text-[10px] font-semibold text-text2 uppercase tracking-wide">Funding Cost (tutma)</span>
-              <span className="text-[9px] text-text3">sabit oran varsayımı</span>
+              <span className="text-[10px] font-semibold text-text2 uppercase tracking-wide">Funding Cost (Holding)</span>
+              <span className="text-[9px] text-text3 bg-surface rounded px-1.5 py-0.5 border border-border1">fixed rate estimate</span>
             </div>
             <div className="divide-y divide-border1">
-              <StatRow label="Günlük Maliyet" value={'$' + fmt(result.fundingCostDaily, 4)} color={result.fundingCostDaily > 0 ? 'text-danger' : 'text-success'} />
-              <StatRow label="Haftalık Maliyet" value={'$' + fmt(result.fundingCostWeekly, 2)} color={result.fundingCostWeekly > 0 ? 'text-danger' : 'text-success'} />
               <StatRow
-                label="Haftalık / Risk"
-                value={result.riskAmount > 0 ? fmt((result.fundingCostWeekly / result.riskAmount) * 100, 1) + '%' : '—'}
+                label="Daily Cost"
+                value={'$' + fmt(result.fundingCostDaily, 4)}
+                color={result.fundingCostDaily > 0 ? 'text-danger' : 'text-success'}
+                sublabel="3 funding periods / day"
+              />
+              <StatRow
+                label="Weekly Cost"
+                value={'$' + fmt(result.fundingCostWeekly, 4)}
+                color={result.fundingCostWeekly > 0 ? 'text-danger' : 'text-success'}
+              />
+              <StatRow
+                label="Weekly / Risk"
+                value={result.riskAmount > 0 ? fmt((result.fundingCostWeekly / result.riskAmount) * 100, 2) + '%' : '—'}
                 color={result.fundingCostWeekly / result.riskAmount > 0.2 ? 'text-danger' : 'text-text3'}
+                sublabel="Funding as % of risk"
               />
             </div>
           </div>
@@ -189,31 +218,36 @@ export function Results({ result, accountInfo, accountSize, onExecute, walletCon
             onClick={() => onExecute(result)}
             disabled={!walletConnected}
             className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all disabled:opacity-40 shadow-card-md ${result.side === 'long' ? 'bg-success text-white hover:opacity-90' : 'bg-danger text-white hover:opacity-90'}`}>
-            {walletConnected ? `${result.side.toUpperCase()} Order — ${market}` : 'Cüzdanı Bağla'}
+            {walletConnected ? `Place ${result.side.toUpperCase()} — ${market}` : 'Connect Wallet'}
           </button>
         </>
       ) : (
         <div className="flex-1 flex flex-col gap-4">
           <div className="flex flex-col items-center justify-center py-10 gap-3 text-text3">
-            <div className="w-14 h-14 rounded-2xl border border-dashed border-border2 flex items-center justify-center text-2xl">◎</div>
-            <p className="text-sm text-text2 font-semibold">Hesaplamayı doldur</p>
-            <p className="text-xs text-center leading-relaxed max-w-[200px]">
-              Giriş fiyatı, stop loss ve hesap büyüklüğünü girerek pozisyon büyüklüğünü hesapla
+            <div className="w-14 h-14 rounded-2xl border border-dashed border-border2 flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text3/50">
+                <path d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3"/>
+                <path d="M9 15h3l8.5-8.5a1.5 1.5 0 00-3-3L9 12v3"/>
+              </svg>
+            </div>
+            <p className="text-sm text-text2 font-semibold">Fill in the calculator</p>
+            <p className="text-xs text-center leading-relaxed max-w-[200px] text-text3">
+              Enter entry price, stop loss and account size to calculate your position
             </p>
           </div>
           <div className="bg-surface rounded-xl border border-border1 p-4 space-y-3">
-            <div className="text-[10px] font-bold text-text3 uppercase tracking-wide">Hızlı Referans</div>
-            <div className="space-y-2 text-[11px]">
+            <div className="text-[10px] font-bold text-text3 uppercase tracking-wide mb-3">Quick Reference</div>
+            <div className="space-y-2.5 text-[11px]">
               {[
-                { icon: '🟢', text: 'Her trade\'de risk ≤ %1-2 — uzun ömürlülük için' },
-                { icon: '📐', text: 'Girmeden önce minimum 1:1.5 R:R' },
-                { icon: '⚡', text: 'Yüksek kaldıraç = sıkışık likidasyon mesafesi' },
-                { icon: '💸', text: 'Funding, tutulan pozisyonlarda günlük birikmekte' },
-                { icon: '🎯', text: 'Win rate + R:R birlikte pozitif beklenti değeri yaratır' },
+                { label: 'Risk per trade', desc: 'Keep risk to 1–2% per trade for longevity' },
+                { label: 'Min R:R ratio', desc: 'Aim for at least 1:1.5 before entering' },
+                { label: 'Leverage warning', desc: 'High leverage narrows liquidation distance' },
+                { label: 'Funding cost', desc: 'Funding accrues every 8h on open positions' },
+                { label: 'Expected value', desc: 'Win rate × R:R together create positive EV' },
               ].map((tip, i) => (
-                <div key={i} className="flex items-start gap-2 text-text3">
-                  <span>{tip.icon}</span>
-                  <span>{tip.text}</span>
+                <div key={i} className="flex items-start gap-2.5 text-text3">
+                  <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-accent/50 mt-1.5" />
+                  <span><span className="text-text2 font-semibold">{tip.label}:</span> {tip.desc}</span>
                 </div>
               ))}
             </div>
