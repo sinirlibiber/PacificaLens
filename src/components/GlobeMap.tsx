@@ -24,23 +24,50 @@ function hitToLatLng(hit: THREE.Vector3, globeMatrix: THREE.Matrix4) {
   return { lat, lng };
 }
 
+/* ── ocean / region name fallback ────────────────────────────── */
+function getOceanOrRegion(lat: number, lng: number): string {
+  // Pacific Ocean
+  if (lng > 120 && lng <= 180 && lat > -60 && lat < 65) return 'Pacific Ocean';
+  if (lng >= -180 && lng < -70 && lat > -60 && lat < 65) return 'Pacific Ocean';
+  // Atlantic Ocean
+  if (lng >= -70 && lng < 20 && lat > -60 && lat < 65) return 'Atlantic Ocean';
+  // Indian Ocean
+  if (lng >= 20 && lng <= 120 && lat > -60 && lat < 30) return 'Indian Ocean';
+  // Arctic Ocean
+  if (lat >= 65) return 'Arctic Ocean';
+  // Southern Ocean
+  if (lat <= -60) return 'Southern Ocean';
+  // Mediterranean Sea
+  if (lng >= -5 && lng <= 42 && lat >= 30 && lat <= 47) return 'Mediterranean Sea';
+  return `${lat >= 0 ? lat.toFixed(1) + '°N' : (-lat).toFixed(1) + '°S'}, ${lng >= 0 ? lng.toFixed(1) + '°E' : (-lng).toFixed(1) + '°W'}`;
+}
+
 /* ── reverse geocode via Nominatim ───────────────────────────── */
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10`,
       { headers: { 'Accept-Language': 'en', 'User-Agent': 'PacificaLens/1.0' } }
     );
     const data = await res.json();
+    // Nominatim returns error key when nothing is found (e.g. ocean)
+    if (data.error) return getOceanOrRegion(lat, lng);
     const a = data.address ?? {};
-    const city    = a.city || a.town || a.village || a.county || a.state_district || '';
+    const city    = a.city || a.town || a.village || a.county || a.state_district || a.suburb || a.municipality || '';
+    const state   = a.state || a.region || '';
     const country = a.country_code ? a.country_code.toUpperCase() : (a.country || '');
     if (city && country) return `${city}, ${country}`;
-    if (city)            return city;
+    if (state && country) return `${state}, ${country}`;
     if (country)         return country;
-    return data.display_name?.split(',')[0] ?? 'Unknown location';
+    if (data.display_name) {
+      // Take last meaningful part (usually country) from display_name
+      const parts = data.display_name.split(',').map((s: string) => s.trim()).filter(Boolean);
+      if (parts.length >= 2) return `${parts[0]}, ${parts[parts.length - 1]}`;
+      return parts[0] ?? getOceanOrRegion(lat, lng);
+    }
+    return getOceanOrRegion(lat, lng);
   } catch {
-    return 'Unknown location';
+    return getOceanOrRegion(lat, lng);
   }
 }
 
@@ -295,7 +322,7 @@ export default function GlobeMap() {
     pins.forEach((pin) => {
       const pos = latLngToVec3(pin.lat, pin.lng, 1.04);
       const sprite = new THREE.Sprite(spriteMat.clone());
-      const sw = 0.082;
+      const sw = 0.052;
       const sh = sw * (160 / 128);
       sprite.scale.set(sw, sh, 1);
       const dir = pos.clone().normalize();
