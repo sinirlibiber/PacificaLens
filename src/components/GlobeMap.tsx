@@ -120,7 +120,7 @@ export default function GlobeMap() {
 
     const s = stateRef.current = {
       renderer, scene, camera, globe, pinsGroup,
-      raf: 0, isDragging: false, autoRotate: true,
+      raf: 0, isDragging: false as boolean, autoRotate: true as boolean,
     };
 
     /* drag to rotate */
