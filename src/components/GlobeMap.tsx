@@ -19,8 +19,14 @@ function latLngToVec3(lat: number, lng: number, r: number): THREE.Vector3 {
 function hitToLatLng(hit: THREE.Vector3, globeMatrix: THREE.Matrix4) {
   const local = hit.clone().applyMatrix4(new THREE.Matrix4().copy(globeMatrix).invert());
   const n = local.clone().normalize();
+  // lat: consistent with latLngToVec3 where y = cos(phi), phi = (90-lat)*PI/180
   const lat = 90 - Math.acos(Math.max(-1, Math.min(1, n.y))) * (180 / Math.PI);
-  const lng = (Math.atan2(n.z, -n.x) * (180 / Math.PI)) - 180;
+  // lng: latLngToVec3 sets x=-sin(phi)*cos(theta), z=sin(phi)*sin(theta)
+  // so theta=atan2(z,-x), lng=theta*(180/PI)-180, then normalise to [-180,180]
+  const theta = Math.atan2(n.z, -n.x);
+  let lng = theta * (180 / Math.PI) - 180;
+  if (lng < -180) lng += 360;
+  if (lng >  180) lng -= 360;
   return { lat, lng };
 }
 
@@ -46,7 +52,7 @@ function getOceanOrRegion(lat: number, lng: number): string {
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10`,
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=6&addressdetails=1`,
       { headers: { 'Accept-Language': 'en', 'User-Agent': 'PacificaLens/1.0' } }
     );
     const data = await res.json();
@@ -223,6 +229,8 @@ export default function GlobeMap() {
           ((e.clientX - rect.left) / nW) * 2 - 1,
          -((e.clientY - rect.top)  / nH) * 2 + 1,
         );
+        // Force matrix update so we get the exact current rotation
+        globe.updateMatrixWorld(true);
         const ray = new THREE.Raycaster();
         ray.setFromCamera(mouse, camera);
         const hits = ray.intersectObject(globe);
