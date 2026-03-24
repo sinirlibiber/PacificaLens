@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useMarkets } from '@/hooks/useMarkets';
 import { useAccount } from '@/hooks/useAccount';
 import { Header, getSolanaAddress } from '@/components/Header';
-import { ConnectScreen } from '@/components/ConnectScreen';
+
 import { Toast } from '@/components/Toast';
 import { getMarkPrice } from '@/lib/utils';
 import { submitLimitOrder, checkBuilderApproval, approveBuilderCode, toBase58 } from '@/lib/pacificaSigning';
@@ -36,6 +36,12 @@ const TAB_ROUTE: Record<Tab, string> = {
   'portfolio': '/portfolio',
   'analytics': '/analytics',
 };
+
+function RedirectHome() {
+  const router = useRouter();
+  useEffect(() => { router.replace('/'); }, [router]);
+  return null;
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { ready, authenticated, user, signMessage } = usePrivy();
@@ -213,7 +219,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <AppShellContext.Provider value={{ markets, tickers, fundingRates, positions, accountInfo, accountSize, setAccountSize, wallet, error, handleExecute, loading, ensureBuilderApproved, builderApproved }}>
       <div className="flex flex-col h-screen overflow-hidden bg-bg">
         <Header tab={currentTab} onTabChange={handleTabChange} accountInfo={accountInfo} />
-        {!authenticated ? <ConnectScreen /> : (
+        {!authenticated ? (
+          // Not connected — send back to globe landing page
+          <RedirectHome />
+        ) : (
           loading ? (
             <div className="flex items-center justify-center flex-1 gap-3">
               <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
