@@ -47,20 +47,6 @@ export default function Home() {
         </a>
       </div>
 
-      {/* Hackathon badge */}
-      <div className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none" style={{ top: '68px' }}>
-        <span
-          className="text-xs font-semibold tracking-widest uppercase px-4 py-1.5 rounded-full"
-          style={{
-            background: 'rgba(0,180,216,0.1)',
-            border    : '1px solid rgba(0,180,216,0.25)',
-            color     : '#00b4d8',
-          }}
-        >
-          🏆 Pacifica Hackathon 2026 · Built with Pacifica Builder API
-        </span>
-      </div>
-
       {/* Bottom CTA */}
       <div
         className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-8 pt-20"
@@ -68,7 +54,7 @@ export default function Home() {
       >
         <p className="text-sm mb-1" style={{ color: '#8b949e' }}>
           The all-in-one analytics &amp; trading assistant for{' '}
-          <span style={{ color: '#e6edf3', fontWeight: 600 }}>Pacifica DEX</span>
+          <span style={{ color: '#e6edf3', fontWeight: 600 }}>Pacifica.fi</span>
         </p>
         <p className="text-xs mb-5" style={{ color: '#656d76' }}>
           Copy top traders · Scan arbitrage · Track whales · Manage risk

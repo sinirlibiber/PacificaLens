@@ -25,15 +25,53 @@ function hitToLatLng(hit: THREE.Vector3, globeMatrix: THREE.Matrix4) {
 }
 
 /* ── constants ───────────────────────────────────────────────── */
-const AUTO_SPEED   = 0.0008;   // base auto-rotation speed (rad/frame)
-const PAUSE_MS     = 15000;    // pause duration after touch (ms)
-const FRICTION     = 0.94;     // velocity damping per frame
-const THROW_SCALE  = 0.012;    // mouse-delta → angular velocity
+const AUTO_SPEED   = 0.0008;
+const PAUSE_MS     = 15000;
+const FRICTION     = 0.94;
+const THROW_SCALE  = 0.012;
+const ZOOM_MIN     = 1.5;
+const ZOOM_MAX     = 5.0;
+const ZOOM_SPEED   = 0.0012;
+
+/* ── pushpin colors ──────────────────────────────────────────── */
+const PIN_COLORS = [
+  0xffcc00, // yellow
+  0xff6600, // orange
+  0xff1a1a, // red
+  0xcc00cc, // purple
+  0x00cc44, // green
+  0x8B4513, // brown
+  0x1a1aff, // dark blue
+  0x66aaff, // light blue
+  0x00bb88, // teal
+  0x111111, // black
+];
+
+function buildPushpin(color: number): THREE.Group {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshPhongMaterial({ color, shininess: 60 });
+
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.022, 12, 12), mat);
+  cap.scale.set(1, 0.7, 1);
+  cap.position.y = 0.055;
+
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.010, 0.032, 12), mat);
+  body.position.y = 0.028;
+
+  const needle = new THREE.Mesh(
+    new THREE.ConeGeometry(0.004, 0.030, 8),
+    new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 80 }),
+  );
+  needle.position.y = 0.004;
+  needle.rotation.z = Math.PI;
+
+  group.add(cap, body, needle);
+  return group;
+}
 
 export default function GlobeMap() {
   const mountRef = useRef<HTMLDivElement>(null);
 
-  /* Three.js refs — stable across renders */
   const rendererRef  = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef     = useRef<THREE.Scene | null>(null);
   const cameraRef    = useRef<THREE.PerspectiveCamera | null>(null);
@@ -41,33 +79,31 @@ export default function GlobeMap() {
   const pinsGroupRef = useRef<THREE.Group | null>(null);
   const rafRef       = useRef<number>(0);
 
-  /* physics */
-  const velRef      = useRef({ x: 0, y: 0 }); // angular velocity (rad/frame)
+  const velRef      = useRef({ x: 0, y: 0 });
   const dragging    = useRef(false);
   const hasMoved    = useRef(false);
   const prevMouse   = useRef({ x: 0, y: 0 });
   const pauseTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pausedRef   = useRef(false);   // true while 15-sec pause is active
+  const pausedRef   = useRef(false);
+  const zoomRef     = useRef(2.6);
 
-  /* UI state */
   const [pins,       setPins      ] = useState<Pin[]>([]);
   const [modal,      setModal     ] = useState<{ sx: number; sy: number; lat: number; lng: number } | null>(null);
   const [inputLabel, setInputLabel] = useState('');
   const [saving,     setSaving    ] = useState(false);
   const [pinError,   setPinError  ] = useState('');
+  const [showInfo,   setShowInfo  ] = useState(false);
 
-  /* ── fetch pins ─────────────────────────────────────────── */
   const fetchPins = useCallback(async () => {
     try {
       const res  = await fetch('/api/pins');
       const data = await res.json();
       if (Array.isArray(data)) setPins(data);
-    } catch { /* network error — ignore */ }
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => { fetchPins(); }, [fetchPins]);
 
-  /* ── pause helper ────────────────────────────────────────── */
   const startPause = useCallback(() => {
     pausedRef.current = true;
     if (pauseTimer.current) clearTimeout(pauseTimer.current);
@@ -82,27 +118,23 @@ export default function GlobeMap() {
     const W = container.clientWidth  || 800;
     const H = container.clientHeight || 600;
 
-    /* renderer */
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    /* scene + camera */
     const scene  = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 1000);
-    camera.position.z = 2.6;
+    camera.position.z = zoomRef.current;
     sceneRef.current  = scene;
     cameraRef.current = camera;
 
-    /* lights */
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     const sun = new THREE.DirectionalLight(0x88ccff, 1.2);
     sun.position.set(5, 3, 5);
     scene.add(sun);
 
-    /* globe */
     const geo = new THREE.SphereGeometry(1, 72, 72);
     const tex = new THREE.TextureLoader().load(
       'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'
@@ -112,19 +144,16 @@ export default function GlobeMap() {
     scene.add(globe);
     globeRef.current = globe;
 
-    /* atmosphere glow */
     scene.add(new THREE.Mesh(
       new THREE.SphereGeometry(1.03, 72, 72),
       new THREE.MeshPhongMaterial({ color: 0x00b4d8, transparent: true, opacity: 0.07, side: THREE.FrontSide }),
     ));
 
-    /* stars */
     const starPos = new Float32Array(6000).map(() => (Math.random() - 0.5) * 120);
     const starGeo = new THREE.BufferGeometry();
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
     scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.08 })));
 
-    /* pins group */
     const pinsGroup = new THREE.Group();
     scene.add(pinsGroup);
     pinsGroupRef.current = pinsGroup;
@@ -140,7 +169,7 @@ export default function GlobeMap() {
       dragging.current  = true;
       hasMoved.current  = false;
       prevMouse.current = { x, y };
-      velRef.current    = { x: 0, y: 0 };  // kill momentum on grab
+      velRef.current    = { x: 0, y: 0 };
       startPause();
     };
 
@@ -151,12 +180,15 @@ export default function GlobeMap() {
       const dy = y - prevMouse.current.y;
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) hasMoved.current = true;
 
-      /* accumulate velocity for throw */
       velRef.current = { x: dx * THROW_SCALE, y: dy * THROW_SCALE };
 
-      globe.rotation.y     += dx * 0.005;
+      // Slow horizontal rotation near poles
+      const tiltFactor = Math.abs(Math.cos(globe.rotation.x));
+      const poleFactor = 0.3 + 0.7 * tiltFactor;
+
+      globe.rotation.y     += dx * 0.005 * poleFactor;
       globe.rotation.x     += dy * 0.005;
-      pinsGroup.rotation.y += dx * 0.005;
+      pinsGroup.rotation.y += dx * 0.005 * poleFactor;
       pinsGroup.rotation.x += dy * 0.005;
       prevMouse.current = { x, y };
     };
@@ -164,7 +196,6 @@ export default function GlobeMap() {
     const onUp = (e: MouseEvent | TouchEvent) => {
       if (!dragging.current) return;
       dragging.current = false;
-      /* click → open pin modal */
       if (!hasMoved.current && 'clientX' in e) {
         const rect  = container.getBoundingClientRect();
         const mouse = new THREE.Vector2(
@@ -183,14 +214,28 @@ export default function GlobeMap() {
       }
     };
 
+    /* ── scroll wheel zoom ───────────────────────────────── */
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Zoom slows down near poles
+      const tiltFactor = Math.abs(Math.cos(globe.rotation.x));
+      const poleSlow = 0.25 + 0.75 * tiltFactor;
+
+      zoomRef.current = Math.max(
+        ZOOM_MIN,
+        Math.min(ZOOM_MAX, zoomRef.current + e.deltaY * ZOOM_SPEED * poleSlow)
+      );
+      camera.position.z = zoomRef.current;
+    };
+
     container.addEventListener('mousedown',  onDown as EventListener);
     container.addEventListener('touchstart', onDown as EventListener, { passive: true });
     window.addEventListener('mousemove', onMove as EventListener);
     window.addEventListener('touchmove', onMove as EventListener, { passive: true });
     window.addEventListener('mouseup',   onUp   as EventListener);
     window.addEventListener('touchend',  onUp   as EventListener);
+    container.addEventListener('wheel', onWheel, { passive: false });
 
-    /* resize */
     const onResize = () => {
       const nW = container.clientWidth;
       const nH = container.clientHeight;
@@ -200,14 +245,12 @@ export default function GlobeMap() {
     };
     window.addEventListener('resize', onResize);
 
-    /* ── animation loop ──────────────────────────────────── */
     const animate = () => {
       rafRef.current = requestAnimationFrame(animate);
 
       if (dragging.current) {
-        /* user is actively dragging — no auto anything */
+        // user dragging
       } else if (pausedRef.current) {
-        /* throw momentum — decay velocity */
         velRef.current.x *= FRICTION;
         velRef.current.y *= FRICTION;
         globe.rotation.y     += velRef.current.x;
@@ -215,9 +258,11 @@ export default function GlobeMap() {
         pinsGroup.rotation.y += velRef.current.x;
         pinsGroup.rotation.x += velRef.current.y;
       } else {
-        /* auto rotate */
-        globe.rotation.y     += AUTO_SPEED;
-        pinsGroup.rotation.y += AUTO_SPEED;
+        // auto-rotate, slow near poles
+        const tiltFactor = Math.abs(Math.cos(globe.rotation.x));
+        const speed = AUTO_SPEED * (0.2 + 0.8 * tiltFactor);
+        globe.rotation.y     += speed;
+        pinsGroup.rotation.y += speed;
       }
 
       renderer.render(scene, camera);
@@ -233,6 +278,7 @@ export default function GlobeMap() {
       window.removeEventListener('touchmove', onMove as EventListener);
       window.removeEventListener('mouseup',   onUp   as EventListener);
       window.removeEventListener('touchend',  onUp   as EventListener);
+      container.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', onResize);
       renderer.dispose();
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
@@ -248,25 +294,13 @@ export default function GlobeMap() {
 
     pins.forEach((pin) => {
       const pos = latLngToVec3(pin.lat, pin.lng, 1.01);
+      // Deterministic color per pin id
+      const colorIndex = pin.id
+        ? pin.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % PIN_COLORS.length
+        : Math.floor(Math.random() * PIN_COLORS.length);
 
-      const stick = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.004, 0.004, 0.09, 8),
-        new THREE.MeshPhongMaterial({ color: 0x00b4d8 }),
-      );
-      const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.018, 10, 10),
-        new THREE.MeshPhongMaterial({ color: 0x00e5ff, emissive: 0x003d4d }),
-      );
-      head.position.y = 0.05;
-
-      const halo = new THREE.Mesh(
-        new THREE.SphereGeometry(0.03, 10, 10),
-        new THREE.MeshBasicMaterial({ color: 0x00b4d8, transparent: true, opacity: 0.22 }),
-      );
-      halo.position.y = 0.05;
-
-      const pinGroup = new THREE.Group();
-      pinGroup.add(stick, head, halo);
+      const pinGroup = buildPushpin(PIN_COLORS[colorIndex]);
+      pinGroup.scale.setScalar(0.55); // small pins
       pinGroup.position.copy(pos);
       pinGroup.lookAt(pos.clone().multiplyScalar(2));
       group.add(pinGroup);
@@ -302,7 +336,7 @@ export default function GlobeMap() {
   /* ── render ─────────────────────────────────────────────── */
   return (
     <div className="relative w-full h-full select-none overflow-hidden">
-      {/* Three.js canvas mount */}
+      {/* Three.js canvas */}
       <div ref={mountRef} className="w-full h-full" />
 
       {/* Pin modal */}
@@ -361,6 +395,64 @@ export default function GlobeMap() {
         </div>
       )}
 
+      {/* Info button (bottom-right above usage hint) */}
+      <button
+        onClick={() => setShowInfo(v => !v)}
+        className="absolute z-30 flex items-center justify-center rounded-full transition-all"
+        style={{
+          bottom    : '52px',
+          right     : '18px',
+          width     : '26px',
+          height    : '26px',
+          background: showInfo ? 'rgba(0,180,216,0.25)' : 'rgba(0,0,0,0.50)',
+          border    : '1px solid rgba(0,180,216,0.40)',
+          color     : '#00b4d8',
+          fontSize  : '12px',
+          fontWeight: 700,
+          cursor    : 'pointer',
+        }}
+        aria-label="About this map"
+      >
+        i
+      </button>
+
+      {/* Info panel */}
+      {showInfo && (
+        <div
+          className="absolute z-40 rounded-2xl p-4 shadow-2xl"
+          style={{
+            bottom        : '82px',
+            right         : '14px',
+            width         : '292px',
+            background    : 'rgba(13,17,23,0.97)',
+            border        : '1px solid rgba(0,180,216,0.28)',
+            backdropFilter: 'blur(14px)',
+            color         : '#8b949e',
+            fontSize      : '12px',
+            lineHeight    : '1.65',
+          }}
+        >
+          <p className="font-semibold mb-2" style={{ color: '#e6edf3', fontSize: '13px' }}>
+            🌍 Welcome to the PacificaLens family.
+          </p>
+          <p>
+            Mark where you are in the world and let our map come alive with you.
+          </p>
+          <p className="mt-2">
+            📍 Your pin is visible to everyone. Our goal is to bring together our
+            community from all around the world on this map. Location data is used
+            only for this map and is not stored for any other purpose.
+          </p>
+          <button
+            onClick={() => setShowInfo(false)}
+            className="mt-3 text-xs"
+            style={{ color: '#00b4d8', cursor: 'pointer' }}
+          >
+            Close ✕
+          </button>
+        </div>
+      )}
+
       {/* Visitor count */}
       <div
         className="absolute bottom-5 left-5 text-xs px-3 py-1.5 rounded-full font-medium pointer-events-none"
@@ -384,7 +476,7 @@ export default function GlobeMap() {
           backdropFilter: 'blur(8px)',
         }}
       >
-        Drag · Click to pin
+        Scroll to zoom · Drag · Click to pin
       </div>
     </div>
   );
