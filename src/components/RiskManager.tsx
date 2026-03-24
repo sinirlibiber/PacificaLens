@@ -510,5 +510,6 @@ export function RiskManager({
         />
       )}
     </div>
+  </div>
   );
 }

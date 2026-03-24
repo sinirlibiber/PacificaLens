@@ -7,7 +7,7 @@ import { Position, AccountInfo } from '@/lib/pacifica';
 
 interface ResultsProps {
   result: CalcResult | null;
-  positions: Position[];
+  positions?: Position[];
   accountInfo: AccountInfo | null;
   accountSize: number;
   onExecute: (r: CalcResult) => void;
