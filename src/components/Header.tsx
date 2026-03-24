@@ -88,11 +88,11 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
   return (
     <header className="flex items-center h-12 border-b border-border1 bg-surface shadow-card sticky top-0 z-50 px-4">
       {/* Logo */}
-      <div className="flex items-center gap-1.5 w-44 shrink-0">
+      <a href="https://www.pacificalens.xyz/" target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-1.5 w-44 shrink-0 hover:opacity-80 transition-opacity cursor-pointer">
         <Image src="/logo.png" alt="PacificaLens" width={36} height={36} className="object-contain" />
         <div className="font-bold text-[15px] tracking-tight text-text1 leading-none">PACIFICALENS</div>
-
-      </div>
+      </a>
 
       {/* Tabs center */}
       <div className="flex-1 flex items-center justify-center">

@@ -268,7 +268,7 @@ export function RiskManager({
     <div className="flex-1 overflow-auto bg-bg">
       <div className="w-full max-w-[1400px] mx-auto px-6 pt-5">
 
-        <div className="border border-border1 rounded-2xl overflow-hidden shadow-card bg-surface mt-5 mb-6">
+        <div className="border border-border1 rounded-2xl overflow-x-auto overflow-y-hidden shadow-card bg-surface mt-5 mb-6">
 
           <StatsBar
             accountInfo={accountInfo}
@@ -279,7 +279,7 @@ export function RiskManager({
 
           <div
             className="grid border-t border-border1"
-            style={{ gridTemplateColumns: '220px 1fr 340px 300px' }}
+            style={{ gridTemplateColumns: '220px minmax(320px,1fr) minmax(300px,340px) 280px', overflowX: 'auto' }}
           >
           {/* LEFT: Market List */}
           <div className="border-r border-border1 overflow-hidden flex flex-col" style={{ height: PANEL_H, minHeight: 500 }}>

@@ -93,6 +93,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   const LIQ_FILTERS = [1_000, 10_000, 50_000, 100_000] as const;
   type LiqFilter = typeof LIQ_FILTERS[number];
   const [liqFilter, setLiqFilter] = useState<LiqFilter>(10_000);
+  // Heatmap has its own independent filter
+  const [heatmapFilter, setHeatmapFilter] = useState<LiqFilter>(10_000);
 
   // Market Signals — reuse WhaleWatcher hook for OI/Funding alerts + liquidations
   const { whaleTrades, oiAlerts, fundingAlerts, isScanning, lastScan } = useWhaleWatcher(markets, tickers, liqFilter);
@@ -104,8 +106,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     const iv = setInterval(() => setNow3h(Date.now()), 60_000); // re-check every minute
     return () => clearInterval(iv);
   }, []);
-  const oiAlertsLive      = oiAlerts.filter(a => now3h - a.ts < TTL_MS);
-  const fundingAlertsLive = fundingAlerts.filter(a => now3h - a.ts < TTL_MS);
+  const oiAlertsLive      = oiAlerts.filter(a => now3h - a.ts < TTL_MS).sort((a, b) => b.ts - a.ts);
+  const fundingAlertsLive = fundingAlerts.filter(a => now3h - a.ts < TTL_MS).sort((a, b) => b.ts - a.ts);
 
   const [news, setNews] = useState<NewsItem[]>([]);
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
@@ -152,6 +154,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   
   // Liquidations — derived from whaleTrades, filtered by size + 3h TTL
   const liquidations = whaleTrades.filter(t => t.isLiquidation && t.notional >= liqFilter && now3h - t.ts < TTL_MS);
+  // Heatmap uses its own independent filter
+  const heatmapLiquidations = whaleTrades.filter(t => t.isLiquidation && t.notional >= heatmapFilter && now3h - t.ts < TTL_MS);
 
   // Fetch news
   useEffect(() => {
@@ -231,7 +235,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
 
   // Liquidation stats
   const totalLiqValue = liquidations.reduce((s, l) => s + l.notional, 0);
-  const liqBySymbol = liquidations.reduce((acc, l) => {
+  const liqBySymbol = heatmapLiquidations.reduce((acc, l) => {
     const key = l.symbol;
     if (!acc[key]) acc[key] = { symbol: key, count: 0, value: 0 };
     acc[key].count++;
@@ -592,9 +596,25 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
 
             {/* Liquidation Heatmap */}
             <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-              <div className="flex justify-between items-center mb-3">
+              <div className="flex justify-between items-center mb-2">
                 <div className="text-[12px] font-bold text-text1">Liquidation Heatmap</div>
-                <span className="text-[10px] text-text3">≥ {liqFilter >= 1_000 ? '$' + (liqFilter/1_000) + 'K' : '$'+liqFilter}</span>
+              </div>
+              {/* Heatmap size filter — independent from Recent Liquidations */}
+              <div className="flex gap-1 mb-3">
+                {([1_000, 10_000, 50_000, 100_000] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setHeatmapFilter(f)}
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-all"
+                    style={{
+                      background: heatmapFilter === f ? 'rgba(239,68,68,0.18)' : 'rgba(255,255,255,0.05)',
+                      color: heatmapFilter === f ? '#ef4444' : 'var(--text3)',
+                      border: heatmapFilter === f ? '1px solid rgba(239,68,68,0.4)' : '1px solid transparent',
+                    }}
+                  >
+                    {f >= 1_000 ? '$' + (f / 1_000) + 'K' : '$' + f}
+                  </button>
+                ))}
               </div>
               {liqHeatmap.length === 0 ? (
                 <div className="py-8 text-center text-[11px] text-text3">No liquidation data available</div>
