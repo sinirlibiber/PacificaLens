@@ -97,6 +97,16 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   // Market Signals — reuse WhaleWatcher hook for OI/Funding alerts + liquidations
   const { whaleTrades, oiAlerts, fundingAlerts, isScanning, lastScan } = useWhaleWatcher(markets, tickers, liqFilter);
 
+  // TTL filter: keep signals from last 3 hours only
+  const TTL_MS = 3 * 60 * 60 * 1000;
+  const [now3h, setNow3h] = useState(Date.now());
+  useEffect(() => {
+    const iv = setInterval(() => setNow3h(Date.now()), 60_000); // re-check every minute
+    return () => clearInterval(iv);
+  }, []);
+  const oiAlertsLive      = oiAlerts.filter(a => now3h - a.ts < TTL_MS);
+  const fundingAlertsLive = fundingAlerts.filter(a => now3h - a.ts < TTL_MS);
+
   const [news, setNews] = useState<NewsItem[]>([]);
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
   const [newsFilter, setNewsFilter] = useState<'All' | 'Crypto' | 'Macro'>('All');
@@ -140,8 +150,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     return () => clearInterval(iv);
   }, []);
   
-  // Liquidations — derived from whaleTrades, filtered by size
-  const liquidations = whaleTrades.filter(t => t.isLiquidation && t.notional >= liqFilter);
+  // Liquidations — derived from whaleTrades, filtered by size + 3h TTL
+  const liquidations = whaleTrades.filter(t => t.isLiquidation && t.notional >= liqFilter && now3h - t.ts < TTL_MS);
 
   // Fetch news
   useEffect(() => {
@@ -477,9 +487,10 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                 <span className="w-2 h-2 rounded-full bg-accent" />
                 <span className="text-[12px] font-bold text-text1">Market Signals</span>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-text3">
+              <div className="flex items-center gap-2 text-[10px] text-text3">
+                <span className="px-1.5 py-0.5 rounded-full bg-surface text-[9px] border border-border1">3h window</span>
                 {isScanning && <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />}
-                {lastScan ? `Updated ${lastScan.toLocaleTimeString()}` : 'Starting scan...'}
+                {lastScan ? `Updated ${lastScan.toLocaleTimeString()}` : 'Connecting...'}
               </div>
             </div>
             <div className="grid grid-cols-2 divide-x divide-border1">
@@ -487,11 +498,11 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               <div>
                 <div className="px-4 py-2.5 border-b border-border1 bg-surface2/40">
                   <h4 className="text-[11px] font-bold text-text1 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />OI Alerts ({oiAlerts.length})
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />OI Alerts ({oiAlertsLive.length})
                   </h4>
                 </div>
                 <div className="overflow-auto" style={{ maxHeight: 200 }}>
-                  {oiAlerts.length > 0 ? oiAlerts.map((a, i) => (
+                  {oiAlertsLive.length > 0 ? oiAlertsLive.map((a, i) => (
                     <div key={i} className="flex items-center justify-between px-4 py-2.5 border-b border-border1 last:border-0 hover:bg-surface2/40">
                       <div className="flex items-center gap-2"><CoinLogo symbol={a.symbol} size={16} /><span className="font-semibold text-[11px]">{a.symbol}</span></div>
                       <span className={`text-[11px] font-bold ${a.direction === 'up' ? 'text-success' : 'text-danger'}`}>
@@ -499,18 +510,18 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                       </span>
                       <span className="text-[10px] text-text3">{new Date(a.ts).toLocaleTimeString()}</span>
                     </div>
-                  )) : <div className="py-6 text-center text-text3 text-[11px]">No OI spikes detected yet</div>}
+                  )) : <div className="py-6 text-center text-text3 text-[11px]">No OI spikes in last 3h</div>}
                 </div>
               </div>
               {/* Funding Spikes */}
               <div>
                 <div className="px-4 py-2.5 border-b border-border1 bg-surface2/40">
                   <h4 className="text-[11px] font-bold text-text1 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-warn" />Funding Spikes ({fundingAlerts.length})
+                    <span className="w-1.5 h-1.5 rounded-full bg-warn" />Funding Spikes ({fundingAlertsLive.length})
                   </h4>
                 </div>
                 <div className="overflow-auto" style={{ maxHeight: 200 }}>
-                  {fundingAlerts.length > 0 ? fundingAlerts.map((a, i) => (
+                  {fundingAlertsLive.length > 0 ? fundingAlertsLive.map((a, i) => (
                     <div key={i} className="flex items-center justify-between px-4 py-2.5 border-b border-border1 last:border-0 hover:bg-surface2/40">
                       <div className="flex items-center gap-2"><CoinLogo symbol={a.symbol} size={16} /><span className="font-semibold text-[11px]">{a.symbol}</span></div>
                       <span className={`text-[11px] font-bold ${a.rate >= 0 ? 'text-danger' : 'text-success'}`}>
@@ -556,8 +567,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               {liquidations.length === 0 ? (
                 <div className="py-8 text-center space-y-1">
                   <div className="text-[13px]">{isScanning ? '🔍' : '✓'}</div>
-                  <div className="text-[11px] text-text3">{isScanning ? 'Scanning markets...' : 'No liquidations detected'}</div>
-                  <div className="text-[10px] text-text3">{lastScan ? `Updated ${lastScan.toLocaleTimeString()}` : 'Starting scan...'}</div>
+                  <div className="text-[11px] text-text3">{isScanning ? 'Connecting to stream...' : 'No liquidations in last 3h'}</div>
+                  <div className="text-[10px] text-text3">{lastScan ? `Last event: ${lastScan.toLocaleTimeString()}` : 'Waiting for data...'}</div>
                 </div>
               ) : (
                 <div className="space-y-1 max-h-48 overflow-y-auto">

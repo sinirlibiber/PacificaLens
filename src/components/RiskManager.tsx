@@ -262,7 +262,6 @@ export function RiskManager({
   const tabs: { key: RiskTab; label: string }[] = [
     { key: 'results', label: 'Results' },
     { key: 'portfolio', label: 'Portfolio' },
-    { key: 'guide', label: 'How It Works' },
   ];
 
   return (
@@ -280,7 +279,7 @@ export function RiskManager({
 
           <div
             className="grid border-t border-border1"
-            style={{ gridTemplateColumns: '220px 1fr 340px' }}
+            style={{ gridTemplateColumns: '220px 1fr 340px 300px' }}
           >
           {/* LEFT: Market List */}
           <div className="border-r border-border1 overflow-hidden flex flex-col" style={{ height: PANEL_H, minHeight: 500 }}>
@@ -574,7 +573,14 @@ export function RiskManager({
               </div>
             )}
 
-            {activeTab === 'guide' && <GuidePanel />}
+          </div>
+
+          {/* FAR RIGHT: How It Works — always visible */}
+          <div className="border-l border-border1 overflow-hidden flex flex-col" style={{ height: PANEL_H, minHeight: 500 }}>
+            <div className="px-4 py-2.5 border-b border-border1 bg-surface2 shrink-0">
+              <span className="text-[11px] font-bold text-text2 uppercase tracking-wide">How It Works</span>
+            </div>
+            <GuidePanel />
           </div>
         </div>
       </div>

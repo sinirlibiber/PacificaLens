@@ -87,7 +87,7 @@ export function Results({ result, accountInfo, accountSize, onExecute, walletCon
   const evPositive = ev >= 0;
 
   return (
-    <div className="flex flex-col gap-3 p-4 overflow-y-auto bg-bg h-full">
+    <div className="flex flex-col gap-3 p-4 overflow-y-auto bg-bg" style={{ height: "100%", minHeight: 0 }}>
       {result ? (
         <>
           {warnings.length > 0 && (
