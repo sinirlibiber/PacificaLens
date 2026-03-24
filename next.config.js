@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['assets.coincap.io', 'app.pacifica.fi'],
+    domains: ['assets.coincap.io', 'app.pacifica.fi', 'unpkg.com'],
     unoptimized: true,
   },
   async headers() {
