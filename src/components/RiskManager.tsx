@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Calculator, CalcResult } from './Calculator';
 import { Results } from './Results';
 import { StatsBar } from './StatsBar';
@@ -8,6 +8,7 @@ import { MarketList } from './MarketList';
 import { CoinLogo } from './CoinLogo';
 import { fmt, fmtPrice, getMarkPrice } from '@/lib/utils';
 import { Market, Ticker, FundingRate, Position, AccountInfo } from '@/lib/pacifica';
+import { useOrderLog } from '@/hooks/useOrderLog';
 
 interface RiskManagerProps {
   markets: Market[];
@@ -28,7 +29,9 @@ const CORR_GROUPS: Record<string, string> = {
   BTC: 'BTC', ETH: 'ETH', SOL: 'ALT', BNB: 'ALT', AVAX: 'ALT',
   MATIC: 'ALT', ARB: 'ALT', OP: 'ALT', LINK: 'ALT', DOT: 'ALT',
   ADA: 'ALT', ATOM: 'ALT', NEAR: 'ALT', APT: 'ALT', SUI: 'ALT',
-  XRP: 'XRP', DOGE: 'MEME', SHIB: 'MEME', PEPE: 'MEME',
+  INJ: 'ALT', TIA: 'ALT', SEI: 'ALT', STRK: 'ALT', JUP: 'ALT',
+  XRP: 'XRP', LTC: 'LTC', BCH: 'BCH',
+  DOGE: 'MEME', SHIB: 'MEME', PEPE: 'MEME', FLOKI: 'MEME', BONK: 'MEME', WIF: 'MEME',
 };
 function getCorrelationGroup(symbol: string): string {
   for (const [k, v] of Object.entries(CORR_GROUPS)) {
@@ -47,7 +50,11 @@ function PositionDetailModal({ pos, ticker, onClose }: {
   const posValue = size * markPrice;
   const pnl = Number(pos.unrealized_pnl || 0);
   const liqPrice = Number(pos.liquidation_price || 0);
-  const leverage = pos.leverage ? Number(pos.leverage) : (pos.margin && posValue > 0 ? Math.round(posValue / Number(pos.margin)) : 1);
+  const leverage = pos.leverage
+    ? Number(pos.leverage)
+    : (pos.margin && posValue > 0 && Number(pos.margin) > 0)
+      ? Math.round(posValue / Number(pos.margin))
+      : null;
   const pnlPct = entry > 0 ? ((markPrice - entry) / entry * 100 * (isLong ? 1 : -1)) : 0;
   const distToLiq = liqPrice > 0 ? Math.abs(markPrice - liqPrice) / markPrice * 100 : null;
   const funding = Number(pos.funding || 0);
@@ -61,7 +68,7 @@ function PositionDetailModal({ pos, ticker, onClose }: {
             <div>
               <div className="font-bold text-[14px] text-text1">{pos.symbol}-PERP</div>
               <div className={`text-[11px] font-semibold ${isLong ? 'text-success' : 'text-danger'}`}>
-                {isLong ? '↑ LONG' : '↓ SHORT'} · {leverage}x
+                {isLong ? '↑ LONG' : '↓ SHORT'}{leverage !== null ? ` · ${leverage}x` : ''}
               </div>
             </div>
           </div>
@@ -87,7 +94,7 @@ function PositionDetailModal({ pos, ticker, onClose }: {
               color: distToLiq !== null && distToLiq < 10 ? 'text-danger' : distToLiq !== null && distToLiq < 20 ? 'text-warn' : 'text-success',
             },
             { label: 'Funding Paid', value: (funding >= 0 ? '+' : '') + '$' + fmt(funding, 4), color: funding >= 0 ? 'text-success' : 'text-danger' },
-            { label: 'Leverage', value: leverage + 'x', color: leverage > 20 ? 'text-danger' : leverage > 10 ? 'text-warn' : 'text-text2' },
+            { label: 'Leverage', value: leverage !== null ? leverage + 'x' : '—', color: leverage !== null && leverage > 20 ? 'text-danger' : leverage !== null && leverage > 10 ? 'text-warn' : 'text-text2' },
           ].map(s => (
             <div key={s.label} className="bg-surface2 rounded-xl border border-border1 px-3 py-2.5">
               <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-1">{s.label}</div>
@@ -119,6 +126,16 @@ export function RiskManager({
   const [result, setResult] = useState<CalcResult | null>(null);
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   const [winRate, setWinRate] = useState(50);
+  const { entries: orderEntries } = useOrderLog(wallet);
+
+  // Stable callbacks — prevent child re-renders on every ticker poll
+  const handleSelectMarket = useCallback((m: Market) => {
+    setSelected(m);
+    setResult(null);
+  }, []);
+  const handleResult = useCallback((r: CalcResult | null) => setResult(r), []);
+  const handleExecuteCalc = useCallback((r: CalcResult) => onExecute(r, selected?.symbol || ''), [onExecute, selected?.symbol]);
+  const handleExecuteResult = useCallback((r: CalcResult) => onExecute(r, selected?.symbol || ''), [onExecute, selected?.symbol]);
 
   useEffect(() => {
     if (!selected && markets.length > 0) setSelected(markets[0]);
@@ -137,7 +154,7 @@ export function RiskManager({
   const totalUnrealizedPnl = positions.reduce((s, p) => s + Number(p.unrealized_pnl || 0), 0);
   const totalFunding = positions.reduce((s, p) => s + Number(p.funding || 0), 0);
   const worstPnl = positions.length > 0 ? Math.min(...positions.map(p => Number(p.unrealized_pnl || 0))) : 0;
-  const maxDrawdownPct = equity > 0 ? Math.abs(Math.min(0, worstPnl / equity * 100)) : 0;
+  const worstPositionLossPct = equity > 0 && worstPnl < 0 ? Math.abs(worstPnl / equity * 100) : 0;
 
   const groupCounts: Record<string, { count: number; side: string[] }> = {};
   positions.forEach(p => {
@@ -148,25 +165,50 @@ export function RiskManager({
   });
   const correlatedGroups = Object.entries(groupCounts).filter(([, v]) => v.count >= 2);
 
-  const PANEL_H = 'calc(100vh - 230px)';
+  // Order log stats — memoized so they don't recompute on every ticker update
+  const orderStats = useMemo(() => {
+    const now = Date.now();
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const weekStart = now - 7 * 24 * 3600 * 1000;
+    const todayEntries = orderEntries.filter(e => e.timestamp >= todayStart.getTime());
+    const weekEntries = orderEntries.filter(e => e.timestamp >= weekStart);
+    const successToday = todayEntries.filter(e => e.status === 'success').length;
+    const successWeek = weekEntries.filter(e => e.status === 'success').length;
+    const failedWeek = weekEntries.filter(e => e.status === 'failed').length;
+    const winRateWeek = successWeek + failedWeek > 0 ? Math.round(successWeek / (successWeek + failedWeek) * 100) : null;
+    return {
+      totalAll: orderEntries.length,
+      todayTotal: todayEntries.length,
+      todaySuccess: successToday,
+      weekTotal: weekEntries.length,
+      weekSuccess: successWeek,
+      weekFailed: failedWeek,
+      winRateWeek,
+      recentEntries: orderEntries.slice(0, 8),
+    };
+  }, [orderEntries]);
+
+  const PANEL_H = 'calc(100vh - 15rem)';
 
   return (
     <div className="flex-1 overflow-auto bg-bg">
-      <div className="w-full max-w-[1400px] mx-auto px-6">
+      <div className="w-full max-w-[1400px] mx-auto px-6 pt-5">
 
-        {/* Stats bar */}
-        <StatsBar
-          accountInfo={accountInfo}
-          positions={positions}
-          accountSize={accountSize}
-          availableBalance={availableBalance}
-        />
+        {/* Single card wrapping StatsBar + 3-col grid */}
+        <div className="border border-border1 rounded-2xl overflow-hidden shadow-card bg-surface mt-5 mb-6">
 
-        {/* Main 3-column card */}
-        <div
-          className="grid border border-border1 rounded-2xl overflow-hidden shadow-card bg-surface mt-5 mb-6"
-          style={{ gridTemplateColumns: '220px 1fr 340px' }}
-        >
+          <StatsBar
+            accountInfo={accountInfo}
+            positions={positions}
+            accountSize={accountSize}
+            availableBalance={availableBalance}
+          />
+
+          {/* Main 3-column grid */}
+          <div
+            className="grid border-t border-border1"
+            style={{ gridTemplateColumns: '220px 1fr 340px' }}
+          >
           {/* LEFT: Market List */}
           <div className="border-r border-border1 overflow-hidden flex flex-col" style={{ height: PANEL_H, minHeight: 500 }}>
             <MarketList
@@ -174,7 +216,7 @@ export function RiskManager({
               tickers={tickers}
               fundingRates={fundingRates}
               selected={selected}
-              onSelect={m => { setSelected(m); setResult(null); }}
+              onSelect={handleSelectMarket}
               error={error}
             />
           </div>
@@ -187,8 +229,8 @@ export function RiskManager({
               funding={selected ? fundingRates[selected.symbol] : undefined}
               accountSize={accountSize}
               onAccountSizeChange={onAccountSizeChange}
-              onResult={setResult}
-              onExecute={r => onExecute(r, selected?.symbol || '')}
+              onResult={handleResult}
+              onExecute={handleExecuteCalc}
               walletConnected={!!wallet}
             />
           </div>
@@ -211,10 +253,9 @@ export function RiskManager({
               <div className="flex-1 overflow-hidden">
                 <Results
                   result={result}
-                  positions={positions}
                   accountInfo={accountInfo}
                   accountSize={accountSize}
-                  onExecute={r => onExecute(r, selected?.symbol || '')}
+                  onExecute={handleExecuteResult}
                   walletConnected={!!wallet}
                   market={selected?.symbol || ''}
                   winRate={winRate}
@@ -267,9 +308,9 @@ export function RiskManager({
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-[12px] font-semibold text-text2">Risk Exposure</span>
                     <div className="flex items-center gap-3">
-                      {maxDrawdownPct > 0 && (
+                      {worstPositionLossPct > 0 && (
                         <span className="text-[10px] text-text3">
-                          Max drawdown: <span className="text-danger font-semibold">{fmt(maxDrawdownPct, 1)}%</span>
+                          Worst position: <span className="text-danger font-semibold">-{fmt(worstPositionLossPct, 1)}%</span>
                         </span>
                       )}
                       <span className={`text-[15px] font-bold ${portfolioRiskPct < 10 ? 'text-success' : portfolioRiskPct < 25 ? 'text-warn' : 'text-danger'}`}>
@@ -399,6 +440,62 @@ export function RiskManager({
                     </div>
                   </div>
                 )}
+
+                {/* Trade History Summary */}
+                <div className="bg-surface rounded-xl border border-border1 shadow-card overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-border1 bg-surface2 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-text2">Trade Geçmişi</span>
+                    <span className="text-[10px] text-text3">{orderStats.totalAll} toplam emir</span>
+                  </div>
+                  {orderStats.totalAll === 0 ? (
+                    <div className="px-4 py-6 text-center text-text3 text-[11px]">Henüz emir yok — bir trade aç</div>
+                  ) : (
+                    <>
+                      {/* Stats row */}
+                      <div className="grid grid-cols-3 divide-x divide-border1 border-b border-border1">
+                        {[
+                          { label: 'Bugün', value: String(orderStats.todayTotal), sub: `${orderStats.todaySuccess} başarılı` },
+                          { label: 'Bu Hafta', value: String(orderStats.weekTotal), sub: `${orderStats.weekSuccess}W · ${orderStats.weekFailed}F` },
+                          { label: 'Win Rate', value: orderStats.winRateWeek !== null ? `${orderStats.winRateWeek}%` : '—', sub: '7 günlük', color: orderStats.winRateWeek !== null ? (orderStats.winRateWeek >= 50 ? 'text-success' : 'text-danger') : 'text-text3' },
+                        ].map(s => (
+                          <div key={s.label} className="px-3 py-2.5 text-center">
+                            <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-1">{s.label}</div>
+                            <div className={`text-[15px] font-bold ${s.color || 'text-text1'}`}>{s.value}</div>
+                            <div className="text-[9px] text-text3 mt-0.5">{s.sub}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Recent entries */}
+                      <div className="divide-y divide-border1">
+                        {orderStats.recentEntries.map(e => {
+                          const isLong = e.side === 'bid';
+                          const d = new Date(e.timestamp);
+                          const timeStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                          const dateStr = d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' });
+                          return (
+                            <div key={e.id} className="flex items-center gap-3 px-3 py-2 hover:bg-surface2/50 transition-colors">
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${isLong ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
+                                {isLong ? '↑ L' : '↓ S'}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[11px] font-semibold text-text1">{e.symbol}</div>
+                                <div className="text-[9px] text-text3">{e.amount} @ ${e.price}</div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <div className={`text-[10px] font-semibold ${e.status === 'success' ? 'text-success' : e.status === 'failed' ? 'text-danger' : e.status === 'pending' ? 'text-warn' : 'text-text3'}`}>
+                                  {e.status === 'success' ? '✓' : e.status === 'failed' ? '✗' : e.status === 'pending' ? '⏳' : '—'}
+                                </div>
+                                <div className="text-[9px] text-text3">{dateStr} {timeStr}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+
               </div>
             )}
           </div>

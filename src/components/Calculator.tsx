@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Market, Ticker, FundingRate } from '@/lib/pacifica';
 import { CoinLogo } from './CoinLogo';
 import { fmtPrice, fmt, getMarkPrice, get24hChange } from '@/lib/utils';
@@ -58,6 +58,41 @@ function PriceLevelBar({ entry, sl, tp, liq, side }: { entry: number; sl: number
   );
 }
 
+const FEE_RATE = 0.0002;
+
+function computeResult(
+  accountSize: number, entryPrice: string, stopLoss: string, takeProfit: string,
+  side: 'long' | 'short', leverage: number, riskPct: number, rrRatio: number, fundingRate: number
+): CalcResult | null {
+  const acc = Number(accountSize), entry = Number(entryPrice), sl = Number(stopLoss), tp = Number(takeProfit);
+  if (!acc || acc <= 0 || !entry || entry <= 0 || !sl || sl <= 0) return null;
+  if (side === 'long' && sl >= entry) return null;
+  if (side === 'short' && sl <= entry) return null;
+  if (tp > 0) {
+    if (side === 'long' && tp <= entry) return null;
+    if (side === 'short' && tp >= entry) return null;
+  }
+  const riskAmount = acc * (riskPct / 100);
+  const slDistance = Math.abs(entry - sl);
+  const positionSize = riskAmount / slDistance;
+  const positionValue = positionSize * entry;
+  const requiredMargin = positionValue / leverage;
+  const marginPct = (requiredMargin / acc) * 100;
+  const slPct = (slDistance / entry) * 100;
+  const liqDistance = entry / leverage;
+  const liquidationPrice = side === 'long' ? entry - liqDistance : entry + liqDistance;
+  const tp1 = tp > 0 ? tp : (side === 'long' ? entry + slDistance * rrRatio : entry - slDistance * rrRatio);
+  const tp2 = side === 'long' ? entry + slDistance * 2 : entry - slDistance * 2;
+  const tp3 = side === 'long' ? entry + slDistance * 3 : entry - slDistance * 3;
+  const fundingCostDaily = Math.abs(fundingRate) * positionValue * 3;
+  const fundingCostWeekly = fundingCostDaily * 7;
+  const feeCost = positionValue * FEE_RATE * 2;
+  const breakEvenMove = feeCost / positionSize;
+  const breakEvenPrice = side === 'long' ? entry + breakEvenMove : entry - breakEvenMove;
+  const actualRr = tp > 0 ? Math.abs(tp - entry) / slDistance : rrRatio;
+  return { riskAmount, positionSize, positionValue, requiredMargin, marginPct, slPct, liquidationPrice, tp1, tp2, tp3, rrRatio: actualRr, fundingCostDaily, fundingCostWeekly, breakEvenPrice, side, leverage, entryPrice: entry, stopLoss: sl };
+}
+
 export function Calculator({ market, ticker, funding, accountSize, onAccountSizeChange, onResult, onExecute, walletConnected }: CalculatorProps) {
   const [side, setSide] = useState<'long' | 'short'>('long');
   const [riskPct, setRiskPct] = useState(2);
@@ -67,28 +102,36 @@ export function Calculator({ market, ticker, funding, accountSize, onAccountSize
   const [leverage, setLeverage] = useState(10);
   const [rrRatio, setRrRatio] = useState(2);
   const [tpMode, setTpMode] = useState<'rr' | 'manual'>('rr');
-  const [error, setError] = useState('');
+  const [validationError, setValidationError] = useState('');
   const [result, setLocalResult] = useState<CalcResult | null>(null);
+  const [lastCalcTime, setLastCalcTime] = useState<number | null>(null);
   const prevSymbolRef = useRef<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const price = getMarkPrice(ticker);
   const change = get24hChange(ticker);
   const fundingRate = funding ? Number(funding.funding_rate) : Number(ticker?.funding || 0);
   const maxLev = market?.max_leverage || 50;
-  const FEE_RATE = 0.0002;
 
+  // Auto-fill entry on market switch
   useEffect(() => {
     if (!market) return;
     if (prevSymbolRef.current !== market.symbol) {
       prevSymbolRef.current = market.symbol;
       if (price > 0) {
-        setEntryPrice(price >= 1000 ? price.toFixed(2) : price >= 1 ? price.toFixed(4) : price.toFixed(6));
-        setStopLoss(''); setTakeProfit(''); setLocalResult(null); onResult(null);
+        const fmt = price >= 1000 ? price.toFixed(2) : price >= 1 ? price.toFixed(4) : price.toFixed(6);
+        setEntryPrice(fmt);
+        setStopLoss('');
+        setTakeProfit('');
+        setLocalResult(null);
+        setValidationError('');
+        onResult(null);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [market?.symbol]);
 
+  // Auto-TP in R:R mode
   useEffect(() => {
     if (tpMode !== 'rr') return;
     const entry = Number(entryPrice), sl = Number(stopLoss);
@@ -98,44 +141,58 @@ export function Calculator({ market, ticker, funding, accountSize, onAccountSize
     if (tp > 0) setTakeProfit(tp >= 1000 ? tp.toFixed(2) : tp >= 1 ? tp.toFixed(4) : tp.toFixed(6));
   }, [entryPrice, stopLoss, rrRatio, side, tpMode]);
 
-  function calculate() {
-    setError('');
-    const acc = Number(accountSize), entry = Number(entryPrice), sl = Number(stopLoss), tp = Number(takeProfit);
-    if (!acc || acc <= 0) return setError('Enter account size');
-    if (!entry || entry <= 0) return setError('Enter entry price');
-    if (!sl || sl <= 0) return setError('Enter stop loss');
-    if (side === 'long' && sl >= entry) return setError('SL must be below entry for LONG');
-    if (side === 'short' && sl <= entry) return setError('SL must be above entry for SHORT');
-    if (tp > 0) {
-      if (side === 'long' && tp <= entry) return setError('TP must be above entry for LONG');
-      if (side === 'short' && tp >= entry) return setError('TP must be below entry for SHORT');
-    }
-    const riskAmount = acc * (riskPct / 100);
-    const slDistance = Math.abs(entry - sl);
-    const positionSize = riskAmount / slDistance;
-    const positionValue = positionSize * entry;
-    const requiredMargin = positionValue / leverage;
-    const marginPct = (requiredMargin / acc) * 100;
-    const slPct = (slDistance / entry) * 100;
-    const liqDistance = entry / leverage;
-    const liquidationPrice = side === 'long' ? entry - liqDistance : entry + liqDistance;
-    const tp1 = tp > 0 ? tp : (side === 'long' ? entry + slDistance * rrRatio : entry - slDistance * rrRatio);
-    const tp2 = side === 'long' ? entry + slDistance * 2 : entry - slDistance * 2;
-    const tp3 = side === 'long' ? entry + slDistance * 3 : entry - slDistance * 3;
-    const fundingCostDaily = Math.abs(fundingRate) * positionValue * 3;
-    const fundingCostWeekly = fundingCostDaily * 7;
-    const feeCost = positionValue * FEE_RATE * 2;
-    const breakEvenMove = feeCost / positionSize;
-    const breakEvenPrice = side === 'long' ? entry + breakEvenMove : entry - breakEvenMove;
-    const actualRr = tp > 0 ? Math.abs(tp - entry) / slDistance : rrRatio;
-    const r: CalcResult = { riskAmount, positionSize, positionValue, requiredMargin, marginPct, slPct, liquidationPrice, tp1, tp2, tp3, rrRatio: actualRr, fundingCostDaily, fundingCostWeekly, breakEvenPrice, side, leverage, entryPrice: entry, stopLoss: sl };
-    setLocalResult(r);
-    onResult(r);
+  // Debounced auto-calculate — fires 350ms after any input change
+  const autoCalc = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setValidationError('');
+      const r = computeResult(accountSize, entryPrice, stopLoss, takeProfit, side, leverage, riskPct, rrRatio, fundingRate);
+      if (r) {
+        setLocalResult(r);
+        onResult(r);
+        setLastCalcTime(Date.now());
+      } else {
+        // Only show error if user has filled in enough fields
+        if (entryPrice && stopLoss) {
+          const entry = Number(entryPrice), sl = Number(stopLoss);
+          if (side === 'long' && sl >= entry) setValidationError('SL must be below entry for LONG');
+          else if (side === 'short' && sl <= entry) setValidationError('SL must be above entry for SHORT');
+        }
+        setLocalResult(null);
+        onResult(null);
+      }
+    }, 350);
+  }, [accountSize, entryPrice, stopLoss, takeProfit, side, leverage, riskPct, rrRatio, fundingRate, onResult]);
+
+  useEffect(() => {
+    autoCalc();
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [autoCalc]);
+
+  // SL quick presets (% from entry)
+  function setSLPreset(pct: number) {
+    const entry = Number(entryPrice) || price;
+    if (!entry) return;
+    const sl = side === 'long' ? entry * (1 - pct / 100) : entry * (1 + pct / 100);
+    setStopLoss(sl >= 1000 ? sl.toFixed(2) : sl >= 1 ? sl.toFixed(4) : sl.toFixed(6));
+  }
+
+  // Clear all inputs
+  function resetInputs() {
+    setStopLoss('');
+    setTakeProfit('');
+    setLocalResult(null);
+    setValidationError('');
+    onResult(null);
+    if (price > 0) setEntryPrice(price >= 1000 ? price.toFixed(2) : price.toFixed(4));
   }
 
   const liveRiskAmt = accountSize * (riskPct / 100);
   const riskColor = riskPct <= 2 ? 'text-success' : riskPct <= 5 ? 'text-warn' : 'text-danger';
   const levColor = leverage > maxLev * 0.7 ? 'text-danger' : leverage > maxLev * 0.4 ? 'text-warn' : 'text-accent';
+
+  // Format last-calculated timestamp
+  const calcAgo = lastCalcTime ? Math.round((Date.now() - lastCalcTime) / 1000) : null;
 
   return (
     <div className="flex flex-col overflow-hidden bg-bg h-full">
@@ -160,10 +217,11 @@ export function Calculator({ market, ticker, funding, accountSize, onAccountSize
         </div>
       )}
       <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+
         {/* Direction */}
         <div className="grid grid-cols-2 rounded-xl overflow-hidden border border-border1">
-          <button onClick={() => setSide('long')} className={`py-2.5 text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${side === 'long' ? 'bg-success text-white' : 'bg-surface text-text3 hover:bg-surface2'}`}>↑ LONG</button>
-          <button onClick={() => setSide('short')} className={`py-2.5 text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${side === 'short' ? 'bg-danger text-white' : 'bg-surface text-text3 hover:bg-surface2'}`}>↓ SHORT</button>
+          <button onClick={() => setSide('long')} className={`py-2.5 text-[13px] font-bold transition-all ${side === 'long' ? 'bg-success text-white' : 'bg-surface text-text3 hover:bg-surface2'}`}>↑ LONG</button>
+          <button onClick={() => setSide('short')} className={`py-2.5 text-[13px] font-bold transition-all ${side === 'short' ? 'bg-danger text-white' : 'bg-surface text-text3 hover:bg-surface2'}`}>↓ SHORT</button>
         </div>
 
         {/* Account size */}
@@ -196,18 +254,43 @@ export function Calculator({ market, ticker, funding, accountSize, onAccountSize
         {/* Entry + SL */}
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[10px] font-semibold text-text3 uppercase tracking-wide block mb-1.5">Entry Price</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[10px] font-semibold text-text3 uppercase tracking-wide">Entry Price</label>
+              <button onClick={resetInputs} className="text-[9px] text-text3 hover:text-danger transition-colors">✕ reset</button>
+            </div>
             <div className="relative">
               <input type="number" className="w-full bg-surface border border-border1 rounded-xl px-3 py-2.5 pr-12 text-[13px] text-text1 outline-none focus:border-accent transition-all" placeholder={fmtPrice(price)} value={entryPrice} onChange={e => setEntryPrice(e.target.value)} />
               <button className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-accent font-bold hover:underline" onClick={() => setEntryPrice(price >= 1000 ? price.toFixed(2) : price.toFixed(4))}>Mark</button>
             </div>
           </div>
           <div>
-            <label className="text-[10px] font-semibold text-text3 uppercase tracking-wide block mb-1.5">Stop Loss</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[10px] font-semibold text-text3 uppercase tracking-wide">Stop Loss</label>
+            </div>
             <div className="relative">
               <input type="number" className="w-full bg-surface border border-border1 rounded-xl px-3 py-2.5 pr-6 text-[13px] text-text1 outline-none focus:border-danger/60 transition-all" placeholder="0.00" value={stopLoss} onChange={e => setStopLoss(e.target.value)} />
               <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-danger">$</span>
             </div>
+          </div>
+        </div>
+
+        {/* SL Quick Presets */}
+        <div>
+          <div className="text-[9px] text-text3 font-semibold uppercase tracking-wide mb-1.5">SL Quick Set</div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {[1, 2, 3, 5].map(pct => (
+              <button
+                key={pct}
+                onClick={() => setSLPreset(pct)}
+                className={`py-1.5 text-[10px] font-semibold rounded-lg border transition-all ${
+                  stopLoss && Math.abs(Math.abs(Number(entryPrice) - Number(stopLoss)) / Number(entryPrice) * 100 - pct) < 0.05
+                    ? 'bg-danger/10 border-danger/40 text-danger'
+                    : 'bg-surface border-border1 text-text3 hover:border-danger/40 hover:text-danger'
+                }`}
+              >
+                -{pct}%
+              </button>
+            ))}
           </div>
         </div>
 
@@ -235,7 +318,7 @@ export function Calculator({ market, ticker, funding, accountSize, onAccountSize
                   <button key={v} onClick={() => setRrRatio(v)} className={`transition-colors ${rrRatio === v ? 'text-success font-bold' : 'hover:text-accent'}`}>1:{v}</button>
                 ))}
               </div>
-              {takeProfit && <div className="text-[10px] text-success mt-1.5 bg-success/5 border border-success/20 rounded-lg px-2.5 py-1">→ TP Price: ${takeProfit}</div>}
+              {takeProfit && <div className="text-[10px] text-success mt-1.5 bg-success/5 border border-success/20 rounded-lg px-2.5 py-1">→ TP: ${takeProfit}</div>}
             </div>
           ) : (
             <div className="relative">
@@ -264,16 +347,32 @@ export function Calculator({ market, ticker, funding, accountSize, onAccountSize
           )}
         </div>
 
-        {/* Price level bar */}
+        {/* Price level bar — live, no button needed */}
         {result && <PriceLevelBar entry={result.entryPrice} sl={result.stopLoss} tp={result.tp1} liq={result.liquidationPrice} side={side} />}
 
-        {error && (
-          <div className="text-[12px] text-danger bg-danger/5 border border-danger/20 rounded-xl px-3 py-2.5 flex items-center gap-2">✕ {error}</div>
+        {/* Validation error */}
+        {validationError && (
+          <div className="text-[12px] text-danger bg-danger/5 border border-danger/20 rounded-xl px-3 py-2.5 flex items-center gap-2">✕ {validationError}</div>
         )}
 
-        <button onClick={calculate} className="w-full py-3 bg-accent text-white font-bold text-[13px] rounded-xl hover:opacity-90 transition-opacity shadow-card-md tracking-wide">
-          CALCULATE
-        </button>
+        {/* Auto-calc status bar */}
+        <div className="flex items-center justify-between px-0.5">
+          <div className="flex items-center gap-1.5">
+            <div className={`w-1.5 h-1.5 rounded-full ${result ? 'bg-success' : 'bg-text3'}`} />
+            <span className="text-[10px] text-text3">
+              {result ? `Auto-calculated${calcAgo !== null && calcAgo < 60 ? ` · ${calcAgo}s ago` : ''}` : 'Fill entry + SL to calculate'}
+            </span>
+          </div>
+          {result && (
+            <button
+              onClick={() => { if (result) onExecute(result); }}
+              disabled={!walletConnected}
+              className={`text-[10px] font-bold px-3 py-1 rounded-lg transition-all disabled:opacity-40 ${result.side === 'long' ? 'bg-success/10 text-success hover:bg-success/20' : 'bg-danger/10 text-danger hover:bg-danger/20'}`}
+            >
+              {walletConnected ? `Place ${result.side.toUpperCase()}` : 'Connect wallet'}
+            </button>
+          )}
+        </div>
 
         {accountSize > 0 && (
           <div className="grid grid-cols-3 gap-2">
