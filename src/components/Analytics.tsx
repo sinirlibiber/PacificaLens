@@ -89,8 +89,13 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   const markets = selfMarkets.length > 0 ? selfMarkets : (propMarkets || []);
   const tickers = Object.keys(selfTickers).length > 0 ? selfTickers : (propTickers || {});
 
+  // Liquidation filter — $1K / $10K / $50K / $100K
+  const LIQ_FILTERS = [1_000, 10_000, 50_000, 100_000] as const;
+  type LiqFilter = typeof LIQ_FILTERS[number];
+  const [liqFilter, setLiqFilter] = useState<LiqFilter>(10_000);
+
   // Market Signals — reuse WhaleWatcher hook for OI/Funding alerts + liquidations
-  const { whaleTrades, oiAlerts, fundingAlerts, isScanning, lastScan } = useWhaleWatcher(markets, tickers, 5000);
+  const { whaleTrades, oiAlerts, fundingAlerts, isScanning, lastScan } = useWhaleWatcher(markets, tickers, liqFilter);
 
   const [news, setNews] = useState<NewsItem[]>([]);
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
@@ -135,8 +140,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     return () => clearInterval(iv);
   }, []);
   
-  // Liquidations — derived from whaleTrades (useWhaleWatcher hook)
-  const liquidations = whaleTrades.filter(t => t.isLiquidation);
+  // Liquidations — derived from whaleTrades, filtered by size
+  const liquidations = whaleTrades.filter(t => t.isLiquidation && t.notional >= liqFilter);
 
   // Fetch news
   useEffect(() => {
@@ -525,11 +530,28 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           <div className="grid grid-cols-2 gap-4">
             {/* Recent Liquidations */}
             <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-              <div className="flex justify-between items-center mb-3">
+              <div className="flex justify-between items-center mb-2">
                 <div className="text-[12px] font-bold text-text1">Recent Liquidations</div>
                 <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${totalLiqValue > 0 ? 'bg-danger/10 text-danger' : 'bg-surface2 text-text3'}`}>
                   {totalLiqValue > 0 ? fmtLarge(totalLiqValue) + ' liquidated' : 'No liquidations'}
                 </span>
+              </div>
+              {/* Size filter */}
+              <div className="flex gap-1 mb-3">
+                {([1_000, 10_000, 50_000, 100_000] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setLiqFilter(f)}
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-all"
+                    style={{
+                      background: liqFilter === f ? 'rgba(239,68,68,0.18)' : 'rgba(255,255,255,0.05)',
+                      color: liqFilter === f ? '#ef4444' : 'var(--text3)',
+                      border: liqFilter === f ? '1px solid rgba(239,68,68,0.4)' : '1px solid transparent',
+                    }}
+                  >
+                    {f >= 1_000 ? '$' + (f / 1_000) + 'K' : '$' + f}
+                  </button>
+                ))}
               </div>
               {liquidations.length === 0 ? (
                 <div className="py-8 text-center space-y-1">
@@ -559,7 +581,10 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
 
             {/* Liquidation Heatmap */}
             <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-              <div className="text-[12px] font-bold text-text1 mb-3">Liquidation Heatmap</div>
+              <div className="flex justify-between items-center mb-3">
+                <div className="text-[12px] font-bold text-text1">Liquidation Heatmap</div>
+                <span className="text-[10px] text-text3">≥ {liqFilter >= 1_000 ? '$' + (liqFilter/1_000) + 'K' : '$'+liqFilter}</span>
+              </div>
               {liqHeatmap.length === 0 ? (
                 <div className="py-8 text-center text-[11px] text-text3">No liquidation data available</div>
               ) : (

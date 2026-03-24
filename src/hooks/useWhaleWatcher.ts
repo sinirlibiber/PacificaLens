@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Market, Ticker, getRecentTrades, Trade } from '@/lib/pacifica';
-import { getMarkPrice, get24hChange, fmt } from '@/lib/utils';
+import { Market, Ticker } from '@/lib/pacifica';
 
 export interface WhaleTrade {
   id: string;
@@ -17,13 +16,13 @@ export interface WhaleTrade {
 
 export interface SymbolPressure {
   symbol: string;
-  bullScore: number;    // 0-100
+  bullScore: number;
   bearScore: number;
   longNotional: number;
   shortNotional: number;
   liqLong: number;
   liqShort: number;
-  oiChange: number;    // % change
+  oiChange: number;
   fundingSpike: boolean;
   totalWhaleFlow: number;
   tradeCount: number;
@@ -42,160 +41,213 @@ export interface FundingAlert {
   ts: number;
 }
 
+const WS_URL = 'wss://ws.pacifica.fi/ws';
+const PING_MS = 30_000;
+const MAX_TRADES = 500;
+
 export function useWhaleWatcher(
   markets: Market[],
   tickers: Record<string, Ticker>,
-  whaleThreshold: number = 50000
+  whaleThreshold: number = 10_000,
 ) {
-  const [whaleTrades, setWhaleTrades] = useState<WhaleTrade[]>([]);
-  const [pressureMap, setPressureMap] = useState<Record<string, SymbolPressure>>({});
-  const [oiAlerts, setOiAlerts] = useState<OIAlert[]>([]);
+  const [whaleTrades,   setWhaleTrades  ] = useState<WhaleTrade[]>([]);
+  const [pressureMap,   setPressureMap  ] = useState<Record<string, SymbolPressure>>({});
+  const [oiAlerts,      setOiAlerts     ] = useState<OIAlert[]>([]);
   const [fundingAlerts, setFundingAlerts] = useState<FundingAlert[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
-  const [lastScan, setLastScan] = useState<Date | null>(null);
-  const prevOI = useRef<Record<string, number>>({});
-  const prevFunding = useRef<Record<string, number>>({});
-  const seenTrades = useRef<Set<string>>(new Set());
+  const [isScanning,    setIsScanning   ] = useState(false);
+  const [lastScan,      setLastScan     ] = useState<Date | null>(null);
 
+  const wsRef       = useRef<WebSocket | null>(null);
+  const pingRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seenTrades  = useRef<Set<string>>(new Set());
+  const pressureRef = useRef<Record<string, SymbolPressure>>({});
+  const prevOI      = useRef<Record<string, number>>({});
+  const prevFund    = useRef<Record<string, number>>({});
+  const marketsRef  = useRef<Market[]>([]);
+  const tickersRef  = useRef<Record<string, Ticker>>({});
+  const threshRef   = useRef(whaleThreshold);
+  const mountedRef  = useRef(true);
 
-  const scan = useCallback(async () => {
-    if (!markets.length) return;
-    setIsScanning(true);
+  useEffect(() => { marketsRef.current  = markets;  }, [markets]);
+  useEffect(() => { tickersRef.current  = tickers;  }, [tickers]);
+  useEffect(() => { threshRef.current   = whaleThreshold; }, [whaleThreshold]);
 
-    // Top 20 markets by volume for scanning
-    const topMarkets = [...markets]
-      .sort((a, b) => Number(tickers[b.symbol]?.volume_24h || 0) - Number(tickers[a.symbol]?.volume_24h || 0))
-      .slice(0, 20);
+  /* ── OI + Funding alerts from tickers polling ─────────────── */
+  useEffect(() => {
+    if (!Object.keys(tickers).length) return;
 
-    // Fetch trades for top markets in parallel (batches of 5)
-    const newTrades: WhaleTrade[] = [];
-    const newPressure: Record<string, SymbolPressure> = {};
-
-    const batch = async (batch: Market[]) => {
-      const results = await Promise.allSettled(
-        batch.map(m => getRecentTrades(m.symbol).then(trades => ({ symbol: m.symbol, trades })))
-      );
-      for (const r of results) {
-        if (r.status !== 'fulfilled') continue;
-        const { symbol, trades } = r.value;
-        const price = getMarkPrice(tickers[symbol]);
-
-        let longNot = 0, shortNot = 0, liqLong = 0, liqShort = 0, count = 0;
-
-        for (const t of trades) {
-          const amount = Number(t.amount || 0);
-          const tprice = Number(t.price || price);
-          const notional = amount * tprice;
-          const isLiq = t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation';
-          const isLong = t.side.includes('long');
-          const isOpen = t.side.startsWith('open');
-
-          if (isOpen && isLong) longNot += notional;
-          if (isOpen && !isLong) shortNot += notional;
-          if (isLiq && isLong) liqLong += notional;
-          if (isLiq && !isLong) liqShort += notional;
-
-          // Add liquidations always (any size), whale trades above threshold
-          const addThis = isLiq || notional >= whaleThreshold;
-          if (addThis) {
-            if (notional >= whaleThreshold) count++;
-            const tradeId = `${symbol}-${t.price}-${t.amount}-${t.created_at}`;
-            if (!seenTrades.current.has(tradeId)) {
-              seenTrades.current.add(tradeId);
-              const wt: WhaleTrade = {
-                id: tradeId,
-                symbol,
-                side: t.side as WhaleTrade['side'],
-                cause: t.cause,
-                price: tprice,
-                amount,
-                notional,
-                ts: (typeof t.created_at === 'number' && t.created_at > 1e12) ? t.created_at : (new Date(t.created_at).getTime() || Date.now()),
-                isLiquidation: isLiq,
-              };
-              newTrades.push(wt);
-            }
-          }
-        }
-
-        const totalWhale = longNot + shortNot;
-        const bullScore = totalWhale > 0 ? Math.round((longNot / totalWhale) * 100) : 50;
-        const fr = Number(tickers[symbol]?.funding || 0) * 100;
-        const prevFR = prevFunding.current[symbol] ?? fr;
-        const fundingSpike = Math.abs(fr - prevFR) > 0.01;
-        prevFunding.current[symbol] = fr;
-
-        newPressure[symbol] = {
-          symbol,
-          bullScore,
-          bearScore: 100 - bullScore,
-          longNotional: longNot,
-          shortNotional: shortNot,
-          liqLong,
-          liqShort,
-          oiChange: 0,
-          fundingSpike,
-          totalWhaleFlow: totalWhale,
-          tradeCount: count,
-        };
-      }
-    };
-
-    // 4 batches of 5
-    for (let i = 0; i < topMarkets.length; i += 5) {
-      await batch(topMarkets.slice(i, i + 5));
-    }
-
-    // OI change detection - track all markets from tickers
     const newOiAlerts: OIAlert[] = [];
     for (const m of markets) {
-      const oi = Number(tickers[m.symbol]?.open_interest || 0);
-      if (oi <= 0) { prevOI.current[m.symbol] = oi; continue; }
+      const oi   = Number(tickers[m.symbol]?.open_interest || 0);
       const prev = prevOI.current[m.symbol];
-      if (prev && prev > 0 && prev !== oi) {
-        const changePct = ((oi - prev) / prev) * 100;
-        if (Math.abs(changePct) >= 2) { // lower threshold to 2%
-          newOiAlerts.push({
-            symbol: m.symbol,
-            changePercent: changePct,
-            direction: changePct > 0 ? 'up' : 'down',
-            ts: Date.now(),
-          });
-          if (newPressure[m.symbol]) newPressure[m.symbol].oiChange = changePct;
-          else newPressure[m.symbol] = { symbol: m.symbol, bullScore: 50, bearScore: 50, longNotional: 0, shortNotional: 0, liqLong: 0, liqShort: 0, oiChange: changePct, fundingSpike: false, totalWhaleFlow: 0, tradeCount: 0 };
+      if (oi > 0 && prev && prev > 0 && prev !== oi) {
+        const pct = ((oi - prev) / prev) * 100;
+        if (Math.abs(pct) >= 2) {
+          newOiAlerts.push({ symbol: m.symbol, changePercent: pct, direction: pct > 0 ? 'up' : 'down', ts: Date.now() });
+          const p = pressureRef.current[m.symbol];
+          if (p) p.oiChange = pct;
         }
       }
       prevOI.current[m.symbol] = oi;
     }
 
-    // Funding spike alerts - show all markets with notable funding
-    const newFundingAlerts: FundingAlert[] = [];
+    const newFundAlerts: FundingAlert[] = [];
     for (const m of markets) {
       const fr = Number(tickers[m.symbol]?.funding || 0) * 100;
-      if (Math.abs(fr) >= 0.01) { // lower threshold to show more
-        newFundingAlerts.push({ symbol: m.symbol, rate: fr, ts: Date.now() });
+      if (Math.abs(fr) >= 0.01) newFundAlerts.push({ symbol: m.symbol, rate: fr, ts: Date.now() });
+      prevFund.current[m.symbol] = fr;
+    }
+    newFundAlerts.sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate));
+
+    if (newOiAlerts.length) setOiAlerts(prev => [...newOiAlerts, ...prev].slice(0, 50));
+    setFundingAlerts(newFundAlerts.slice(0, 20));
+  }, [tickers, markets]);
+
+  /* ── WebSocket connection ──────────────────────────────────── */
+  const connect = useCallback(() => {
+    if (!mountedRef.current) return;
+    const syms = marketsRef.current.map(m => m.symbol);
+    if (!syms.length) return;
+
+    // Close existing
+    try { wsRef.current?.close(); } catch {}
+    if (pingRef.current)  clearInterval(pingRef.current);
+    if (reconnRef.current) clearTimeout(reconnRef.current);
+
+    setIsScanning(true);
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      if (!mountedRef.current) { ws.close(); return; }
+      // Subscribe to ALL markets in one go
+      syms.forEach(sym => {
+        // Pacifica symbol format: "BTC-USD" → strip "-USD" for WS
+        const wsSym = sym.replace(/-USD$/, '');
+        ws.send(JSON.stringify({ method: 'subscribe', params: { source: 'trades', symbol: wsSym } }));
+      });
+      // Heartbeat
+      pingRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ method: 'ping' }));
+      }, PING_MS);
+    };
+
+    ws.onmessage = (event: MessageEvent) => {
+      if (!mountedRef.current) return;
+      let msg: { channel: string; data: unknown[] };
+      try { msg = JSON.parse(event.data as string); } catch { return; }
+      if (msg.channel !== 'trades' || !Array.isArray(msg.data)) return;
+
+      const newTrades: WhaleTrade[] = [];
+      const pressureUpdates: Record<string, Partial<SymbolPressure>> = {};
+
+      for (const raw of msg.data as {
+        h: number; s: string; a: string; p: string;
+        d: string; tc: string; t: number;
+      }[]) {
+        const symbol   = raw.s.includes('-') ? raw.s : raw.s + '-USD';
+        const price    = parseFloat(raw.p) || 0;
+        const amount   = parseFloat(raw.a) || 0;
+        const notional = price * amount;
+        const isLiq    = raw.tc === 'market_liquidation' || raw.tc === 'backstop_liquidation';
+        const isLong   = raw.d?.includes('long');
+        const isOpen   = raw.d?.startsWith('open');
+
+        // Update pressure
+        if (!pressureUpdates[symbol]) {
+          pressureUpdates[symbol] = { longNotional: 0, shortNotional: 0, liqLong: 0, liqShort: 0, tradeCount: 0 };
+        }
+        const pu = pressureUpdates[symbol];
+        if (isOpen && isLong)  pu.longNotional  = (pu.longNotional  || 0) + notional;
+        if (isOpen && !isLong) pu.shortNotional = (pu.shortNotional || 0) + notional;
+        if (isLiq && isLong)   pu.liqLong       = (pu.liqLong       || 0) + notional;
+        if (isLiq && !isLong)  pu.liqShort      = (pu.liqShort      || 0) + notional;
+        if (notional >= threshRef.current) pu.tradeCount = (pu.tradeCount || 0) + 1;
+
+        // Collect liquidations + whale trades
+        const addThis = isLiq || notional >= threshRef.current;
+        if (addThis) {
+          const tradeId = `${symbol}-${raw.h}-${raw.t}`;
+          if (!seenTrades.current.has(tradeId)) {
+            seenTrades.current.add(tradeId);
+            if (seenTrades.current.size > 5000) {
+              const first = seenTrades.current.values().next().value;
+              if (first) seenTrades.current.delete(first);
+            }
+            newTrades.push({
+              id: tradeId,
+              symbol,
+              side: raw.d as WhaleTrade['side'],
+              cause: raw.tc,
+              price,
+              amount,
+              notional,
+              ts: raw.t,
+              isLiquidation: isLiq,
+            });
+          }
+        }
       }
-    }
-    newFundingAlerts.sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate));
 
-    // Commit state
-    if (newTrades.length > 0) {
-      setWhaleTrades(prev => [...newTrades, ...prev].slice(0, 200));
-    }
-    setPressureMap(prev => ({ ...prev, ...newPressure }));
-    if (newOiAlerts.length > 0) setOiAlerts(prev => [...newOiAlerts, ...prev].slice(0, 50));
-    setFundingAlerts(newFundingAlerts.slice(0, 20));
-    setLastScan(new Date());
-    setIsScanning(false);
-  }, [markets, tickers, whaleThreshold]);
+      // Merge pressure
+      for (const [sym, update] of Object.entries(pressureUpdates)) {
+        const existing = pressureRef.current[sym] ?? {
+          symbol: sym, bullScore: 50, bearScore: 50,
+          longNotional: 0, shortNotional: 0, liqLong: 0, liqShort: 0,
+          oiChange: 0, fundingSpike: false, totalWhaleFlow: 0, tradeCount: 0,
+        };
+        const merged: SymbolPressure = {
+          ...existing,
+          longNotional:  (existing.longNotional  || 0) + (update.longNotional  || 0),
+          shortNotional: (existing.shortNotional || 0) + (update.shortNotional || 0),
+          liqLong:       (existing.liqLong       || 0) + (update.liqLong       || 0),
+          liqShort:      (existing.liqShort      || 0) + (update.liqShort      || 0),
+          tradeCount:    (existing.tradeCount    || 0) + (update.tradeCount    || 0),
+        };
+        const total = merged.longNotional + merged.shortNotional;
+        merged.totalWhaleFlow = total;
+        merged.bullScore = total > 0 ? Math.round((merged.longNotional / total) * 100) : 50;
+        merged.bearScore = 100 - merged.bullScore;
+        pressureRef.current[sym] = merged;
+      }
 
+      if (newTrades.length) {
+        setWhaleTrades(prev => [...newTrades, ...prev].slice(0, MAX_TRADES));
+        setLastScan(new Date());
+        setIsScanning(false);
+        setPressureMap({ ...pressureRef.current });
+      }
+    };
+
+    ws.onerror = () => {
+      setIsScanning(false);
+    };
+
+    ws.onclose = () => {
+      if (!mountedRef.current) return;
+      setIsScanning(false);
+      // Auto-reconnect after 3s
+      reconnRef.current = setTimeout(() => {
+        if (mountedRef.current && marketsRef.current.length) connect();
+      }, 3000);
+    };
+  }, []); // stable — uses refs internally
+
+  /* ── Start WS when markets are ready ──────────────────────── */
   useEffect(() => {
     if (!markets.length) return;
-    // Initial scan after short delay
-    const t = window.setTimeout(() => scan(), 1000);
-    const iv = window.setInterval(scan, 15000); // every 15s
-    return () => { window.clearTimeout(t); window.clearInterval(iv); };
-  }, [scan, markets.length]);
+    connect();
+    return () => {
+      mountedRef.current = false;
+      try { wsRef.current?.close(); } catch {}
+      if (pingRef.current)  clearInterval(pingRef.current);
+      if (reconnRef.current) clearTimeout(reconnRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markets.length > 0]); // only re-run when markets go from 0 → loaded
+
+  const scan = useCallback(() => { connect(); }, [connect]);
 
   return { whaleTrades, pressureMap, oiAlerts, fundingAlerts, isScanning, lastScan, scan };
 }
