@@ -23,7 +23,7 @@ interface RiskManagerProps {
   onExecute: (r: CalcResult, symbol: string) => void;
 }
 
-type RiskTab = 'results' | 'portfolio';
+type RiskTab = 'results' | 'portfolio' | 'guide';
 
 const CORR_GROUPS: Record<string, string> = {
   BTC: 'BTC', ETH: 'ETH', SOL: 'ALT', BNB: 'ALT', AVAX: 'ALT',
@@ -104,15 +104,86 @@ function PositionDetailModal({ pos, ticker, onClose }: {
         </div>
         {distToLiq !== null && distToLiq < 15 && (
           <div className="mx-4 mb-3 flex items-center gap-2 px-3 py-2 bg-danger/8 border border-danger/25 rounded-xl text-[11px] text-danger font-semibold">
-            ⚡ Liquidation {fmt(distToLiq, 1)}% uzakta — pozisyonu küçültmeyi düşün
+            Liquidation is {fmt(distToLiq, 1)}% away — consider reducing position size
           </div>
         )}
         <div className="px-4 pb-4">
           <button onClick={onClose} className="w-full py-2.5 bg-surface2 border border-border1 rounded-xl text-[12px] font-semibold text-text2 hover:bg-surface transition-colors">
-            Kapat
+            Close
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function GuidePanel() {
+  const sections = [
+    {
+      title: 'How to use the Risk Manager',
+      color: 'text-accent',
+      items: [
+        { label: 'Select a market', desc: 'Choose a perpetual from the left panel. Entry price auto-fills from the mark price.' },
+        { label: 'Set account size', desc: 'Enter your total account equity. This drives all position sizing calculations.' },
+        { label: 'Set risk %', desc: 'Choose how much of your account to risk per trade. 1–2% is standard.' },
+        { label: 'Enter stop loss', desc: 'Type a price or use the quick-set buttons (1%, 2%, 3%, 5% from entry).' },
+        { label: 'Choose R:R or manual TP', desc: 'R:R mode auto-places take profit. Manual mode lets you set an exact price.' },
+        { label: 'Review results', desc: 'Position size, margin, liquidation price, funding cost and EV are calculated instantly.' },
+      ],
+    },
+    {
+      title: 'Key metrics explained',
+      color: 'text-accent',
+      items: [
+        { label: 'Position Size', desc: 'Contracts to buy/sell so that a SL hit equals exactly your risk amount.' },
+        { label: 'Required Margin', desc: 'Collateral locked by the exchange. Position Value ÷ Leverage.' },
+        { label: 'Liquidation Price', desc: 'Estimated price where margin runs out. Keep distance above 10%.' },
+        { label: 'Break-Even Price', desc: 'Price needed to cover entry + exit fees. TP must be above this.' },
+        { label: 'Expected Value (EV)', desc: 'EV = (Win Rate × Reward) − (Loss Rate × Risk). Positive EV is required for long-term profitability.' },
+        { label: 'Funding Cost', desc: 'Fee paid every 8h to hold a position. High funding eats into profits on swing trades.' },
+      ],
+    },
+    {
+      title: 'Risk rules of thumb',
+      color: 'text-warn',
+      items: [
+        { label: 'Max risk per trade', desc: '1–2% of account. Never exceed 5% on a single position.' },
+        { label: 'Minimum R:R', desc: 'Enter only if Reward is at least 1.5× the Risk.' },
+        { label: 'Leverage limit', desc: 'Above 20x the liquidation distance shrinks below normal volatility ranges.' },
+        { label: 'Portfolio risk', desc: 'Keep total margin used below 25% of equity across all positions.' },
+        { label: 'Correlated positions', desc: 'Multiple ALT longs are effectively one big position. Weight them accordingly.' },
+        { label: 'Funding drain', desc: 'If weekly funding exceeds 20% of your risk amount, holding the trade becomes expensive.' },
+      ],
+    },
+    {
+      title: 'Portfolio tab',
+      color: 'text-accent',
+      items: [
+        { label: 'Heat Map', desc: 'Bubbles sized by position value. Green = profit, red = loss. Click any bubble for full detail.' },
+        { label: 'Correlation Warnings', desc: 'Flags when you hold 2+ positions in the same asset group (BTC, ETH, MEME, ALT…).' },
+        { label: 'Long / Short Breakdown', desc: 'Bar shows your directional bias. Near 50/50 = roughly market-neutral.' },
+        { label: 'Trade History', desc: 'All orders placed via this interface. Shows today and 7-day win rate.' },
+      ],
+    },
+  ];
+
+  return (
+    <div className="flex-1 overflow-auto p-4 bg-bg space-y-5">
+      {sections.map(sec => (
+        <div key={sec.title} className="bg-surface rounded-xl border border-border1 overflow-hidden shadow-card">
+          <div className="px-4 py-2.5 border-b border-border1 bg-surface2">
+            <span className={`text-[11px] font-bold uppercase tracking-wide ${sec.color}`}>{sec.title}</span>
+          </div>
+          <div className="divide-y divide-border1">
+            {sec.items.map(item => (
+              <div key={item.label} className="px-4 py-2.5">
+                <div className="text-[11px] font-semibold text-text1 mb-0.5">{item.label}</div>
+                <div className="text-[11px] text-text3 leading-relaxed">{item.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -128,7 +199,6 @@ export function RiskManager({
   const [winRate, setWinRate] = useState(50);
   const { entries: orderEntries } = useOrderLog(wallet);
 
-  // Stable callbacks — prevent child re-renders on every ticker poll
   const handleSelectMarket = useCallback((m: Market) => {
     setSelected(m);
     setResult(null);
@@ -165,7 +235,6 @@ export function RiskManager({
   });
   const correlatedGroups = Object.entries(groupCounts).filter(([, v]) => v.count >= 2);
 
-  // Order log stats — memoized so they don't recompute on every ticker update
   const orderStats = useMemo(() => {
     const now = Date.now();
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
@@ -190,11 +259,16 @@ export function RiskManager({
 
   const PANEL_H = 'calc(100vh - 15rem)';
 
+  const tabs: { key: RiskTab; label: string }[] = [
+    { key: 'results', label: 'Results' },
+    { key: 'portfolio', label: 'Portfolio' },
+    { key: 'guide', label: 'How It Works' },
+  ];
+
   return (
     <div className="flex-1 overflow-auto bg-bg">
       <div className="w-full max-w-[1400px] mx-auto px-6 pt-5">
 
-        {/* Single card wrapping StatsBar + 3-col grid */}
         <div className="border border-border1 rounded-2xl overflow-hidden shadow-card bg-surface mt-5 mb-6">
 
           <StatsBar
@@ -204,7 +278,6 @@ export function RiskManager({
             availableBalance={availableBalance}
           />
 
-          {/* Main 3-column grid */}
           <div
             className="grid border-t border-border1"
             style={{ gridTemplateColumns: '220px 1fr 340px' }}
@@ -235,10 +308,10 @@ export function RiskManager({
             />
           </div>
 
-          {/* RIGHT: Results / Portfolio */}
+          {/* RIGHT: Tabs */}
           <div className="overflow-hidden flex flex-col" style={{ height: PANEL_H, minHeight: 500 }}>
             <div className="flex border-b border-border1 bg-surface shrink-0 px-2">
-              {([{ key: 'results', label: 'Results' }, { key: 'portfolio', label: 'Portfolio' }] as { key: RiskTab; label: string }[]).map(t => (
+              {tabs.map(t => (
                 <button key={t.key} onClick={() => setActiveTab(t.key)}
                   className={`px-3 py-2.5 text-[11px] font-semibold border-b-2 transition-all whitespace-nowrap ${activeTab === t.key ? 'border-accent text-accent' : 'border-transparent text-text3 hover:text-text2'}`}>
                   {t.label}
@@ -334,17 +407,17 @@ export function RiskManager({
                 {/* Correlation warnings */}
                 {correlatedGroups.length > 0 && (
                   <div className="space-y-1.5">
-                    <div className="text-[10px] font-bold text-text3 uppercase tracking-wide">Korelasyon Uyarıları</div>
+                    <div className="text-[10px] font-bold text-text3 uppercase tracking-wide">Correlation Warnings</div>
                     {correlatedGroups.map(([group, data]) => {
                       const allSameSide = data.side.every(s => s === data.side[0]);
                       return (
                         <div key={group} className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border text-[11px] ${allSameSide ? 'bg-warn/8 border-warn/25 text-warn' : 'bg-accent/8 border-accent/25 text-accent'}`}>
-                          <span className="shrink-0 mt-0.5">{allSameSide ? '⚠' : 'ℹ'}</span>
+                          <span className="shrink-0 mt-0.5">{allSameSide ? '!' : 'i'}</span>
                           <span>
-                            <span className="font-bold">{data.count} {group} pozisyon</span>
+                            <span className="font-bold">{data.count} {group} positions</span>
                             {allSameSide
-                              ? ` — tümü ${data.side[0] === 'bid' ? 'LONG' : 'SHORT'}, yüksek korelasyon riski`
-                              : ' — karışık yön, kısmen hedge edilmiş'}
+                              ? ` — all ${data.side[0] === 'bid' ? 'LONG' : 'SHORT'}, high correlation risk`
+                              : ' — mixed direction, partially hedged'}
                           </span>
                         </div>
                       );
@@ -357,9 +430,9 @@ export function RiskManager({
                   <div className="bg-surface rounded-xl border border-border1 p-4 shadow-card">
                     <div className="flex items-center justify-between mb-1">
                       <div className="text-[12px] font-semibold text-text2">Position Heat Map</div>
-                      <div className="text-[10px] text-text3 bg-accent/10 text-accent px-2 py-0.5 rounded-full font-semibold">tıkla → detay</div>
+                      <div className="text-[10px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-semibold">click for detail</div>
                     </div>
-                    <div className="text-[10px] text-text3 mb-4">Boyut = pozisyon değeri · Renk = PnL</div>
+                    <div className="text-[10px] text-text3 mb-4">Size = position value · Color = PnL</div>
                     <div className="flex flex-wrap gap-3 justify-center">
                       {positions.map(p => {
                         const tk = tickers[p.symbol];
@@ -395,7 +468,7 @@ export function RiskManager({
                                 </span>
                               )}
                               {distToLiq !== null && distToLiq < 15 && (
-                                <span className="text-[7px] text-danger font-bold">⚡{fmt(distToLiq, 0)}%</span>
+                                <span className="text-[7px] text-danger font-bold">liq {fmt(distToLiq, 0)}%</span>
                               )}
                             </div>
                             <span className={`text-[10px] font-bold ${isLong ? 'text-success' : 'text-danger'}`}>
@@ -409,10 +482,14 @@ export function RiskManager({
                   </div>
                 ) : (
                   <div className="bg-surface rounded-xl border border-dashed border-border2 p-10 text-center">
-                    <div className="text-3xl mb-2 opacity-30">◉</div>
-                    <p className="text-sm font-semibold text-text2">Açık pozisyon yok</p>
-                    <p className="text-xs mt-1 text-text3">Pozisyonlar burada baloncuk olarak görünür</p>
-                    <p className="text-xs mt-0.5 text-text3">Boyut = değer · Renk = PnL · Tıkla = detay</p>
+                    <div className="w-10 h-10 rounded-full border border-border2 mx-auto mb-3 flex items-center justify-center">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text3/40">
+                        <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>
+                      </svg>
+                    </div>
+                    <p className="text-sm font-semibold text-text2">No open positions</p>
+                    <p className="text-xs mt-1 text-text3">Positions appear here as bubbles</p>
+                    <p className="text-xs mt-0.5 text-text3">Size = value · Color = PnL · Click = detail</p>
                   </div>
                 )}
 
@@ -435,7 +512,7 @@ export function RiskManager({
                       </div>
                       <div className={`text-center text-[12px] font-bold ${Math.abs(netExposure) < 500 ? 'text-success' : 'text-warn'}`}>
                         Net: {netExposure >= 0 ? 'Long' : 'Short'} ${fmt(Math.abs(netExposure), 0)}
-                        {Math.abs(netExposure) < 500 && <span className="text-[10px] text-success ml-2">✓ Neredeyse hedge</span>}
+                        {Math.abs(netExposure) < 500 && <span className="text-[10px] text-success ml-2">Nearly hedged</span>}
                       </div>
                     </div>
                   </div>
@@ -444,19 +521,18 @@ export function RiskManager({
                 {/* Trade History Summary */}
                 <div className="bg-surface rounded-xl border border-border1 shadow-card overflow-hidden">
                   <div className="px-4 py-2.5 border-b border-border1 bg-surface2 flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-text2">Trade Geçmişi</span>
-                    <span className="text-[10px] text-text3">{orderStats.totalAll} toplam emir</span>
+                    <span className="text-[11px] font-semibold text-text2">Trade History</span>
+                    <span className="text-[10px] text-text3">{orderStats.totalAll} total orders</span>
                   </div>
                   {orderStats.totalAll === 0 ? (
-                    <div className="px-4 py-6 text-center text-text3 text-[11px]">Henüz emir yok — bir trade aç</div>
+                    <div className="px-4 py-6 text-center text-text3 text-[11px]">No orders yet — place a trade to start tracking</div>
                   ) : (
                     <>
-                      {/* Stats row */}
                       <div className="grid grid-cols-3 divide-x divide-border1 border-b border-border1">
                         {[
-                          { label: 'Bugün', value: String(orderStats.todayTotal), sub: `${orderStats.todaySuccess} başarılı` },
-                          { label: 'Bu Hafta', value: String(orderStats.weekTotal), sub: `${orderStats.weekSuccess}W · ${orderStats.weekFailed}F` },
-                          { label: 'Win Rate', value: orderStats.winRateWeek !== null ? `${orderStats.winRateWeek}%` : '—', sub: '7 günlük', color: orderStats.winRateWeek !== null ? (orderStats.winRateWeek >= 50 ? 'text-success' : 'text-danger') : 'text-text3' },
+                          { label: 'Today', value: String(orderStats.todayTotal), sub: `${orderStats.todaySuccess} successful` },
+                          { label: 'This Week', value: String(orderStats.weekTotal), sub: `${orderStats.weekSuccess}W · ${orderStats.weekFailed}F` },
+                          { label: 'Win Rate', value: orderStats.winRateWeek !== null ? `${orderStats.winRateWeek}%` : '—', sub: '7-day', color: orderStats.winRateWeek !== null ? (orderStats.winRateWeek >= 50 ? 'text-success' : 'text-danger') : 'text-text3' },
                         ].map(s => (
                           <div key={s.label} className="px-3 py-2.5 text-center">
                             <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-1">{s.label}</div>
@@ -466,13 +542,12 @@ export function RiskManager({
                         ))}
                       </div>
 
-                      {/* Recent entries */}
                       <div className="divide-y divide-border1">
                         {orderStats.recentEntries.map(e => {
                           const isLong = e.side === 'bid';
                           const d = new Date(e.timestamp);
-                          const timeStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-                          const dateStr = d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' });
+                          const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                          const dateStr = d.toLocaleDateString('en-US', { day: '2-digit', month: '2-digit' });
                           return (
                             <div key={e.id} className="flex items-center gap-3 px-3 py-2 hover:bg-surface2/50 transition-colors">
                               <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${isLong ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
@@ -484,7 +559,7 @@ export function RiskManager({
                               </div>
                               <div className="text-right shrink-0">
                                 <div className={`text-[10px] font-semibold ${e.status === 'success' ? 'text-success' : e.status === 'failed' ? 'text-danger' : e.status === 'pending' ? 'text-warn' : 'text-text3'}`}>
-                                  {e.status === 'success' ? '✓' : e.status === 'failed' ? '✗' : e.status === 'pending' ? '⏳' : '—'}
+                                  {e.status === 'success' ? '✓' : e.status === 'failed' ? '✗' : e.status === 'pending' ? '...' : '—'}
                                 </div>
                                 <div className="text-[9px] text-text3">{dateStr} {timeStr}</div>
                               </div>
@@ -498,9 +573,12 @@ export function RiskManager({
 
               </div>
             )}
+
+            {activeTab === 'guide' && <GuidePanel />}
           </div>
         </div>
       </div>
+    </div>
 
       {selectedPosition && (
         <PositionDetailModal
@@ -510,6 +588,5 @@ export function RiskManager({
         />
       )}
     </div>
-  </div>
   );
 }
