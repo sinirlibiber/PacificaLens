@@ -24,7 +24,7 @@ export function useMarkets() {
     const changed = Object.keys(next).some(k => {
       const a = prev[k]; const b = next[k];
       if (!a || !b) return true;
-      return a.mark_price !== b.mark_price || a.funding !== b.funding || a.volume_24h !== b.volume_24h;
+      return a.mark !== b.mark || a.funding !== b.funding || a.volume_24h !== b.volume_24h;
     });
     if (changed) {
       prevTickersRef.current = next;
