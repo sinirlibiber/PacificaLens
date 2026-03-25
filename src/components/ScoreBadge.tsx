@@ -1,16 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { TraderScore, ScoreTier, TIER_COLORS } from '@/lib/traderScore';
+import { TraderScore, ScoreTier, TIER_COLORS, STYLE_META } from '@/lib/traderScore';
 
 // ─── Tier tooltip labels ──────────────────────────────────────────────────────
 
 export const TIER_LABELS: Record<ScoreTier, string> = {
   S: 'Elite — Top 5%',
-  A: 'Strong — Top 15%',
-  B: 'Average — Top 35%',
-  C: 'Weak — Bottom 40%',
-  D: 'Low performance',
+  A: 'Strong — Top 20%',
+  B: 'Average — Top 45%',
+  C: 'Weak — Bottom 55%',
 };
 
 // ─── Compact badge (leaderboard table) ───────────────────────────────────────
@@ -33,9 +32,14 @@ export function ScoreBadge({ score, showNumber = true }: ScoreBadgeProps) {
 
   const { bg, text, border } = TIER_COLORS[score.tier];
   const isS = score.tier === 'S';
+  const styleMeta = STYLE_META[score.style];
 
   return (
     <div className="flex items-center justify-end gap-1.5">
+      {/* Style icon */}
+      <span className={`text-[11px] ${styleMeta.color}`} title={score.style}>
+        {styleMeta.icon}
+      </span>
       {showNumber && (
         <span className={`text-[11px] font-mono font-semibold ${text}`}>
           {score.score}
@@ -59,11 +63,18 @@ export function ScoreBadge({ score, showNumber = true }: ScoreBadgeProps) {
               <div className="text-[10px] text-text3 mt-0.5">
                 Score: {score.score} / 100
               </div>
+              {/* Style */}
+              <div className={`text-[10px] mt-1 font-semibold ${styleMeta.color}`}>
+                {styleMeta.icon} {score.style}
+              </div>
+              {/* Breakdown */}
               <div className="text-[9px] text-text3 mt-1 space-y-0.5">
-                <div>PnL <span className="text-text2">{score.breakdown.pnl}/40</span></div>
-                <div>Consistency <span className="text-text2">{score.breakdown.consistency}/25</span></div>
-                <div>Volume <span className="text-text2">{score.breakdown.volume}/20</span></div>
-                <div>Efficiency <span className="text-text2">{score.breakdown.risk}/15</span></div>
+                <div>PnL <span className="text-text2">{score.breakdown.pnl}/30</span></div>
+                <div>Consistency <span className="text-text2">{score.breakdown.consistency}/20</span></div>
+                <div>Sharpe <span className="text-text2">{score.breakdown.sharpe}/20</span></div>
+                <div>Win Rate <span className="text-text2">{score.breakdown.winRate}/15</span></div>
+                <div>Drawdown <span className="text-text2">{score.breakdown.drawdown}/10</span></div>
+                <div>OI Risk <span className="text-text2">{score.breakdown.oiRisk}/5</span></div>
               </div>
             </div>
           </div>
@@ -82,6 +93,7 @@ interface ScoreCardProps {
 export function ScoreCard({ score }: ScoreCardProps) {
   const { text, border } = TIER_COLORS[score.tier];
   const isS = score.tier === 'S';
+  const styleMeta = STYLE_META[score.style];
 
   const lastUpdated = new Date(score.lastUpdated);
   const updatedStr = lastUpdated.toLocaleString('en-GB', {
@@ -89,10 +101,12 @@ export function ScoreCard({ score }: ScoreCardProps) {
   });
 
   const bars: { label: string; value: number; max: number; color: string }[] = [
-    { label: 'PnL',         value: score.breakdown.pnl,        max: 40, color: 'bg-success' },
-    { label: 'Consistency', value: score.breakdown.consistency, max: 25, color: 'bg-accent' },
-    { label: 'Volume',      value: score.breakdown.volume,      max: 20, color: 'bg-warn' },
-    { label: 'Efficiency',  value: score.breakdown.risk,        max: 15, color: 'bg-[#a78bfa]' },
+    { label: 'PnL',         value: score.breakdown.pnl,         max: 30, color: 'bg-success' },
+    { label: 'Consistency', value: score.breakdown.consistency,  max: 20, color: 'bg-accent' },
+    { label: 'Sharpe',      value: score.breakdown.sharpe,       max: 20, color: 'bg-[#818cf8]' },
+    { label: 'Win Rate',    value: score.breakdown.winRate,      max: 15, color: 'bg-warn' },
+    { label: 'Drawdown',    value: score.breakdown.drawdown,     max: 10, color: 'bg-[#34d399]' },
+    { label: 'OI Risk',     value: score.breakdown.oiRisk,       max: 5,  color: 'bg-[#a78bfa]' },
   ];
 
   return (
@@ -124,6 +138,16 @@ export function ScoreCard({ score }: ScoreCardProps) {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Trader Style pill */}
+      <div className="px-3 pt-2.5">
+        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-semibold
+          ${styleMeta.color} border-current/30 bg-current/5`}>
+          <span>{styleMeta.icon}</span>
+          <span>{score.style}</span>
+          <span className="font-normal text-text3">— {styleMeta.desc}</span>
         </div>
       </div>
 

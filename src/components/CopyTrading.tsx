@@ -17,6 +17,7 @@ import { useOrderLog } from '@/hooks/useOrderLog';
 import { usePrivy, useSolanaWallets } from '@privy-io/react-auth';
 import { useTraderScore } from '@/hooks/useTraderScore';
 import { ScoreBadge, ScoreCard } from '@/components/ScoreBadge';
+import { STYLE_META } from '@/lib/traderScore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -639,6 +640,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                         <Th key={c.field} label={c.label} field={c.field}
                           cur={sortField} dir={sortDir} onClick={() => toggleSort(c.field)} />
                       ))}
+                      <th className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-left hidden md:table-cell">Style</th>
                       <th
                         onClick={() => toggleSort('watching' as SortField)}
                         className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-center cursor-pointer hover:text-accent select-none transition-colors"
@@ -678,6 +680,20 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                           {/* Score */}
                           <td className={`px-3 py-2 text-right ${sortField === 'score' ? 'bg-accent/3' : ''}`}>
                             <ScoreBadge score={getScore(entry.account)} />
+                          </td>
+
+                          {/* Trader Style */}
+                          <td className="px-3 py-2 hidden md:table-cell">
+                            {(() => {
+                              const traderScore = getScore(entry.account);
+                              if (!traderScore) return <span className="text-[10px] text-text3">—</span>;
+                              const meta = STYLE_META[traderScore.style];
+                              return (
+                                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${meta.color}`} title={meta.desc}>
+                                  {meta.icon} {traderScore.style}
+                                </span>
+                              );
+                            })()}
                           </td>
 
                           {/* PnL cols */}
