@@ -42,11 +42,12 @@ interface BotConfig {
 
 const SIGNAL_THRESHOLD = { STRONG: 15, GOOD: 8, LOW: 3 };
 
+// Normalize symbol to base asset: strip -USD, -PERP, USDT suffixes
 function normalizeSym(s: string): string {
   return s.replace(/-USD$/i, '').replace(/-PERP$/i, '').replace(/USDT$/i, '').replace(/USD$/i, '').toUpperCase().trim();
 }
 
-function SignalBadge({ signal }: { signal: ArbOpportunity['signal'] }) {
+
   const styles = {
     STRONG: 'bg-success/15 text-success border border-success/30',
     GOOD: 'bg-accent/15 text-accent border border-accent/30',
@@ -77,9 +78,11 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
     interval: 30,
   });
   const [botLog, setBotLog] = useState<string[]>([]);
+  const [notifiedSet, setNotifiedSet] = useState<Set<string>>(new Set());
   const botRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const notifiedRef = useRef<Set<string>>(new Set());
 
+  // Load bot config from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem('pl_bot_config');
@@ -87,6 +90,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
     } catch {}
   }, []);
 
+  // Save bot config
   useEffect(() => {
     try { localStorage.setItem('pl_bot_config', JSON.stringify(botConfig)); } catch {}
   }, [botConfig]);
@@ -128,6 +132,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
         const market = m as { baseAsset: string; nextFundingRate: string; oraclePrice: string };
         const sym = market.baseAsset;
         if (sym) {
+          // dYdX nextFundingRate is per 1h
           map[sym] = {
             symbol: sym,
             funding: Number(market.nextFundingRate || 0),
@@ -152,20 +157,24 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
     return () => clearInterval(iv);
   }, []);
 
+  // Build opportunities
   const opportunities: ArbOpportunity[] = markets.map(m => {
     const sym = m.symbol;
-    const normSym = normalizeSym(sym);
+    const normSym = normalizeSym(sym); // e.g. 'BTC-USD' -> 'BTC'
     const pacificaTk = tickers[sym];
-    const pacificaFR = pacificaTk ? Number(pacificaTk.funding || 0) : 0;
+    const pacificaFR = pacificaTk ? Number(pacificaTk.funding || 0) : 0; // per hour
+    // Use normalized symbol for cross-exchange lookup
     const hlEntry = hlData[normSym] ?? hlData[sym];
     const dydxEntry = dydxData[normSym] ?? dydxData[sym];
     const hlFR = hlEntry ? hlEntry.funding : null;
     const dydxFR = dydxEntry ? dydxEntry.funding : null;
     const pacificaMarkPrice = pacificaTk ? Number(pacificaTk.mark || 0) : 0;
 
+    // Spread = |FR_A - FR_B| per hour
     const spreadHL = hlFR !== null ? Math.abs(pacificaFR - hlFR) : null;
     const spreadDydx = dydxFR !== null ? Math.abs(pacificaFR - dydxFR) : null;
 
+    // APR = spread * 24 * 365 * 100
     const aprHL = spreadHL !== null ? spreadHL * 24 * 365 * 100 : null;
     const aprDydx = spreadDydx !== null ? spreadDydx * 24 * 365 * 100 : null;
 
@@ -201,6 +210,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
     return 0;
   });
 
+  // Notification sender
   const sendNotifications = useCallback(async (opps: ArbOpportunity[]) => {
     const newOpps = opps.filter(o =>
       o.signal === 'STRONG' || (o.bestApr >= botConfig.minApr)
@@ -214,10 +224,12 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
 
     const fullMsg = `🎯 PacificaLens Arbitrage Alert\n\n${msg}\n\n⏰ ${new Date().toLocaleTimeString()}`;
 
+    // Browser notification
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification('PacificaLens: ' + newOpps.length + ' Arbitrage Opportunities', { body: newOpps[0].symbol + ' APR: ' + fmt(newOpps[0].bestApr, 1) + '%' });
     }
 
+    // Telegram
     if (botConfig.telegramToken && botConfig.telegramChatId) {
       try {
         await fetch(`https://api.telegram.org/bot${botConfig.telegramToken}/sendMessage`, {
@@ -229,6 +241,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
       } catch { setBotLog(prev => [`❌ Telegram failed (${new Date().toLocaleTimeString()})`, ...prev.slice(0, 19)]); }
     }
 
+    // Discord
     if (botConfig.discordWebhook) {
       try {
         await fetch(botConfig.discordWebhook, {
@@ -240,10 +253,12 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
       } catch { setBotLog(prev => [`❌ Discord failed (${new Date().toLocaleTimeString()})`, ...prev.slice(0, 19)]); }
     }
 
+    // Mark as notified
     newOpps.forEach(o => notifiedRef.current.add(o.symbol + '_' + Math.round(o.bestApr)));
     setBotLog(prev => [`🔍 Scanned: found ${newOpps.length} new opportunities (${new Date().toLocaleTimeString()})`, ...prev.slice(0, 19)]);
   }, [botConfig]);
 
+  // Bot interval
   useEffect(() => {
     if (botRef.current) clearInterval(botRef.current);
     if (!botConfig.enabled) return;
@@ -264,6 +279,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
     <div className="flex-1 overflow-auto bg-bg">
       <div className="max-w-[1400px] mx-auto px-8 py-5 space-y-4">
 
+        {/* Header stats */}
         <div className="grid grid-cols-5 gap-3">
           {[
             { label: 'Opportunities Found', value: String(opportunities.length), color: 'text-text1', sub: 'above min APR' },
@@ -280,6 +296,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
           ))}
         </div>
 
+        {/* How it works */}
         <div className="bg-accent/5 border border-accent/20 rounded-xl p-4">
           <div className="text-[12px] font-semibold text-accent mb-1">How Cross-DEX Funding Arbitrage Works</div>
           <div className="text-[11px] text-text2 leading-relaxed">
@@ -287,6 +304,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
           </div>
         </div>
 
+        {/* Filters */}
         <div className="flex items-center gap-3 bg-surface border border-border1 rounded-xl px-4 py-3 shadow-card">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold text-text2">Min APR:</span>
@@ -313,6 +331,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
           </div>
         </div>
 
+        {/* Main table */}
         <div className="bg-surface rounded-xl border border-border1 shadow-card overflow-hidden">
           <table className="w-full border-collapse">
             <thead>
@@ -327,7 +346,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
                 <th className="px-4 py-2.5 text-[10px] font-semibold text-text3 uppercase text-right cursor-pointer hover:text-text1 select-none" onClick={() => setSortKey('bestApr')}>Best APR {sortKey === 'bestApr' ? '↓' : ''}</th>
                 <th className="px-4 py-2.5 text-[10px] font-semibold text-text3 uppercase text-left">Strategy</th>
                 <th className="px-4 py-2.5 text-[10px] font-semibold text-text3 uppercase text-center">Signal</th>
-               </tr>
+              </tr>
             </thead>
             <tbody>
               {opportunities.length === 0 ? (
@@ -393,6 +412,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
   );
 }
 
+// Bot page
 export function ArbitrageBot({ tickers, markets }: ArbitrageProps) {
   const [botConfig, setBotConfig] = useState<BotConfig>({
     minApr: 5,
@@ -522,6 +542,7 @@ export function ArbitrageBot({ tickers, markets }: ArbitrageProps) {
   return (
     <div className="flex-1 overflow-auto bg-bg">
       <div className="max-w-[900px] mx-auto px-8 py-5 space-y-4">
+        {/* Status */}
         <div className={'flex items-center justify-between bg-surface rounded-xl border shadow-card p-5 ' + (botConfig.enabled ? 'border-success/40' : 'border-border1')}>
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -546,6 +567,7 @@ export function ArbitrageBot({ tickers, markets }: ArbitrageProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
+          {/* Config */}
           <div className="bg-surface rounded-xl border border-border1 shadow-card p-5 space-y-4">
             <h3 className="text-[13px] font-semibold text-text1">Alert Bot Configuration</h3>
             <div className="px-3 py-2 rounded-lg bg-warn/8 border border-warn/25 text-[11px] text-warn leading-relaxed">
@@ -572,6 +594,7 @@ export function ArbitrageBot({ tickers, markets }: ArbitrageProps) {
             </div>
           </div>
 
+          {/* Notification channels */}
           <div className="bg-surface rounded-xl border border-border1 shadow-card p-5 space-y-3">
             <h3 className="text-[13px] font-semibold text-text1">Notification Channels</h3>
             <div className="space-y-2.5">
@@ -601,6 +624,7 @@ export function ArbitrageBot({ tickers, markets }: ArbitrageProps) {
           </div>
         </div>
 
+        {/* Bot log */}
         <div className="bg-surface rounded-xl border border-border1 shadow-card overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border1 bg-surface2">
             <span className="text-[12px] font-semibold text-text2">Bot Activity Log</span>

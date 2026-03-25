@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 export interface ExchangeRate {
   exchange: string;
   symbol: string;
-  fundingRate: number;    // 8h rate as decimal e.g. 0.0001
+  fundingRate: number;    // 1h rate as decimal e.g. 0.0000125 (~10.95% APR)
   markPrice: number;
   openInterest: number;
   color: string;
