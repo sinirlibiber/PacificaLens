@@ -47,7 +47,8 @@ function normalizeSym(s: string): string {
   return s.replace(/-USD$/i, '').replace(/-PERP$/i, '').replace(/USDT$/i, '').replace(/USD$/i, '').toUpperCase().trim();
 }
 
-
+// SignalBadge bileşeni (düzeltildi)
+function SignalBadge({ signal }: { signal: ArbOpportunity['signal'] }) {
   const styles = {
     STRONG: 'bg-success/15 text-success border border-success/30',
     GOOD: 'bg-accent/15 text-accent border border-accent/30',
@@ -346,7 +347,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
                 <th className="px-4 py-2.5 text-[10px] font-semibold text-text3 uppercase text-right cursor-pointer hover:text-text1 select-none" onClick={() => setSortKey('bestApr')}>Best APR {sortKey === 'bestApr' ? '↓' : ''}</th>
                 <th className="px-4 py-2.5 text-[10px] font-semibold text-text3 uppercase text-left">Strategy</th>
                 <th className="px-4 py-2.5 text-[10px] font-semibold text-text3 uppercase text-center">Signal</th>
-              </tr>
+               </tr>
             </thead>
             <tbody>
               {opportunities.length === 0 ? (
