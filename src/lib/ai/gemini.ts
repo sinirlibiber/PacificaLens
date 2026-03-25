@@ -14,7 +14,7 @@ const CACHE_TTL = 1800; // 30 dakika
 
 export interface GeminiResult {
   answer: string;
-  source: 'gemini';
+  source: 'groq';
   cached: boolean;
 }
 
@@ -24,7 +24,7 @@ export async function queryGemini(userQuestion: string, priceContext = ''): Prom
   // 1. Cache'de var mı?
   const cached = await cacheGet(cacheKey);
   if (cached) {
-    return { answer: cached, source: 'gemini', cached: true };
+    return { answer: cached, source: 'groq', cached: true };
   }
 
   // 2. Groq'a sor
@@ -64,5 +64,5 @@ IMPORTANT: Always respond in the exact same language the user writes in. If the 
   // 3. Cache'e yaz
   await cacheSet(cacheKey, answer, CACHE_TTL);
 
-  return { answer, source: 'gemini', cached: false };
+  return { answer, source: 'groq', cached: false };
 }

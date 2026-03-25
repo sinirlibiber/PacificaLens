@@ -220,8 +220,17 @@ export async function getTradeHistory(wallet: string, limit = 50): Promise<Trade
 
 export async function getEquityHistory(wallet: string): Promise<EquityHistory[]> {
   try {
+    // Primary: account/equity_history (undocumented, may not exist on all API versions)
     const res = await proxyGet<PacificaRes<EquityHistory[]>>(`account/equity_history?account=${wallet}`);
-    if (res.success && Array.isArray(res.data)) return res.data;
+    if (res.success && Array.isArray(res.data) && res.data.length > 0) return res.data;
+
+    // Fallback: try portfolio endpoint which sometimes contains equity snapshots
+    const res2 = await proxyGet<PacificaRes<{ equity_history?: EquityHistory[] }>>(`portfolio?account=${wallet}`);
+    if (res2.success && Array.isArray(res2.data?.equity_history) && res2.data.equity_history!.length > 0) {
+      return res2.data.equity_history!;
+    }
+
+    // Both endpoints returned no data — equity history chart will show "No history"
     return [];
   } catch { return []; }
 }

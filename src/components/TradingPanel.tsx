@@ -11,6 +11,7 @@ interface TradingPanelProps {
   tickers: Record<string, Ticker>;
   wallet: string | null;
   onExecute: (r: CalcResult, symbol: string) => void;
+  accountInfo?: { available_to_spend?: string; balance?: string } | null;
 }
 
 function OrderbookPanel({ orderbook, markPrice }: { orderbook: Orderbook | null; markPrice: number }) {
@@ -60,7 +61,7 @@ function OrderbookPanel({ orderbook, markPrice }: { orderbook: Orderbook | null;
   );
 }
 
-export function TradingPanel({ markets, tickers, wallet, onExecute }: TradingPanelProps) {
+export function TradingPanel({ markets, tickers, wallet, onExecute, accountInfo }: TradingPanelProps) {
   const [selected, setSelected] = useState<Market | null>(null);
   const [search, setSearch] = useState('');
   const [rightTab, setRightTab] = useState<'orderbook' | 'trade'>('trade');
@@ -155,8 +156,8 @@ export function TradingPanel({ markets, tickers, wallet, onExecute }: TradingPan
     setPlacing(false);
   }
 
-  // Quick amount buttons (% of available)
-  const available = 11.60; // placeholder — ideally from accountInfo
+  // Real available balance from accountInfo
+  const available = Number(accountInfo?.available_to_spend || accountInfo?.balance || 0);
   function setAmountPct(pct: number) {
     if (!markPrice || !leverage) return;
     const usd = available * pct / 100 * leverage;

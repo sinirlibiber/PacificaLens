@@ -559,7 +559,10 @@ export function ArbitrageBot({ tickers, markets }: ArbitrageProps) {
         <div className="grid grid-cols-2 gap-4">
           {/* Config */}
           <div className="bg-surface rounded-xl border border-border1 shadow-card p-5 space-y-4">
-            <h3 className="text-[13px] font-semibold text-text1">Bot Configuration</h3>
+            <h3 className="text-[13px] font-semibold text-text1">Alert Bot Configuration</h3>
+            <div className="px-3 py-2 rounded-lg bg-warn/8 border border-warn/25 text-[11px] text-warn leading-relaxed">
+              <span className="font-bold">📢 Notification only.</span> Sends alerts when opportunities are found. <span className="font-semibold">Does not execute trades.</span>
+            </div>
             <div className="space-y-3">
               <div>
                 <div className="flex justify-between mb-1">

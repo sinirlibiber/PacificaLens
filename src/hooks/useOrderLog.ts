@@ -89,10 +89,8 @@ export interface TraderPerformance {
   traderAddress: string;
   totalOrders: number;
   successOrders: number;
-  totalPnl: number;       // estimated from realized_pnl in trade history
-  winRate: number;        // %
-  bestTrade: number;
-  worstTrade: number;
+  winRate: number;  // %
+  // Note: PnL is not tracked in the order log — check trade history for realized PnL
 }
 
 export function getCopyPerformance(entries: OrderLogEntry[]): TraderPerformance[] {
@@ -103,18 +101,11 @@ export function getCopyPerformance(entries: OrderLogEntry[]): TraderPerformance[
     .forEach(e => {
       const addr = e.traderAddress!;
       if (!map.has(addr)) {
-        map.set(addr, { traderAddress: addr, totalOrders: 0, successOrders: 0, totalPnl: 0, winRate: 0, bestTrade: 0, worstTrade: 0 });
+        map.set(addr, { traderAddress: addr, totalOrders: 0, successOrders: 0, winRate: 0 });
       }
       const p = map.get(addr)!;
       p.totalOrders++;
-      if (e.status === 'success') {
-        p.successOrders++;
-        // pnl stored as metadata if available
-        const pnl = (e as OrderLogEntry & { pnl?: number }).pnl || 0;
-        p.totalPnl += pnl;
-        if (pnl > p.bestTrade) p.bestTrade = pnl;
-        if (pnl < p.worstTrade) p.worstTrade = pnl;
-      }
+      if (e.status === 'success') p.successOrders++;
       p.winRate = p.totalOrders > 0 ? (p.successOrders / p.totalOrders) * 100 : 0;
     });
   return Array.from(map.values()).sort((a, b) => b.totalOrders - a.totalOrders);

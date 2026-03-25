@@ -43,7 +43,12 @@ function sideLabel(side: string) {
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 
 function Sparkline({ data }: { data: EquityHistory[] }) {
-  if (data.length < 2) return <div className="h-16 flex items-center justify-center text-[11px] text-text3">No history</div>;
+  if (data.length < 2) return (
+    <div className="h-16 flex flex-col items-center justify-center gap-1">
+      <div className="text-[11px] text-text3">No equity history available</div>
+      <div className="text-[10px] text-text3/60">Endpoint may not be supported on this account</div>
+    </div>
+  );
   const vals = data.map(d => Number(d.equity));
   const min = Math.min(...vals);
   const max = Math.max(...vals);
@@ -629,7 +634,7 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                     </div>
                   ))}
                   <div className="px-4 py-3 text-[10px] text-text3 border-t border-border1">
-                    PnL tracking requires on-chain data. Orders are logged locally — clear browser data to reset.
+                    ℹ️ <span className="font-semibold">Order placement success rate only.</span> PnL is not tracked here — check your Portfolio → Trade History for realized PnL on copied trades. Orders are logged locally in your browser.
                   </div>
                 </div>
               );

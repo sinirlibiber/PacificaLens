@@ -1,19 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// Lazy init — build sırasında değil, istek geldiğinde oluşturulur
+// Lazy init — returns null if env vars are missing (graceful degradation)
 function getClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL ve NEXT_PUBLIC_SUPABASE_ANON_KEY env değişkenleri eksik');
-  }
+  if (!url || !key) return null;
   return createClient(url, key);
 }
 
 export async function GET() {
+  const supabase = getClient();
+  // Supabase not configured — return empty list instead of crashing
+  if (!supabase) {
+    return NextResponse.json([]);
+  }
   try {
-    const supabase = getClient();
     const { data, error } = await supabase
       .from('pins')
       .select('*')
@@ -28,8 +30,15 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const supabase = getClient();
+  // Supabase not configured — pins cannot be saved without it
+  if (!supabase) {
+    return NextResponse.json(
+      { error: 'Pin saving requires Supabase. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment.' },
+      { status: 503 }
+    );
+  }
   try {
-    const supabase = getClient();
     const body = await req.json();
     const { label, lat, lng } = body;
 

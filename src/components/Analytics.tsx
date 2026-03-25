@@ -111,6 +111,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
 
   const [news, setNews] = useState<NewsItem[]>([]);
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
+  const [calUnavailable, setCalUnavailable] = useState(false);
   const [newsFilter, setNewsFilter] = useState<'All' | 'Crypto' | 'Macro'>('All');
   const [calFilter, setCalFilter] = useState('Global');
   const [newsLoading, setNewsLoading] = useState(true);
@@ -181,8 +182,15 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
       try {
         const res = await fetch('/api/calendar');
         if (!res.ok) return;
+        // Server sets this header when all upstream sources failed
+        if (res.headers.get('X-Calendar-Source') === 'unavailable') {
+          setCalUnavailable(true);
+          setCalEvents([]);
+          return;
+        }
         const data = await res.json();
         if (Array.isArray(data)) {
+          setCalUnavailable(data.length === 0);
           setCalEvents(data.slice(0, 60).map((e: Record<string, string>) => ({
             // ForexFactory fields: title, country, date, time, impact, forecast, previous, actual
             // Fallback fields: event, name, currency
@@ -418,7 +426,10 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           {/* Long/Short Ratio */}
           <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
             <div className="flex justify-between items-center mb-3">
-              <div className="text-[12px] font-bold text-text1">Long / Short Ratio</div>
+              <div>
+                <div className="text-[12px] font-bold text-text1">Long / Short Ratio</div>
+                <div className="text-[10px] text-text3 mt-0.5">⚠️ Estimated from funding rate bias — not real order-book data</div>
+              </div>
               <div className="flex items-center gap-3 text-[10px] text-text3">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block" /> Long</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block" /> Short</span>
@@ -460,7 +471,10 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
 
           {/* All Markets Funding Rate Heatmap */}
           <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-            <div className="text-[12px] font-bold text-text1 mb-3">All Markets Funding Rate</div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[12px] font-bold text-text1">All Markets Funding Rate</div>
+              <div className="text-[10px] text-text3">Live snapshot · updates every 30s</div>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {allFundingData.map(m => {
                 const absF = Math.abs(m.funding);
@@ -749,7 +763,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           <div className="flex-1 overflow-y-auto">
             {filteredCal.length === 0 ? (
               <div className="py-8 text-center text-[11px] text-text3">
-                {calLoading ? 'Loading calendar...' : 'No events available'}
+                {calLoading ? 'Loading calendar...' : calUnavailable ? '⚠️ Calendar source unavailable — try again later' : 'No events available'}
               </div>
             ) : (() => {
               let lastDate = '';

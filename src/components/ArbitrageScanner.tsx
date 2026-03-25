@@ -477,14 +477,19 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
               {/* Bot Config */}
               <div className="space-y-4">
                 <div className="bg-surface rounded-xl border border-border1 shadow-card p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[14px] font-bold text-text1">🤖 Bot Configuration</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[14px] font-bold text-text1">🤖 Alert Bot Configuration</h3>
                     <button
                       onClick={() => setConfig(c => ({ ...c, active: !c.active }))}
                       className={'px-4 py-2 rounded-lg text-[12px] font-bold transition-all ' +
                         (config.active ? 'bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20' : 'bg-success/10 border border-success/30 text-success hover:bg-success/20')}>
                       {config.active ? '⏹ Stop Alerts' : '▶ Start Alerts'}
                     </button>
+                  </div>
+
+                  {/* Alert-only disclaimer */}
+                  <div className="mb-4 px-3 py-2.5 rounded-lg bg-warn/8 border border-warn/25 text-[11px] text-warn leading-relaxed">
+                    <span className="font-bold">📢 Notification bot only.</span> This bot monitors for opportunities and sends alerts via Telegram, Discord, or browser notifications. <span className="font-semibold">It does not open or execute trades automatically.</span> You must place orders manually on the exchanges.
                   </div>
 
                   <div className="space-y-3">

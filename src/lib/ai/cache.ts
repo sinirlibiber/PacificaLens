@@ -5,8 +5,17 @@
  *   UPSTASH_REDIS_REST_TOKEN
  */
 
-const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL!;
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN!;
+const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+// Warn once at startup if Redis is not configured
+if (!REDIS_URL || !REDIS_TOKEN) {
+  console.warn(
+    '[cache] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN not set. ' +
+    'AI response caching is disabled — every request will hit Groq/Elfa directly. ' +
+    'Set these in .env.local to enable caching and avoid rate-limit issues.'
+  );
+}
 
 /** Upstash Redis REST API — GET */
 export async function cacheGet(key: string): Promise<string | null> {

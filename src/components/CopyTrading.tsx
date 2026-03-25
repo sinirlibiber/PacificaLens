@@ -20,6 +20,9 @@ import { ScoreBadge, ScoreCard } from '@/components/ScoreBadge';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+// NOTE: AutoPosConfig and DEFAULT_AUTO_CONFIG are defined for a future
+// automated position-mirroring feature. Auto-copy is not yet implemented —
+// only manual copy (clicking "Copy" on a specific trade) is functional.
 interface AutoPosConfig {
   amount: number;
   slEnabled: boolean;

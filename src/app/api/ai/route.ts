@@ -1,7 +1,7 @@
 /**
  * POST /api/ai
  * Body: { question: string }
- * Response: { answer: string; source: 'elfa' | 'gemini'; cached: boolean }
+ * Response: { answer: string; source: 'elfa' | 'groq'; cached: boolean }
  */
 
 import { NextRequest, NextResponse } from 'next/server';
