@@ -71,7 +71,7 @@ export function ScoreBadge({ score, showNumber = true }: ScoreBadgeProps) {
               <div className="text-[9px] text-text3 mt-1 space-y-0.5">
                 <div>PnL <span className="text-text2">{score.breakdown.pnl}/30</span></div>
                 <div>Consistency <span className="text-text2">{score.breakdown.consistency}/20</span></div>
-                <div>Sharpe <span className="text-text2">{score.breakdown.sharpe}/20</span></div>
+                <div>EPR <span className="text-text2">{score.breakdown.epr}/20</span></div>
                 <div>Win Rate <span className="text-text2">{score.breakdown.winRate}/15</span></div>
                 <div>Drawdown <span className="text-text2">{score.breakdown.drawdown}/10</span></div>
                 <div>OI Risk <span className="text-text2">{score.breakdown.oiRisk}/5</span></div>
@@ -103,7 +103,7 @@ export function ScoreCard({ score }: ScoreCardProps) {
   const bars: { label: string; value: number; max: number; color: string }[] = [
     { label: 'PnL',         value: score.breakdown.pnl,         max: 30, color: 'bg-success' },
     { label: 'Consistency', value: score.breakdown.consistency,  max: 20, color: 'bg-accent' },
-    { label: 'Sharpe',      value: score.breakdown.sharpe,       max: 20, color: 'bg-[#818cf8]' },
+    { label: 'EPR',         value: score.breakdown.epr,          max: 20, color: 'bg-[#818cf8]' },
     { label: 'Win Rate',    value: score.breakdown.winRate,      max: 15, color: 'bg-warn' },
     { label: 'Drawdown',    value: score.breakdown.drawdown,     max: 10, color: 'bg-[#34d399]' },
     { label: 'OI Risk',     value: score.breakdown.oiRisk,       max: 5,  color: 'bg-[#a78bfa]' },

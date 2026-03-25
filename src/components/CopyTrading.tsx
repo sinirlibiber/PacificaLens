@@ -275,9 +275,9 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     return true;
   }) : pagedList;
 
-  // Score-aware sort override: when sortField === 'score' or 'watching', re-sort using live data
+  // Score-aware sort override: when sortField === 'score', 'watching', or 'style', re-sort using live data
   const scoreSortedList = (() => {
-    if (sortField !== 'score' && sortField !== 'watching') return null;
+    if (sortField !== 'score' && sortField !== 'watching' && sortField !== 'style') return null;
     return [...leaderboard]
       .filter(e => !searchQuery.trim() || e.account.toLowerCase().includes(searchQuery.trim().toLowerCase()))
       .sort((a, b) => {
@@ -285,6 +285,11 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
           const wa = isFavorite(a.account) ? 1 : 0;
           const wb = isFavorite(b.account) ? 1 : 0;
           return sortDir === 'desc' ? wb - wa : wa - wb;
+        }
+        if (sortField === 'style') {
+          const sa = getScore(a.account)?.style ?? '';
+          const sb = getScore(b.account)?.style ?? '';
+          return sortDir === 'desc' ? sb.localeCompare(sa) : sa.localeCompare(sb);
         }
         const sa = getScore(a.account)?.score ?? -1;
         const sb = getScore(b.account)?.score ?? -1;
@@ -462,6 +467,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     { label: 'Vol All Time', field: 'volume_all' },
     { label: 'Equity', field: 'equity_current' },
     { label: 'Open Int.', field: 'oi_current' },
+    { label: 'Style', field: 'style' },
   ];
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -556,7 +562,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                 </button>
                 {scoresComputedAt && (
                   <span className="text-[10px] text-text3 border-l border-border1 pl-3">
-                    Skor: {new Date(scoresComputedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                    Score: {new Date(scoresComputedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     {' '}
                     <button onClick={refreshScores} disabled={scoresLoading} className="text-accent hover:underline disabled:opacity-50">
                       {scoresLoading ? '...' : '↻'}
@@ -640,7 +646,6 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                         <Th key={c.field} label={c.label} field={c.field}
                           cur={sortField} dir={sortDir} onClick={() => toggleSort(c.field)} />
                       ))}
-                      <th className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-left hidden md:table-cell">Style</th>
                       <th
                         onClick={() => toggleSort('watching' as SortField)}
                         className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-center cursor-pointer hover:text-accent select-none transition-colors"
@@ -682,20 +687,6 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                             <ScoreBadge score={getScore(entry.account)} />
                           </td>
 
-                          {/* Trader Style */}
-                          <td className="px-3 py-2 hidden md:table-cell">
-                            {(() => {
-                              const traderScore = getScore(entry.account);
-                              if (!traderScore) return <span className="text-[10px] text-text3">—</span>;
-                              const meta = STYLE_META[traderScore.style];
-                              return (
-                                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${meta.color}`} title={meta.desc}>
-                                  {meta.icon} {traderScore.style}
-                                </span>
-                              );
-                            })()}
-                          </td>
-
                           {/* PnL cols */}
                           {(['pnl_7d', 'pnl_30d', 'pnl_all'] as const).map(f => (
                             <td key={f} className={`px-3 py-2 text-right text-[12px] font-mono font-semibold ${
@@ -726,6 +717,20 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                             sortField === 'oi_current' ? 'bg-accent/3' : ''
                           }`}>
                             {fmtN(entry.oi_current)}
+                          </td>
+
+                          {/* Trader Style */}
+                          <td className={`px-3 py-2 hidden md:table-cell ${sortField === 'style' ? 'bg-accent/3' : ''}`}>
+                            {(() => {
+                              const traderScore = getScore(entry.account);
+                              if (!traderScore) return <span className="text-[10px] text-text3">—</span>;
+                              const meta = STYLE_META[traderScore.style];
+                              return (
+                                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${meta.color}`} title={meta.desc}>
+                                  {meta.icon} {traderScore.style}
+                                </span>
+                              );
+                            })()}
                           </td>
 
                           {/* Favorite button */}

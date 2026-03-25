@@ -1,5 +1,5 @@
 // ─── Trader Score System v2 ────────────────────────────────────────────────────
-// Enhanced scoring: Drawdown penalty, Sharpe-like ratio, Win Rate, OI Risk,
+// Enhanced scoring: Drawdown penalty, EPR (Exposure Profit Ratio), Win Rate, OI Risk,
 // Momentum/streak — all blended into a 0–100 composite score.
 // Tier system: S / A / B / C  (D tier removed)
 // Trader Style: Scalper | Swing Trader | Whale | High Risk | Balanced
@@ -14,7 +14,7 @@ export type TraderStyle = 'Scalper' | 'Swing Trader' | 'Whale' | 'High Risk' | '
 export interface TraderScoreBreakdown {
   pnl: number;         // 0–30  (percentile-ranked 30d PnL)
   consistency: number; // 0–20  (7d/30d momentum alignment)
-  sharpe: number;      // 0–20  (Sharpe-like: PnL relative to exposure/drawdown)
+  epr: number;         // 0–20  (Exposure Profit Ratio: PnL relative to exposure/drawdown)
   winRate: number;     // 0–15  (long-term PnL/volume efficiency proxy)
   drawdown: number;    // 0–10  (drawdown control — lower drop = higher score)
   oiRisk: number;      // 0–5   (OI/equity ratio — high OI = lower score)
@@ -106,19 +106,19 @@ export function calculateScores(entries: LeaderboardEntry[]): Map<string, Trader
     }
     consistencyScore = Math.max(0, Math.min(20, consistencyScore));
 
-    // ── 3. Sharpe-like score (0–20) ───────────────────────────
+    // ── 3. EPR — Exposure Profit Ratio (0–20) ─────────────────
     // PnL efficiency relative to OI exposure (or volume as fallback)
-    let sharpeScore = 0;
+    let eprScore = 0;
     const exposure = entry.oi_current > 0 ? entry.oi_current : entry.volume_30d;
     if (exposure > 0 && entry.pnl_30d > 0) {
-      const sharpeProxy = entry.pnl_30d / exposure;
-      if (sharpeProxy >= 0.10)       sharpeScore = 20;
-      else if (sharpeProxy >= 0.05)  sharpeScore = 16;
-      else if (sharpeProxy >= 0.02)  sharpeScore = 12;
-      else if (sharpeProxy >= 0.01)  sharpeScore = 8;
-      else if (sharpeProxy > 0)      sharpeScore = 4;
+      const eprProxy = entry.pnl_30d / exposure;
+      if (eprProxy >= 0.10)       eprScore = 20;
+      else if (eprProxy >= 0.05)  eprScore = 16;
+      else if (eprProxy >= 0.02)  eprScore = 12;
+      else if (eprProxy >= 0.01)  eprScore = 8;
+      else if (eprProxy > 0)      eprScore = 4;
     }
-    sharpeScore = Math.max(0, Math.min(20, sharpeScore));
+    eprScore = Math.max(0, Math.min(20, eprScore));
 
     // ── 4. Win-Rate proxy (0–15) ──────────────────────────────
     // Long-term PnL / volume_all as profit factor proxy
@@ -166,7 +166,7 @@ export function calculateScores(entries: LeaderboardEntry[]): Map<string, Trader
     oiRiskScore = Math.max(0, Math.min(5, oiRiskScore));
 
     // ── Composite ─────────────────────────────────────────────
-    const raw = pnlScore + consistencyScore + sharpeScore + winRateScore + drawdownScore + oiRiskScore;
+    const raw = pnlScore + consistencyScore + eprScore + winRateScore + drawdownScore + oiRiskScore;
     const clampedScore = Math.max(0, Math.min(100, Math.round(raw)));
 
     result.set(entry.account, {
@@ -176,7 +176,7 @@ export function calculateScores(entries: LeaderboardEntry[]): Map<string, Trader
       breakdown: {
         pnl:         Math.round(pnlScore),
         consistency: Math.round(consistencyScore),
-        sharpe:      Math.round(sharpeScore),
+        epr:         Math.round(eprScore),
         winRate:     Math.round(winRateScore),
         drawdown:    Math.round(drawdownScore),
         oiRisk:      Math.round(oiRiskScore),
@@ -211,9 +211,9 @@ export const TIER_COLORS: Record<ScoreTier, { bg: string; text: string; border: 
 // ─── Style metadata ───────────────────────────────────────────────────────────
 
 export const STYLE_META: Record<TraderStyle, { icon: string; color: string; desc: string }> = {
-  'Scalper':      { icon: '⚡', color: 'text-[#f472b6]', desc: 'Çok kısa süreli, küçük karlar peşinde' },
-  'Swing Trader': { icon: '📈', color: 'text-accent',     desc: 'Günlük/haftalık trendleri takip eder' },
-  'Whale':        { icon: '🐋', color: 'text-[#60a5fa]',  desc: 'Büyük hacimli, piyasa yapıcı işlemler' },
-  'High Risk':    { icon: '🔥', color: 'text-danger',     desc: 'Stop-loss kullanmayan / yüksek volatilite' },
-  'Balanced':     { icon: '⚖️', color: 'text-text2',      desc: 'Dengeli risk/getiri profili' },
+  'Scalper':      { icon: '⚡', color: 'text-[#f472b6]', desc: 'Very short-term trades chasing small profits' },
+  'Swing Trader': { icon: '📈', color: 'text-accent',     desc: 'Follows daily/weekly trends' },
+  'Whale':        { icon: '🐋', color: 'text-[#60a5fa]',  desc: 'High-volume, market-moving positions' },
+  'High Risk':    { icon: '🔥', color: 'text-danger',     desc: 'No stop-loss / high volatility' },
+  'Balanced':     { icon: '⚖️', color: 'text-text2',      desc: 'Balanced risk/reward profile' },
 };
