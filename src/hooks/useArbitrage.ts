@@ -15,7 +15,7 @@ export interface ArbitrageOpportunity {
   symbol: string;
   long: ExchangeRate;
   short: ExchangeRate;
-  spreadRate: number;    // 8h spread
+  spreadRate: number;    // 1h spread (absolute difference of 1h funding rates)
   spreadAPR: number;     // annualized %
   longAction: string;    // "LONG on Hyperliquid"
   shortAction: string;   // "SHORT on Pacifica"
@@ -37,18 +37,24 @@ async function fetchHyperliquid(): Promise<ExchangeRate[]> {
       body: JSON.stringify({ type: 'metaAndAssetCtxs' }),
     });
     const data = await res.json();
-    // HL returns: [ [meta_array], [ctx_array] ] where each is array of one element
+    // HL returns: [ metaObj, ctxArray ]
+    // metaObj = { universe: [ { name: 'BTC', ... }, ... ] }
+    // ctxArray = [ { funding: '0.00001', markPx: '...', openInterest: '...' }, ... ]
     if (!Array.isArray(data) || data.length < 2) return [];
-    const metaArr = Array.isArray(data[0]) ? data[0] : [data[0]];
-    const ctxArr = Array.isArray(data[1]) ? data[1] : [data[1]];
-    const universe = metaArr[0]?.universe ?? [];
-    const ctxs = ctxArr[0] ?? [];
-    return universe.map((u: { name: string }, i: number) => {
-      const ctx = Array.isArray(ctxs) ? (ctxs[i] ?? {}) : {};
+
+    // data[0] is always a single object with a universe key (NOT an array of arrays)
+    const meta = Array.isArray(data[0]) ? data[0][0] : data[0];
+    const universe: { name: string }[] = meta?.universe ?? [];
+
+    // data[1] is the flat ctx array — one entry per market, same index as universe
+    const ctxs: Record<string, unknown>[] = Array.isArray(data[1]) ? data[1] : [];
+
+    return universe.map((u, i) => {
+      const ctx = ctxs[i] ?? {};
       return {
         exchange: 'Hyperliquid',
         symbol: normSym(u.name),
-        fundingRate: Number(ctx.funding ?? 0),
+        fundingRate: Number(ctx.funding ?? 0),   // 1h rate
         markPrice: Number(ctx.markPx ?? 0),
         openInterest: Number(ctx.openInterest ?? 0) * Number(ctx.markPx ?? 0),
         color: '#00C2FF',
@@ -95,28 +101,6 @@ async function fetchDydx(): Promise<ExchangeRate[]> {
   } catch { return []; }
 }
 
-async function fetchLighter(): Promise<ExchangeRate[]> {
-  try {
-    // Use funding-rates endpoint: GET /api/v1/funding-rates
-    const res = await fetch('/api/lighter?path=funding-rates');
-    const data = await res.json();
-    // Response: array of { market_id, symbol, funding_rate, mark_price, ... }
-    const rates = data?.funding_rates ?? data?.data ?? data ?? [];
-    if (!Array.isArray(rates)) return [];
-    return rates
-      .map((r: { symbol?: string; market?: string; funding_rate?: string; mark_price?: string; open_interest?: string }) => ({
-        exchange: 'Lighter',
-        symbol: normSym(r.symbol ?? r.market ?? ''),
-        fundingRate: Number(r.funding_rate ?? 0),
-        markPrice: Number(r.mark_price ?? 0),
-        openInterest: Number(r.open_interest ?? 0),
-        color: '#10B981',
-        logo: '🔮',
-      } as ExchangeRate))
-      .filter((r: ExchangeRate) => r.symbol && r.markPrice > 0);
-  } catch { return []; }
-}
-
 export function useArbitrage(pacificaRates: Record<string, number>, pacificaPrices: Record<string, number>) {
   const [opportunities, setOpportunities] = useState<ArbitrageOpportunity[]>([]);
   const [allRates, setAllRates] = useState<ExchangeRate[]>([]);
@@ -126,11 +110,12 @@ export function useArbitrage(pacificaRates: Record<string, number>, pacificaPric
   const notifiedRef = useRef<Set<string>>(new Set());
 
   const compute = useCallback(async () => {
-    const [hl, aster, dydx, lighter] = await Promise.allSettled([
+    // Note: Lighter is excluded — its funding-rate API requires authentication (API key + token).
+    // Only Hyperliquid and dYdX are supported for public, unauthenticated arbitrage scanning.
+    const [hl, aster, dydx] = await Promise.allSettled([
       fetchHyperliquid(),
       fetchAster(),
       fetchDydx(),
-      fetchLighter(),
     ]);
 
     const newErrors: Record<string, string> = {};
@@ -142,8 +127,6 @@ export function useArbitrage(pacificaRates: Record<string, number>, pacificaPric
     else newErrors['Aster'] = 'Fetch failed';
     if (dydx.status === 'fulfilled') exRates.push(...dydx.value);
     else newErrors['dYdX'] = 'Fetch failed';
-    if (lighter.status === 'fulfilled') exRates.push(...lighter.value);
-    else newErrors['Lighter'] = 'Fetch failed';
 
     setErrors(newErrors);
     setAllRates(exRates);
@@ -179,8 +162,8 @@ export function useArbitrage(pacificaRates: Record<string, number>, pacificaPric
           const a = rates[i], b = rates[j];
           if (a.exchange === b.exchange) continue;
           const spread = Math.abs(a.fundingRate - b.fundingRate);
-          // 8h * 3 * 365 * 100
-          const apr = spread * 3 * 365 * 100;
+          // Funding rates from HL and dYdX are 1h rates → annualize: × 24h × 365days × 100
+          const apr = spread * 24 * 365 * 100;
           if (apr < 5) continue; // min 5% APR threshold
 
           const longSide = a.fundingRate < b.fundingRate ? a : b;  // lower rate = receiver on long

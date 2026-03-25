@@ -33,7 +33,7 @@ const DEFAULT_CONFIG: BotConfig = {
   discordActive: false,
   soundEnabled: true,
   browserNotif: true,
-  exchanges: ['Pacifica', 'Hyperliquid', 'Aster', 'dYdX', 'Lighter'],
+  exchanges: ['Pacifica', 'Hyperliquid', 'Aster', 'dYdX'],
   active: false,
 };
 
@@ -233,7 +233,7 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
   const highCount = opportunities.filter(o => o.tier === 'high').length;
   const medCount = opportunities.filter(o => o.tier === 'medium').length;
 
-  const exchanges = ['all', 'Pacifica', 'Hyperliquid', 'Aster', 'dYdX', 'Lighter'];
+  const exchanges = ['all', 'Pacifica', 'Hyperliquid', 'Aster', 'dYdX'];
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden bg-bg">
@@ -506,7 +506,7 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                     <div>
                       <label className="text-[10px] text-text3 uppercase font-semibold block mb-1.5">Monitored Exchanges</label>
                       <div className="flex flex-wrap gap-2">
-                        {['Pacifica', 'Hyperliquid', 'Aster', 'dYdX', 'Lighter'].map(ex => (
+                        {['Pacifica', 'Hyperliquid', 'Aster', 'dYdX'].map(ex => (
                           <button key={ex}
                             onClick={() => setConfig(c => ({
                               ...c,

@@ -42,7 +42,12 @@ interface BotConfig {
 
 const SIGNAL_THRESHOLD = { STRONG: 15, GOOD: 8, LOW: 3 };
 
-function SignalBadge({ signal }: { signal: ArbOpportunity['signal'] }) {
+// Normalize symbol to base asset: strip -USD, -PERP, USDT suffixes
+function normalizeSym(s: string): string {
+  return s.replace(/-USD$/i, '').replace(/-PERP$/i, '').replace(/USDT$/i, '').replace(/USD$/i, '').toUpperCase().trim();
+}
+
+
   const styles = {
     STRONG: 'bg-success/15 text-success border border-success/30',
     GOOD: 'bg-accent/15 text-accent border border-accent/30',
@@ -155,10 +160,14 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
   // Build opportunities
   const opportunities: ArbOpportunity[] = markets.map(m => {
     const sym = m.symbol;
+    const normSym = normalizeSym(sym); // e.g. 'BTC-USD' -> 'BTC'
     const pacificaTk = tickers[sym];
     const pacificaFR = pacificaTk ? Number(pacificaTk.funding || 0) : 0; // per hour
-    const hlFR = hlData[sym] ? hlData[sym].funding : null;
-    const dydxFR = dydxData[sym] ? dydxData[sym].funding : null;
+    // Use normalized symbol for cross-exchange lookup
+    const hlEntry = hlData[normSym] ?? hlData[sym];
+    const dydxEntry = dydxData[normSym] ?? dydxData[sym];
+    const hlFR = hlEntry ? hlEntry.funding : null;
+    const dydxFR = dydxEntry ? dydxEntry.funding : null;
     const pacificaMarkPrice = pacificaTk ? Number(pacificaTk.mark || 0) : 0;
 
     // Spread = |FR_A - FR_B| per hour
@@ -276,7 +285,7 @@ export function Arbitrage({ tickers, markets }: ArbitrageProps) {
             { label: 'Opportunities Found', value: String(opportunities.length), color: 'text-text1', sub: 'above min APR' },
             { label: 'Strong Signals', value: String(strongCount), color: 'text-success', sub: 'APR > ' + SIGNAL_THRESHOLD.STRONG + '%' },
             { label: 'Good Signals', value: String(goodCount), color: 'text-accent', sub: 'APR > ' + SIGNAL_THRESHOLD.GOOD + '%' },
-            { label: 'Exchanges', value: '3', color: 'text-text1', sub: 'Pacifica · HL · dYdX' },
+            { label: 'Exchanges', value: '2', color: 'text-text1', sub: 'Pacifica vs HL · vs dYdX' },
             { label: 'Last Update', value: lastUpdate ? lastUpdate.toLocaleTimeString() : '—', color: 'text-text3', sub: loading ? 'Fetching...' : 'Auto 30s' },
           ].map(s => (
             <div key={s.label} className="bg-surface rounded-xl border border-border1 shadow-card p-4">
@@ -459,7 +468,8 @@ export function ArbitrageBot({ tickers, markets }: ArbitrageProps) {
     const opps: Array<{ symbol: string; apr: number; strategy: string }> = [];
     markets.forEach(m => {
       const pacificaFR = Number(tickers[m.symbol]?.funding || 0);
-      const hlFR = hlData[m.symbol]?.funding ?? null;
+      const normSym = normalizeSym(m.symbol);
+      const hlFR = (hlData[normSym] ?? hlData[m.symbol])?.funding ?? null;
       if (hlFR === null) return;
       const spread = Math.abs(pacificaFR - hlFR);
       const apr = spread * 24 * 365 * 100;
