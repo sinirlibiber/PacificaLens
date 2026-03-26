@@ -179,7 +179,7 @@ export async function updateLeverage(
     const timestamp = Date.now();
     // Pacifica leverage endpoint: data must NOT contain builder_code
     // leverage must be a string, not a number
-    const data: Record<string, unknown> = { symbol, leverage: String(leverage) };
+    const data: Record<string, unknown> = { symbol, leverage };
     const header = { timestamp, expiry_window: 60000, type: 'update_leverage' };
     const combined = { ...header, data };
     const sorted = sortJsonKeys(combined);
@@ -195,7 +195,7 @@ export async function updateLeverage(
       timestamp,
       expiry_window: 60000,
       symbol,
-      leverage: String(leverage),
+      leverage,
     };
 
     const res = await fetch('https://api.pacifica.fi/api/v1/account/leverage', {
