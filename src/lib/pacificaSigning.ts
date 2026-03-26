@@ -25,9 +25,11 @@ export function buildSigningPayload(
 ): { payload: string; timestamp: number } {
   const timestamp = Date.now();
   const header = { timestamp, expiry_window: 5000, type };
-  // builder_code goes inside data object so it's included in the signature
-  const dataWithBuilder = { ...data, builder_code: BUILDER_CODE };
-  const combined = { ...header, data: dataWithBuilder };
+  // Per Pacifica docs: data must contain ONLY operation fields — no builder_code
+  // builder_code only goes in the final request body (top-level), NOT in the signed payload
+  const dataClean = { ...data };
+  delete dataClean['builder_code']; // strip if accidentally included
+  const combined = { ...header, data: dataClean };
   const sorted = sortJsonKeys(combined);
   return { payload: JSON.stringify(sorted), timestamp };
 }

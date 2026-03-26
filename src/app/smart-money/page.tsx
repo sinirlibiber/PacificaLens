@@ -6,7 +6,7 @@ import { useState } from 'react';
 interface ToastState { message: string; type: 'success' | 'error' | 'info'; }
 
 function CopyTradingPage() {
-  const { markets, tickers, wallet, accountInfo, ensureBuilderApproved } = useShell();
+  const { markets, tickers, wallet, accountInfo, ensureBuilderApproved, walletSignFn } = useShell();
   const [toast, setToast] = useState<ToastState | null>(null);
 
   function handleToast(message: string, type: 'success' | 'error' | 'info') {
@@ -23,6 +23,7 @@ function CopyTradingPage() {
         accountInfo={accountInfo}
         onToast={handleToast}
         ensureBuilderApproved={ensureBuilderApproved}
+        walletSignFn={walletSignFn}
       />
       {toast && (
         <div className={`fixed bottom-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-card-md text-[12px] font-semibold border max-w-sm ${

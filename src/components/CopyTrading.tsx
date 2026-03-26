@@ -15,7 +15,6 @@ import { CalcResult } from './Calculator';
 import { submitMarketOrder, submitLimitOrder, toBase58 } from '@/lib/pacificaSigning';
 import * as nacl from 'tweetnacl';
 import { useOrderLog } from '@/hooks/useOrderLog';
-import { usePrivy, useSolanaWallets } from '@privy-io/react-auth';
 import { useTraderScore } from '@/hooks/useTraderScore';
 import { ScoreBadge, ScoreCard } from '@/components/ScoreBadge';
 import { STYLE_META } from '@/lib/traderScore';
@@ -792,11 +791,10 @@ interface CopyTradingProps {
   accountInfo: AccountInfo | null;
   onToast: (msg: string, type: 'success' | 'error' | 'info') => void;
   ensureBuilderApproved: () => Promise<boolean>;
+  walletSignFn: (msgBytes: Uint8Array) => Promise<string>;
 }
 
-export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, ensureBuilderApproved }: CopyTradingProps) {
-  const { signMessage } = usePrivy();
-  const { wallets: solanaWallets } = useSolanaWallets();
+export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, ensureBuilderApproved, walletSignFn }: CopyTradingProps) {
 
   const { getScore, loading: scoresLoading, refreshScores, computedAt: scoresComputedAt } = useTraderScore();
 
@@ -906,35 +904,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
 
   // Position mirroring
 
-  // ── Build signer ──────────────────────────────────────────────────────────
-
-  const buildSignFn = useCallback(() => {
-    return async (msgBytes: Uint8Array): Promise<string> => {
-      // Try to find matching wallet by address, then any available Solana wallet
-      const solanaWallet =
-        solanaWallets.find(w => w.address === wallet) ||
-        solanaWallets.find(w => w.address) ||
-        solanaWallets[0];
-      if (solanaWallet) {
-        try {
-          const sigResult = await solanaWallet.signMessage(msgBytes);
-          if (typeof sigResult === 'string') return sigResult;
-          return toBase58(sigResult as unknown as Uint8Array);
-        } catch (e) {
-          // If Solana wallet fails, fall through to signMessage
-          console.warn('solanaWallet.signMessage failed, trying signMessage fallback:', e);
-        }
-      }
-      // Fallback: usePrivy signMessage — encodes bytes as base64 string
-      if (signMessage) {
-        // Privy's signMessage accepts a string; encode bytes as latin1 to preserve all byte values
-        const msgStr = new TextDecoder('latin1').decode(msgBytes);
-        const result = await signMessage(msgStr);
-        return typeof result === 'string' ? result : toBase58(result as unknown as Uint8Array);
-      }
-      throw new Error('No Solana wallet found. Connect Phantom or Solflare and try again.');
-    };
-  }, [solanaWallets, wallet, signMessage]);
+  // walletSignFn is provided by AppShell — uses Privy's wallet to sign
 
 
   // ── Open trader drawer ───────────────────────────────────────────────────
@@ -1014,7 +984,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     onToast(`Placing ${isLong ? 'LONG' : 'SHORT'} ${trade.symbol} ${leverage}×${slTpStr ? ' · ' + slTpStr : ''}...`, 'info');
 
     try {
-      const signFn = buildSignFn();
+      const signFn = walletSignFn;
       let result;
 
       if (orderType === 'market') {

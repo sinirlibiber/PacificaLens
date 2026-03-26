@@ -160,6 +160,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.push(TAB_ROUTE[tab]);
   }
 
+  // Shared wallet sign function — used by CopyTrading for "Copy this position"
+  async function walletSignFn(msgBytes: Uint8Array): Promise<string> {
+    const solanaWallet =
+      solanaWallets.find(w => w.address === wallet) ||
+      solanaWallets.find(w => w.address) ||
+      solanaWallets[0];
+    if (solanaWallet) {
+      try {
+        const sigResult = await solanaWallet.signMessage(msgBytes);
+        if (typeof sigResult === 'string') return sigResult;
+        return toBase58(sigResult as unknown as Uint8Array);
+      } catch { /* fall through */ }
+    }
+    if (signMessage) {
+      const msgStr = new TextDecoder().decode(msgBytes);
+      const result = await signMessage(msgStr);
+      return typeof result === 'string' ? result : toBase58(result as unknown as Uint8Array);
+    }
+    throw new Error('No Solana wallet found. Connect Phantom or Solflare.');
+  }
+
   async function handleExecute(r: CalcResult, symbol: string) {
     if (!wallet) { setToast({ message: 'Connect your wallet first', type: 'error' }); return; }
     const approved = await ensureBuilderApproved();
@@ -251,7 +272,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Pass shared state via context-like props — children use these via context
   return (
-    <AppShellContext.Provider value={{ markets, tickers, fundingRates, positions, accountInfo, accountSize, setAccountSize, wallet, error, handleExecute, loading, ensureBuilderApproved, builderApproved }}>
+    <AppShellContext.Provider value={{ markets, tickers, fundingRates, positions, accountInfo, accountSize, setAccountSize, wallet, error, handleExecute, loading, ensureBuilderApproved, builderApproved, walletSignFn }}>
       <div className="flex flex-col h-screen overflow-hidden bg-bg">
         <Header tab={currentTab} onTabChange={handleTabChange} accountInfo={accountInfo} />
         {!authenticated ? (
@@ -293,12 +314,14 @@ interface ShellCtx {
   loading: boolean;
   ensureBuilderApproved: () => Promise<boolean>;
   builderApproved: boolean;
+  walletSignFn: (msgBytes: Uint8Array) => Promise<string>;
 }
 
 export const AppShellContext = createContext<ShellCtx>({
   markets: [], tickers: {}, fundingRates: {}, positions: [], accountInfo: null,
   accountSize: 0, setAccountSize: () => {}, wallet: null, error: null,
   handleExecute: () => {}, loading: false, ensureBuilderApproved: async () => false, builderApproved: false,
+  walletSignFn: async () => { throw new Error('No wallet'); },
 });
 
 export function useShell() { return useContext(AppShellContext); }
