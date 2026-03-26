@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── LIGHT THEME (default) ── */
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #f1f5f9;
+  --border1: #e2e8f0;
+  --border2: #cbd5e1;
+  --accent: #00b4d8;
+  --accent2: #0096c7;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warn: #f59e0b;
+  --text1: #0f172a;
+  --text2: #475569;
+  --text3: #94a3b8;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* ── DARK THEME ── */
+html.dark {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #1c2128;
+  --border1: #30363d;
+  --border2: #3d444d;
+  --accent: #00b4d8;
+  --accent2: #0096c7;
+  --success: #3fb950;
+  --danger: #f85149;
+  --warn: #d29922;
+  --text1: #e6edf3;
+  --text2: #8b949e;
+  --text3: #656d76;
+  --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text1);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* Remove number input arrows */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type='number'] { -moz-appearance: textfield; }
+
+/* Range input */
+input[type='range'] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 3px;
+  background: var(--border2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+/* Smooth transitions — only for theme-relevant props, NOT layout */
+body, .bg-bg, .bg-surface, .bg-surface2,
+.border-border1, .border-border2,
+.text-text1, .text-text2, .text-text3 {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+/* Never animate these */
+iframe, img, svg, canvas { transition: none !important; }
+
+/* Tailwind dark mode overrides — ensure text is readable */
+html.dark .text-text1 { color: var(--text1) !important; }
+html.dark .text-text2 { color: var(--text2) !important; }
+html.dark .text-text3 { color: var(--text3) !important; }
+html.dark .bg-bg { background-color: var(--bg) !important; }
+html.dark .bg-surface { background-color: var(--surface) !important; }
+html.dark .bg-surface2 { background-color: var(--surface2) !important; }
+html.dark .border-border1 { border-color: var(--border1) !important; }
+html.dark .border-border2 { border-color: var(--border2) !important; }
+
+/* Input dark mode */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: var(--surface2);
+  color: var(--text1);
+  border-color: var(--border1);
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder { color: var(--text3); }
+html.dark input:focus,
+html.dark select:focus { border-color: var(--accent); }
