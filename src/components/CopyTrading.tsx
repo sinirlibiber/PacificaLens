@@ -283,6 +283,7 @@ function CopyTradePanel({
         }
         const side    = tp.side as 'bid'|'ask';
         const isLong  = side === 'bid';
+        const mkt     = markets.find(m => m.symbol === tp.symbol);
         const slPx    = cfg.slEnabled ? (isLong ? px*(1-cfg.slPct/100) : px*(1+cfg.slPct/100)) : null;
         const tpPx    = cfg.tpEnabled ? (isLong ? px*(1+cfg.tpPct/100) : px*(1-cfg.tpPct/100)) : null;
 
