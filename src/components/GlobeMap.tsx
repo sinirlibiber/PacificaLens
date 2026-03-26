@@ -105,7 +105,9 @@ export default function GlobeMap() {
   const prevMouse   = useRef({ x: 0, y: 0 });
   const pauseTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pausedRef   = useRef(false);
-  const zoomRef     = useRef(2.6);
+  const zoomRef     = useRef(
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 3.8 : 2.6
+  );
   const tiltRef     = useRef(0);
 
   const [pins,      setPins    ] = useState<Pin[]>([]);
@@ -144,12 +146,13 @@ export default function GlobeMap() {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(W, H);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, window.innerWidth < 768 ? 1.5 : 2));
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
     const scene  = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 1000);
+    const isMobile = W < 768;
+    const camera = new THREE.PerspectiveCamera(isMobile ? 38 : 42, W / H, 0.1, 1000);
     camera.position.z = zoomRef.current;
     cameraRef.current = camera;
 
