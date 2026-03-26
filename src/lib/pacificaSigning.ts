@@ -168,6 +168,7 @@ export function toBase58(bytes: Uint8Array): string {
 type SignFn = (msg: Uint8Array) => Promise<Uint8Array | string>;
 
 // ── Update Leverage (must be called before placing an order to set leverage per symbol) ─────────
+// NOTE: leverage endpoint does NOT use builder_code — it uses its own signing format
 export async function updateLeverage(
   account: string,
   symbol: string,
@@ -175,12 +176,28 @@ export async function updateLeverage(
   signMessage: SignFn
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const data: Record<string, unknown> = { symbol, leverage };
-    const { payload, timestamp } = buildSigningPayload('update_leverage', data);
+    const timestamp = Date.now();
+    // Pacifica leverage endpoint: data must NOT contain builder_code
+    // leverage must be a string, not a number
+    const data: Record<string, unknown> = { symbol, leverage: String(leverage) };
+    const header = { timestamp, expiry_window: 60000, type: 'update_leverage' };
+    const combined = { ...header, data };
+    const sorted = sortJsonKeys(combined);
+    const payload = JSON.stringify(sorted);
+
     const msgBytes = new TextEncoder().encode(payload);
     const sigResult = await signMessage(msgBytes);
     const sig = typeof sigResult === 'string' ? sigResult : toBase58(sigResult as Uint8Array);
-    const body = buildRequestBody(account, sig, timestamp, data);
+
+    const body: Record<string, unknown> = {
+      account,
+      signature: sig,
+      timestamp,
+      expiry_window: 60000,
+      symbol,
+      leverage: String(leverage),
+    };
+
     const res = await fetch('https://api.pacifica.fi/api/v1/account/leverage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
