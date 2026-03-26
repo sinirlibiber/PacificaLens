@@ -182,7 +182,11 @@ export async function submitLimitOrder(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const json = await res.json();
+    const rawText = await res.text();
+    console.log('[submitLimitOrder] status:', res.status, '| body:', body);
+    console.log('[submitLimitOrder] response:', rawText);
+    let json: any;
+    try { json = JSON.parse(rawText); } catch { return { success: false, error: rawText }; }
     if (json.success) return { success: true, orderId: json.data?.id };
     return { success: false, error: json.error || JSON.stringify(json) };
   } catch (e) {
@@ -216,7 +220,11 @@ export async function submitMarketOrder(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const json = await res.json();
+    const rawText = await res.text();
+    console.log('[submitMarketOrder] status:', res.status, '| body:', body);
+    console.log('[submitMarketOrder] response:', rawText);
+    let json: any;
+    try { json = JSON.parse(rawText); } catch { return { success: false, error: rawText }; }
     if (json.success) return { success: true, orderId: json.data?.id };
     return { success: false, error: json.error || JSON.stringify(json) };
   } catch (e) {
