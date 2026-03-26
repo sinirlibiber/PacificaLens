@@ -10,7 +10,7 @@ import { Header, getSolanaAddress } from '@/components/Header';
 
 import { Toast } from '@/components/Toast';
 import { getMarkPrice } from '@/lib/utils';
-import { submitLimitOrder, submitMarketOrder, checkBuilderApproval, approveBuilderCode, toBase58 } from '@/lib/pacificaSigning';
+import { submitLimitOrder, submitMarketOrder, updateLeverage, checkBuilderApproval, approveBuilderCode, toBase58, roundToTick } from '@/lib/pacificaSigning';
 import { CalcResult } from '@/components/Calculator';
 import { useOrderLog } from '@/hooks/useOrderLog';
 
@@ -221,6 +221,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ? (markPrice > 0 ? String(markPrice) : '0')
         : (r.entryPrice > 0 ? String(r.entryPrice) : (markPrice > 0 ? String(markPrice) : '0'));
       const orderSide = r.side === 'long' ? 'bid' : 'ask';
+
+      // Set leverage for this symbol before placing the order
+      if (r.leverage && r.leverage > 0) {
+        await updateLeverage(wallet, symbol, r.leverage, privySign);
+      }
+
       const logId = addEntry({
         symbol, side: orderSide,
         amount: orderAmount, price: orderPrice,
@@ -234,17 +240,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         result = await submitMarketOrder(wallet, {
           symbol, amount: orderAmount, side: orderSide,
           reduce_only: false,
-          take_profit: r.tp1 > 0 ? { stop_price: String(r.tp1) } : undefined,
-          // Bug 4 fix: send stop_loss when set
-          stop_loss: r.stopLoss > 0 ? { stop_price: String(r.stopLoss) } : undefined,
+          take_profit: r.tp1 > 0 ? { stop_price: roundToTick(r.tp1, market?.tick_size || '0.01') } : undefined,
+          stop_loss: r.stopLoss > 0 ? { stop_price: roundToTick(r.stopLoss, market?.tick_size || '0.01') } : undefined,
         }, privySign);
       } else {
         result = await submitLimitOrder(wallet, {
           symbol, price: orderPrice, amount: orderAmount, side: orderSide,
           tif: 'GTC', reduce_only: false,
-          take_profit: r.tp1 > 0 ? { stop_price: String(r.tp1) } : undefined,
-          // Bug 4 fix: send stop_loss when set
-          stop_loss: r.stopLoss > 0 ? { stop_price: String(r.stopLoss) } : undefined,
+          take_profit: r.tp1 > 0 ? { stop_price: roundToTick(r.tp1, market?.tick_size || '0.01') } : undefined,
+          stop_loss: r.stopLoss > 0 ? { stop_price: roundToTick(r.stopLoss, market?.tick_size || '0.01') } : undefined,
         }, privySign);
       }
       if (result.success) {

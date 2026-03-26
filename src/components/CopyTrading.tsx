@@ -12,7 +12,7 @@ import { CoinLogo } from './CoinLogo';
 import { fmt, fmtShortAddr, fmtPrice, getMarkPrice } from '@/lib/utils';
 import { Market, Ticker, AccountInfo, getAccountInfo, getPositions, getEquityHistory, getTradeHistory, getPortfolioStats, getTradesHistory, getOpenOrders, getOrderHistory, getFundingHistory, PortfolioStats } from '@/lib/pacifica';
 import { CalcResult } from './Calculator';
-import { submitMarketOrder, submitLimitOrder, toBase58 } from '@/lib/pacificaSigning';
+import { submitMarketOrder, submitLimitOrder, updateLeverage, toBase58, roundToTick } from '@/lib/pacificaSigning';
 import * as nacl from 'tweetnacl';
 import { useOrderLog } from '@/hooks/useOrderLog';
 import { useTraderScore } from '@/hooks/useTraderScore';
@@ -291,8 +291,8 @@ function CopyTradePanel({
           const data: Record<string,unknown> = {
             symbol: tp.symbol, amount: contracts, side, reduce_only: false,
             slippage_percent: '1', client_order_id: crypto.randomUUID(),
-            ...(slPx ? { stop_loss:   { stop_price: slPx.toFixed(4) } } : {}),
-            ...(tpPx ? { take_profit: { stop_price: tpPx.toFixed(4) } } : {}),
+            ...(slPx ? { stop_loss:   { stop_price: roundToTick(slPx, mkt?.tick_size || '0.01') } } : {}),
+            ...(tpPx ? { take_profit: { stop_price: roundToTick(tpPx, mkt?.tick_size || '0.01') } } : {}),
           };
           const { payload, timestamp } = buildSigningPayload('create_market_order', data);
           const sig  = await agentSign(cfg.agentPrivateKey, new TextEncoder().encode(payload));
@@ -1014,6 +1014,16 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     try {
       onToast('Waiting for wallet signature...', 'info');
       const signFn = walletSignFn;
+
+      // Set leverage for this symbol before placing the order
+      if (leverage && leverage > 0) {
+        const levResult = await updateLeverage(wallet, trade.symbol, leverage, signFn);
+        if (!levResult.success) {
+          onToast(`Leverage update failed: ${levResult.error}`, 'error');
+          throw new Error(levResult.error);
+        }
+      }
+
       let result;
 
       if (orderType === 'market') {
@@ -1023,8 +1033,8 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
           side: isLong ? 'bid' : 'ask',
           reduce_only: false,
           slippage_percent: '1',
-          ...(slPrice ? { stop_loss: { stop_price: slPrice.toFixed(4) } } : {}),
-          ...(tpPrice ? { take_profit: { stop_price: tpPrice.toFixed(4) } } : {}),
+          ...(slPrice ? { stop_loss: { stop_price: roundToTick(slPrice, market?.tick_size || '0.01') } } : {}),
+          ...(tpPrice ? { take_profit: { stop_price: roundToTick(tpPrice, market?.tick_size || '0.01') } } : {}),
         }, signFn);
       } else {
         result = await submitLimitOrder(wallet, {
@@ -1034,8 +1044,8 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
           side: isLong ? 'bid' : 'ask',
           tif: 'GTC',
           reduce_only: false,
-          ...(slPrice ? { stop_loss: { stop_price: slPrice.toFixed(4) } } : {}),
-          ...(tpPrice ? { take_profit: { stop_price: tpPrice.toFixed(4) } } : {}),
+          ...(slPrice ? { stop_loss: { stop_price: roundToTick(slPrice, market?.tick_size || '0.01') } } : {}),
+          ...(tpPrice ? { take_profit: { stop_price: roundToTick(tpPrice, market?.tick_size || '0.01') } } : {}),
         }, signFn);
       }
 

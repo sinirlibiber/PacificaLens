@@ -3,6 +3,15 @@
 
 const BUILDER_CODE = 'PACIFICALENS';
 
+// Round price to nearest tick size multiple
+export function roundToTick(price: number, tickSize: string | number): string {
+  const tick = Number(tickSize);
+  if (!tick || tick <= 0) return String(price);
+  const decimals = Math.max(0, -Math.floor(Math.log10(tick)));
+  const rounded = Math.round(price / tick) * tick;
+  return rounded.toFixed(decimals);
+}
+
 // Recursively sort JSON keys alphabetically
 function sortJsonKeys(value: unknown): unknown {
   if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
@@ -157,6 +166,35 @@ export function toBase58(bytes: Uint8Array): string {
 }
 
 type SignFn = (msg: Uint8Array) => Promise<Uint8Array | string>;
+
+// ── Update Leverage (must be called before placing an order to set leverage per symbol) ─────────
+export async function updateLeverage(
+  account: string,
+  symbol: string,
+  leverage: number,
+  signMessage: SignFn
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const data: Record<string, unknown> = { symbol, leverage };
+    const { payload, timestamp } = buildSigningPayload('update_leverage', data);
+    const msgBytes = new TextEncoder().encode(payload);
+    const sigResult = await signMessage(msgBytes);
+    const sig = typeof sigResult === 'string' ? sigResult : toBase58(sigResult as Uint8Array);
+    const body = buildRequestBody(account, sig, timestamp, data);
+    const res = await fetch('https://api.pacifica.fi/api/v1/account/leverage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const rawText = await res.text();
+    let json: any;
+    try { json = JSON.parse(rawText); } catch { return { success: false, error: rawText }; }
+    if (json.success) return { success: true };
+    return { success: false, error: json.error || JSON.stringify(json) };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
 
 // ── Limit Order ───────────────────────────────────────────────────────────────
 export async function submitLimitOrder(
