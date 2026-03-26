@@ -54,9 +54,19 @@ function saveCT(addr: string, cfg: CopyTradeConfig) {
   try { const a = loadCT(); a[addr] = cfg; localStorage.setItem(CT_STORAGE, JSON.stringify(a)); } catch { /**/ }
 }
 
+// ─── Base58 validation ────────────────────────────────────────────────────────
+
+const B58_CHARSET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const B58_RE = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/;
+
+function isValidBase58(s: string, expectedLen: number, tolerance = 5): boolean {
+  if (!s || !B58_RE.test(s)) return false;
+  return Math.abs(s.length - expectedLen) <= tolerance;
+}
+
 // ─── Ed25519 helpers ──────────────────────────────────────────────────────────
 
-const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const B58 = B58_CHARSET;
 function fromB58(s: string): Uint8Array {
   const bytes = [0];
   for (const c of s) {
@@ -294,7 +304,9 @@ function CopyTradePanel({
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [cfg.active, cfg.agentPrivateKey, cfg.agentPublicKey, myAccount, poll]);
 
-  const canStart = !!cfg.agentPrivateKey && !!cfg.agentPublicKey && !!myAccount;
+  const pkValid  = isValidBase58(cfg.agentPrivateKey, 88);
+  const pubValid = isValidBase58(cfg.agentPublicKey, 44);
+  const canStart = pkValid && pubValid && !!myAccount;
 
   return (
     <div className="border-t border-border1 bg-surface2/30">
@@ -333,11 +345,24 @@ function CopyTradePanel({
           <input type="password" placeholder="Agent Private Key (Base58)"
             value={cfg.agentPrivateKey}
             onChange={e => setCfg(p => ({ ...p, agentPrivateKey: e.target.value.trim() }))}
-            className="w-full bg-surface border border-border1 rounded-xl px-3 py-2 text-[10px] font-mono text-text1 outline-none focus:border-accent/60 placeholder-text3 transition-colors" />
+            className={`w-full bg-surface border rounded-xl px-3 py-2 text-[10px] font-mono text-text1 outline-none focus:border-accent/60 placeholder-text3 transition-colors ${
+              cfg.agentPrivateKey && !pkValid ? 'border-danger/60 bg-danger/5' : 'border-border1'
+            }`} />
+          {cfg.agentPrivateKey && !pkValid && (
+            <p className="text-[9px] text-danger px-1">⚠ Geçersiz Private Key — Base58 formatında ~88 karakter olmalı</p>
+          )}
           <input type="text" placeholder="Agent Public Key (Base58)"
             value={cfg.agentPublicKey}
             onChange={e => setCfg(p => ({ ...p, agentPublicKey: e.target.value.trim() }))}
-            className="w-full bg-surface border border-border1 rounded-xl px-3 py-2 text-[10px] font-mono text-text1 outline-none focus:border-accent/60 placeholder-text3 transition-colors" />
+            className={`w-full bg-surface border rounded-xl px-3 py-2 text-[10px] font-mono text-text1 outline-none focus:border-accent/60 placeholder-text3 transition-colors ${
+              cfg.agentPublicKey && !pubValid ? 'border-danger/60 bg-danger/5' : 'border-border1'
+            }`} />
+          {cfg.agentPublicKey && !pubValid && (
+            <p className="text-[9px] text-danger px-1">⚠ Geçersiz Public Key — Base58 formatında ~44 karakter olmalı</p>
+          )}
+          {cfg.agentPrivateKey && pkValid && cfg.agentPublicKey && pubValid && (
+            <p className="text-[9px] text-success px-1">✓ API Agent Keys geçerli görünüyor</p>
+          )}
         </div>
 
         {/* Leverage mode */}
@@ -427,7 +452,7 @@ function CopyTradePanel({
           }`}>
           {cfg.active
             ? <><div className="w-2 h-2 rounded-full bg-danger animate-pulse" /> Stop Copy Trade</>
-            : <>{canStart ? 'Start Copy Trade' : 'Enter Agent Keys to activate'}</>
+            : <>{canStart ? 'Start Copy Trade' : (cfg.agentPrivateKey || cfg.agentPublicKey) && (!pkValid || !pubValid) ? 'Geçersiz Key formatı' : 'Enter Agent Keys to activate'}</>
           }
         </button>
 
