@@ -22,7 +22,8 @@ import { STYLE_META } from '@/lib/traderScore';
 // ─── CopyTrade types & storage ───────────────────────────────────────────────
 
 const BUILDER_CODE = 'PACIFICALENS';
-const CT_STORAGE   = 'pacifica_copytrade_v2';
+const CT_STORAGE       = 'pacifica_copytrade_v2';
+const CT_KNOWN_STORAGE = 'pacifica_ct_known_v1'; // persist known symbols across page reloads
 
 interface CopyTradeConfig {
   agentPrivateKey: string;
@@ -52,6 +53,31 @@ function loadCT(): Record<string, CopyTradeConfig> {
 }
 function saveCT(addr: string, cfg: CopyTradeConfig) {
   try { const a = loadCT(); a[addr] = cfg; localStorage.setItem(CT_STORAGE, JSON.stringify(a)); } catch { /**/ }
+}
+
+// Persist known symbols so page refresh doesn't cause duplicate entries
+function loadKnown(traderAccount: string): Set<string> {
+  try {
+    const r = typeof window !== 'undefined' ? localStorage.getItem(CT_KNOWN_STORAGE) : null;
+    const all: Record<string, string[]> = r ? JSON.parse(r) : {};
+    return new Set(all[traderAccount] ?? []);
+  } catch { return new Set(); }
+}
+function saveKnown(traderAccount: string, known: Set<string>) {
+  try {
+    const r = typeof window !== 'undefined' ? localStorage.getItem(CT_KNOWN_STORAGE) : null;
+    const all: Record<string, string[]> = r ? JSON.parse(r) : {};
+    all[traderAccount] = Array.from(known);
+    localStorage.setItem(CT_KNOWN_STORAGE, JSON.stringify(all));
+  } catch { /**/ }
+}
+function clearKnown(traderAccount: string) {
+  try {
+    const r = typeof window !== 'undefined' ? localStorage.getItem(CT_KNOWN_STORAGE) : null;
+    const all: Record<string, string[]> = r ? JSON.parse(r) : {};
+    delete all[traderAccount];
+    localStorage.setItem(CT_KNOWN_STORAGE, JSON.stringify(all));
+  } catch { /**/ }
 }
 
 // ─── Base58 validation ────────────────────────────────────────────────────────
@@ -160,8 +186,9 @@ function CopyTradePanel({
   const [lastPoll, setLastPoll] = useState<Date | null>(null);
   const [myPosCount, setMyPosCount] = useState(0);
   const timerRef        = useRef<ReturnType<typeof setInterval> | null>(null);
-  const knownRef        = useRef<Set<string>>(new Set());
-  const firstPollRef    = useRef(true);
+  const knownRef        = useRef<Set<string>>(loadKnown(traderAccount));
+  const amountRef       = useRef<Map<string, number>>(new Map()); // track trader's position sizes for partial close detection
+  const firstPollRef    = useRef(knownRef.current.size === 0); // if we have persisted known symbols, skip first-poll snapshot
 
   const log = (e: Omit<CTLog,'id'|'ts'>) =>
     setLogs(p => [{ id: crypto.randomUUID(), ts: Date.now(), ...e }, ...p].slice(0, 120));
@@ -213,18 +240,31 @@ function CopyTradePanel({
       const myMap = new Map(mPs.map((p: import('@/lib/pacifica').Position) => [p.symbol, p]));
       const trMap = new Map(tPs.map((p: import('@/lib/pacifica').Position) => [p.symbol, p]));
 
-      // First poll – snapshot only
+      // First poll – snapshot only (skip if we loaded persisted known symbols)
       if (firstPollRef.current) {
         firstPollRef.current = false;
-        tPs.forEach((p: import('@/lib/pacifica').Position) => knownRef.current.add(p.symbol));
+        tPs.forEach((p: import('@/lib/pacifica').Position) => {
+          knownRef.current.add(p.symbol);
+          amountRef.current.set(p.symbol, Number(p.amount));
+        });
+        saveKnown(traderAccount, knownRef.current);
         log({ symbol: '—', side: '—', action: 'skipped', msg: `Snapshot: ${tPs.length} open position(s). Watching for new entries...` });
         return;
+      }
+
+      // Update amount tracking for existing known positions
+      for (const tp of tPs as import('@/lib/pacifica').Position[]) {
+        if (knownRef.current.has(tp.symbol)) {
+          amountRef.current.set(tp.symbol, Number(tp.amount));
+        }
       }
 
       // ── New positions trader opened ─────────────────────────────────────────
       for (const tp of tPs as import('@/lib/pacifica').Position[]) {
         if (knownRef.current.has(tp.symbol)) continue;
         knownRef.current.add(tp.symbol);
+        amountRef.current.set(tp.symbol, Number(tp.amount));
+        saveKnown(traderAccount, knownRef.current);
 
         if (myMap.has(tp.symbol))                                        { log({ symbol: tp.symbol, side: tp.side, action: 'skipped', msg: 'Already holding this symbol' }); continue; }
         if (cfg.maxPositions > 0 && mPs.length >= cfg.maxPositions)     { log({ symbol: tp.symbol, side: tp.side, action: 'skipped', msg: `Max positions (${cfg.maxPositions}) reached` }); continue; }
@@ -262,10 +302,12 @@ function CopyTradePanel({
         } catch (e) { log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: String(e) }); }
       }
 
-      // ── Positions trader closed ─────────────────────────────────────────────
+      // ── Positions trader fully closed ───────────────────────────────────────
       for (const sym of Array.from(knownRef.current) as string[]) {
         if (trMap.has(sym)) continue;
         knownRef.current.delete(sym);
+        amountRef.current.delete(sym);
+        saveKnown(traderAccount, knownRef.current);
         const mine = myMap.get(sym);
         if (!mine) continue;
         try {
@@ -287,6 +329,60 @@ function CopyTradePanel({
           }
         } catch (e) { log({ symbol: sym, side: mine.side as string, action: 'error', msg: `Close failed: ${String(e)}` }); }
       }
+
+      // ── Partial close: trader reduced position by ≥30% ─────────────────────
+      for (const sym of Array.from(knownRef.current) as string[]) {
+        const traderPos  = trMap.get(sym);
+        const prevAmount = amountRef.current.get(sym);
+        const mine       = myMap.get(sym);
+        if (!traderPos || !prevAmount || !mine) continue;
+
+        const currentAmount = Number(traderPos.amount);
+        const reductionPct  = (prevAmount - currentAmount) / prevAmount;
+
+        // Only act if trader reduced by ≥30% and we haven't already closed our share
+        if (reductionPct < 0.30) continue;
+
+        // How much of our position to close proportionally
+        const myAmount     = Number(mine.amount);
+        const closeAmount  = myAmount * reductionPct;
+        const mkt          = markets.find(m => m.symbol === sym);
+        const lot          = mkt?.lot_size ? Number(mkt.lot_size) : 0.0001;
+        const dec          = Math.max(0, Math.ceil(-Math.log10(lot)));
+        const minSize      = mkt?.min_order_size ? Number(mkt.min_order_size) : 0;
+
+        if (closeAmount < minSize) {
+          log({ symbol: sym, side: mine.side as string, action: 'skipped', msg: `Partial close skipped — amount too small (${closeAmount.toFixed(dec)})` });
+          amountRef.current.set(sym, currentAmount); // update so we don't re-trigger
+          continue;
+        }
+
+        amountRef.current.set(sym, currentAmount); // update before order to prevent double-trigger
+
+        try {
+          const { buildSigningPayload, buildRequestBody } = await import('@/lib/pacificaSigning');
+          const data: Record<string,unknown> = {
+            symbol: sym,
+            amount: closeAmount.toFixed(dec),
+            side: mine.side === 'bid' ? 'ask' : 'bid',
+            reduce_only: true, slippage_percent: '1',
+            client_order_id: crypto.randomUUID(), builder_code: BUILDER_CODE,
+          };
+          const { payload, timestamp } = buildSigningPayload('create_market_order', data);
+          const sig  = await agentSign(cfg.agentPrivateKey, new TextEncoder().encode(payload));
+          const body = { ...buildRequestBody(myAccount as string, sig, timestamp, data), agent_wallet: cfg.agentPublicKey };
+          const res  = await fetch('https://api.pacifica.fi/api/v1/orders/create_market', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          const json = await res.json();
+          if (json.success) {
+            log({ symbol: sym, side: mine.side as string, action: 'closed',
+              msg: `Partial close: trader reduced ${(reductionPct*100).toFixed(0)}% → closed ${closeAmount.toFixed(dec)} of our position` });
+            onToast(`Copy Trade: ${sym} partially closed (${(reductionPct*100).toFixed(0)}%)`, 'info');
+          } else {
+            log({ symbol: sym, side: mine.side as string, action: 'error', msg: `Partial close failed: ${json.error || JSON.stringify(json)}` });
+          }
+        } catch (e) { log({ symbol: sym, side: mine.side as string, action: 'error', msg: `Partial close error: ${String(e)}` }); }
+      }
+
     } catch (e) {
       log({ symbol: '—', side: '—', action: 'error', msg: `Poll error: ${String(e)}` });
     } finally { setRunning(false); }
@@ -296,13 +392,22 @@ function CopyTradePanel({
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (cfg.active && cfg.agentPrivateKey && cfg.agentPublicKey && myAccount) {
-      firstPollRef.current = true;
-      knownRef.current.clear();
+      // Only reset snapshot if we have no persisted known symbols
+      if (knownRef.current.size === 0) {
+        firstPollRef.current = true;
+      }
+      amountRef.current.clear();
       poll();
-      timerRef.current = setInterval(poll, 15_000);
+      timerRef.current = setInterval(poll, 10_000); // 10s for faster reaction
+    } else if (!cfg.active) {
+      // Clear persisted known when user manually stops, so next start is a fresh snapshot
+      clearKnown(traderAccount);
+      knownRef.current.clear();
+      amountRef.current.clear();
+      firstPollRef.current = true;
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [cfg.active, cfg.agentPrivateKey, cfg.agentPublicKey, myAccount, poll]);
+  }, [cfg.active, cfg.agentPrivateKey, cfg.agentPublicKey, myAccount, poll, traderAccount]);
 
   const pkValid  = isValidBase58(cfg.agentPrivateKey, 88);
   const pubValid = isValidBase58(cfg.agentPublicKey, 44);
@@ -457,11 +562,18 @@ function CopyTradePanel({
         </button>
 
         {/* Running status */}
+        {cfg.active && myPosCount > 0 && (
+          <div className="flex items-center justify-between px-3 py-1.5 bg-warn/5 border border-warn/20 rounded-xl text-[9px]">
+            <span className="flex items-center gap-1.5 text-warn">
+              ⚠ Stopping will NOT close your {myPosCount} open position(s) automatically
+            </span>
+          </div>
+        )}
         {cfg.active && (
           <div className="flex items-center justify-between px-3 py-1.5 bg-success/5 border border-success/20 rounded-xl text-[9px]">
             <span className="flex items-center gap-1.5 text-success">
               <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse inline-block" />
-              Polling every 15s · {myPosCount} open position(s)
+              Polling every 10s · {myPosCount} open position(s)
             </span>
             <span className="text-text3">Keep browser open</span>
           </div>
