@@ -291,7 +291,6 @@ function CopyTradePanel({
           const data: Record<string,unknown> = {
             symbol: tp.symbol, amount: contracts, side, reduce_only: false,
             slippage_percent: '1', client_order_id: crypto.randomUUID(),
-            leverage: String(lev),
             ...(slPx ? { stop_loss:   { stop_price: slPx.toFixed(4) } } : {}),
             ...(tpPx ? { take_profit: { stop_price: tpPx.toFixed(4) } } : {}),
           };
@@ -1024,7 +1023,6 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
           side: isLong ? 'bid' : 'ask',
           reduce_only: false,
           slippage_percent: '1',
-          leverage: String(leverage),
           ...(slPrice ? { stop_loss: { stop_price: slPrice.toFixed(4) } } : {}),
           ...(tpPrice ? { take_profit: { stop_price: tpPrice.toFixed(4) } } : {}),
         }, signFn);
@@ -1036,7 +1034,6 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
           side: isLong ? 'bid' : 'ask',
           tif: 'GTC',
           reduce_only: false,
-          leverage: String(leverage),
           ...(slPrice ? { stop_loss: { stop_price: slPrice.toFixed(4) } } : {}),
           ...(tpPrice ? { take_profit: { stop_price: tpPrice.toFixed(4) } } : {}),
         }, signFn);

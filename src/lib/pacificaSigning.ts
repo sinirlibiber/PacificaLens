@@ -24,7 +24,7 @@ export function buildSigningPayload(
   data: Record<string, unknown>
 ): { payload: string; timestamp: number } {
   const timestamp = Date.now();
-  const header = { timestamp, expiry_window: 5000, type };
+  const header = { timestamp, expiry_window: 60000, type };
   // builder_code MUST be inside data so it is covered by the signature
   // This is required for builder attribution to work on Pacifica
   const dataWithBuilder = { ...data, builder_code: BUILDER_CODE };
@@ -45,7 +45,7 @@ export function buildRequestBody(
     agent_wallet: null,
     signature,
     timestamp,
-    expiry_window: 5000,
+    expiry_window: 60000,
     builder_code: BUILDER_CODE,
     ...data,
   };
@@ -83,7 +83,7 @@ export async function approveBuilderCode(
       builder_code: BUILDER_CODE,
       max_fee_rate: '0.001', // must be >= builder's fee_rate
     };
-    const header = { timestamp, expiry_window: 5000, type: 'approve_builder_code' };
+    const header = { timestamp, expiry_window: 60000, type: 'approve_builder_code' };
     const combined = { ...header, data: dataToSign };
     const sorted = sortJsonKeys(combined);
     const payload = JSON.stringify(sorted);
@@ -97,7 +97,7 @@ export async function approveBuilderCode(
       agent_wallet: null,
       signature: sig,
       timestamp,
-      expiry_window: 5000,
+      expiry_window: 60000,
       builder_code: BUILDER_CODE,
       max_fee_rate: '0.001',
     };
@@ -125,7 +125,6 @@ export interface LimitOrderData {
   side: OrderSide;
   tif: OrderTif;
   reduce_only: boolean;
-  leverage?: string;
   client_order_id?: string;
   take_profit?: { stop_price: string; limit_price?: string };
   stop_loss?: { stop_price: string; limit_price?: string };
@@ -249,7 +248,7 @@ export async function updateBuilderFeeRate(
       fee_rate: newFeeRate,
     };
     const timestamp = Date.now();
-    const header = { timestamp, expiry_window: 5000, type: 'update_builder_code_fee_rate' };
+    const header = { timestamp, expiry_window: 60000, type: 'update_builder_code_fee_rate' };
     // builder_code must be inside data for signing (same rule as orders)
     const combined = { ...header, data: dataToSign };
     const sorted = sortJsonKeys(combined);
@@ -265,7 +264,7 @@ export async function updateBuilderFeeRate(
       agent_wallet: null,
       signature: sig,
       timestamp,
-      expiry_window: 5000,
+      expiry_window: 60000,
       builder_code: BUILDER_CODE,
       fee_rate: newFeeRate,
     };

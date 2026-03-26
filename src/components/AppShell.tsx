@@ -221,8 +221,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ? (markPrice > 0 ? String(markPrice) : '0')
         : (r.entryPrice > 0 ? String(r.entryPrice) : (markPrice > 0 ? String(markPrice) : '0'));
       const orderSide = r.side === 'long' ? 'bid' : 'ask';
-      // Bug 3 fix: leverage as string for API
-      const leverageStr = String(r.leverage || 10);
       const logId = addEntry({
         symbol, side: orderSide,
         amount: orderAmount, price: orderPrice,
@@ -236,7 +234,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         result = await submitMarketOrder(wallet, {
           symbol, amount: orderAmount, side: orderSide,
           reduce_only: false,
-          leverage: leverageStr,
           take_profit: r.tp1 > 0 ? { stop_price: String(r.tp1) } : undefined,
           // Bug 4 fix: send stop_loss when set
           stop_loss: r.stopLoss > 0 ? { stop_price: String(r.stopLoss) } : undefined,
@@ -245,7 +242,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         result = await submitLimitOrder(wallet, {
           symbol, price: orderPrice, amount: orderAmount, side: orderSide,
           tif: 'GTC', reduce_only: false,
-          leverage: leverageStr,
           take_profit: r.tp1 > 0 ? { stop_price: String(r.tp1) } : undefined,
           // Bug 4 fix: send stop_loss when set
           stop_loss: r.stopLoss > 0 ? { stop_price: String(r.stopLoss) } : undefined,
