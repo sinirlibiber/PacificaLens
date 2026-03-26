@@ -19,68 +19,64 @@ import { useTraderScore } from '@/hooks/useTraderScore';
 import { ScoreBadge, ScoreCard } from '@/components/ScoreBadge';
 import { STYLE_META } from '@/lib/traderScore';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── CopyTrade types & storage ───────────────────────────────────────────────
 
-interface AutoPosConfig {
-  amount: number;
-  leverage: number;
-  slEnabled: boolean;
-  slPct: number;
-  tpEnabled: boolean;
-  tpPct: number;
-  maxPositions: number;
-  cooldownMinutes: number;
-  active: boolean;
-  // API Agent Key alanları
+const BUILDER_CODE = 'PACIFICALENS';
+const CT_STORAGE   = 'pacifica_copytrade_v2';
+
+interface CopyTradeConfig {
   agentPrivateKey: string;
-  agentPublicKey: string;
+  agentPublicKey:  string;
+  marginUsd:       number;
+  leverageMode:    'mirror' | 'custom';
+  customLeverage:  number;
+  slEnabled: boolean; slPct: number;
+  tpEnabled: boolean; tpPct: number;
+  maxPositions:    number;
+  active:          boolean;
 }
 
-const DEFAULT_AUTO_CONFIG: AutoPosConfig = {
-  amount: 100,
-  leverage: 5,
+const DEFAULT_CT: CopyTradeConfig = {
+  agentPrivateKey: '', agentPublicKey: '',
+  marginUsd: 50,
+  leverageMode: 'mirror', customLeverage: 10,
   slEnabled: false, slPct: 5,
   tpEnabled: false, tpPct: 10,
-  maxPositions: 3, cooldownMinutes: 0,
-  active: false,
-  agentPrivateKey: '',
-  agentPublicKey: '',
+  maxPositions: 5, active: false,
 };
 
-// ─── AutoMirror log entry ─────────────────────────────────────────────────────
-interface MirrorLog {
-  id: string;
-  ts: number;
-  symbol: string;
-  side: string;
-  action: 'opened' | 'closed' | 'skipped' | 'error';
-  msg: string;
+interface CTLog { id: string; ts: number; symbol: string; side: string; action: 'opened'|'closed'|'skipped'|'error'; msg: string; }
+
+function loadCT(): Record<string, CopyTradeConfig> {
+  try { const r = typeof window !== 'undefined' ? localStorage.getItem(CT_STORAGE) : null; return r ? JSON.parse(r) : {}; } catch { return {}; }
+}
+function saveCT(addr: string, cfg: CopyTradeConfig) {
+  try { const a = loadCT(); a[addr] = cfg; localStorage.setItem(CT_STORAGE, JSON.stringify(a)); } catch { /**/ }
 }
 
-// ─── AutoMirror storage helpers ───────────────────────────────────────────────
-const MIRROR_STORAGE_KEY = 'pacifica_mirror_configs_v2';
+// ─── Ed25519 helpers ──────────────────────────────────────────────────────────
 
-function loadMirrorConfigs(): Record<string, AutoPosConfig & { traderAccount: string }> {
-  try {
-    const raw = typeof window !== 'undefined' ? localStorage.getItem(MIRROR_STORAGE_KEY) : null;
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function fromB58(s: string): Uint8Array {
+  const bytes = [0];
+  for (const c of s) {
+    const idx = B58.indexOf(c); if (idx < 0) throw new Error('bad b58');
+    let carry = idx;
+    for (let i = 0; i < bytes.length; i++) { carry += bytes[i] * 58; bytes[i] = carry & 0xff; carry >>= 8; }
+    while (carry > 0) { bytes.push(carry & 0xff); carry >>= 8; }
+  }
+  let lz = 0; for (const c of s) { if (c === '1') lz++; else break; }
+  return new Uint8Array([...new Array(lz).fill(0), ...bytes.reverse()]);
 }
 
-function saveMirrorConfig(traderAccount: string, cfg: AutoPosConfig) {
-  try {
-    const all = loadMirrorConfigs();
-    all[traderAccount] = { ...cfg, traderAccount };
-    localStorage.setItem(MIRROR_STORAGE_KEY, JSON.stringify(all));
-  } catch { /* ignore */ }
-}
-
-function deleteMirrorConfig(traderAccount: string) {
-  try {
-    const all = loadMirrorConfigs();
-    delete all[traderAccount];
-    localStorage.setItem(MIRROR_STORAGE_KEY, JSON.stringify(all));
-  } catch { /* ignore */ }
+async function agentSign(pkB58: string, msg: Uint8Array): Promise<string> {
+  const raw = fromB58(pkB58);
+  const seed = raw.length === 64 ? raw.slice(0, 32) : raw;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const key = await (crypto.subtle as any).importKey('raw', seed, { name: 'Ed25519' }, false, ['sign']);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sig = await (crypto.subtle as any).sign('Ed25519', key, msg);
+  return toBase58(new Uint8Array(sig));
 }
 
 
@@ -112,411 +108,6 @@ function sideLabel(side: string): { label: string; isLong: boolean } {
   return { label: side, isLong: true };
 }
 
-// ─── PositionCard (with ⚡ Mirror button) ────────────────────────────────────
-
-function PositionCard({
-  pos, isLong, pnl, pnlPct, tk, selectedTrader, isCopyFav, wallet, tickers,
-  onCopyModal, onToast,
-}: {
-  pos: import('@/lib/pacifica').Position;
-  isLong: boolean;
-  pnl: number;
-  pnlPct: number;
-  tk: Ticker;
-  selectedTrader: string;
-  isCopyFav: import('@/hooks/useCopyTrading').FavoriteTrader | undefined;
-  wallet: string | null;
-  tickers: Record<string, Ticker>;
-  onCopyModal: (trade: TraderTrade) => void;
-  onToast: (msg: string, type: 'success' | 'error' | 'info') => void;
-}) {
-  const [showMirror, setShowMirror] = useState(false);
-
-  // Check if mirror is already active for this trader
-  const isMirrorActive = (() => {
-    try {
-      const all = loadMirrorConfigs();
-      return !!(all[selectedTrader]?.active);
-    } catch { return false; }
-  })();
-
-  return (
-    <div className="bg-surface2 border border-border1 rounded-xl px-3 py-2.5">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] font-bold text-text1">{pos.symbol}</span>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isLong ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
-            {isLong ? 'Long' : 'Short'}
-          </span>
-          {isMirrorActive && (
-            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-[#00e5ff]/15 text-[#00e5ff] border border-[#00e5ff]/20 flex items-center gap-0.5">
-              <span className="w-1 h-1 rounded-full bg-[#00e5ff] animate-pulse inline-block" />
-              Mirroring
-            </span>
-          )}
-        </div>
-        <span className={`text-[13px] font-bold font-mono ${pnl >= 0 ? 'text-success' : 'text-danger'}`}>
-          {pnl >= 0 ? '+' : ''}${Math.abs(pnl).toLocaleString('en-US', { maximumFractionDigits: 2 })} ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] mb-3">
-        <div className="flex justify-between"><span className="text-text3">Size</span><span className="text-text2 font-mono">{Number(pos.amount).toFixed(4)} {pos.symbol}</span></div>
-        <div className="flex justify-between"><span className="text-text3">Mark Price</span><span className="text-text2 font-mono">${fmtPrice(getMarkPrice(tk))}</span></div>
-        <div className="flex justify-between"><span className="text-text3">Entry / Breakeven</span><span className="text-text2 font-mono">${fmtPrice(Number(pos.entry_price))}</span></div>
-        <div className="flex justify-between"><span className="text-text3">Margin</span><span className="text-text2 font-mono">{pos.isolated ? 'Isolated' : 'Cross'}{pos.margin ? ` $${Number(pos.margin).toFixed(2)}` : ''}</span></div>
-        {pos.liquidation_price && <div className="flex justify-between col-span-2"><span className="text-text3">Liq. Price</span><span className="text-danger font-mono">${fmtPrice(Number(pos.liquidation_price))}</span></div>}
-      </div>
-
-      {/* ── Action buttons row ── */}
-      <div className="flex gap-2">
-        {/* Copy this position — unchanged */}
-        <button
-          onClick={() => onCopyModal({ symbol: pos.symbol, side: isLong ? 'open_long' : 'open_short', price: pos.entry_price, amount: pos.amount, created_at: pos.created_at })}
-          className="flex-1 py-1.5 bg-accent/10 text-accent border border-accent/20 rounded-lg text-[11px] font-semibold hover:bg-accent/20 transition-colors">
-          Copy this position
-        </button>
-
-        {/* ⚡ Mirror toggle button */}
-        <button
-          onClick={() => setShowMirror(v => !v)}
-          title="Auto Mirror — trader'ın yeni pozisyonlarını otomatik kopyala"
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
-            showMirror || isMirrorActive
-              ? 'bg-[#00e5ff]/15 text-[#00e5ff] border-[#00e5ff]/40'
-              : 'bg-surface text-text3 border-border1 hover:border-[#00e5ff]/40 hover:text-[#00e5ff]'
-          }`}>
-          <span className="text-[13px]">⚡</span>
-          <span>Mirror</span>
-          {isMirrorActive && <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-pulse" />}
-        </button>
-      </div>
-
-      {/* ── AutoMirrorPanel — collapsible ── */}
-      {showMirror && (
-        <AutoMirrorPanel
-          traderAccount={selectedTrader}
-          myAccount={wallet}
-          tickers={tickers}
-          onToast={onToast}
-        />
-      )}
-    </div>
-  );
-}
-
-// ─── Base58 decode (for agent key) ───────────────────────────────────────────
-const B58_ALPHA_STR = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-function fromBase58(str: string): Uint8Array {
-  const bytes = [0];
-  for (const char of str) {
-    const idx = B58_ALPHA_STR.indexOf(char);
-    if (idx < 0) throw new Error('Bad B58 char');
-    let carry = idx;
-    for (let i = 0; i < bytes.length; i++) { carry += bytes[i] * 58; bytes[i] = carry & 0xff; carry >>= 8; }
-    while (carry > 0) { bytes.push(carry & 0xff); carry >>= 8; }
-  }
-  let lz = 0; for (const c of str) { if (c === '1') lz++; else break; }
-  return new Uint8Array([...new Array(lz).fill(0), ...bytes.reverse()]);
-}
-
-async function signWithAgentKey(pkBase58: string, msgBytes: Uint8Array): Promise<string> {
-  const raw = fromBase58(pkBase58);
-  const seed = raw.length === 64 ? raw.slice(0, 32) : raw;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cryptoKey = await (crypto.subtle as any).importKey('raw', seed, { name: 'Ed25519' }, false, ['sign']);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sig = await (crypto.subtle as any).sign('Ed25519', cryptoKey, msgBytes);
-  return toBase58(new Uint8Array(sig));
-}
-
-// ─── AutoMirrorPanel ──────────────────────────────────────────────────────────
-
-function AutoMirrorPanel({
-  traderAccount,
-  myAccount,
-  tickers,
-  onToast,
-}: {
-  traderAccount: string;
-  myAccount: string | null;
-  tickers: Record<string, Ticker>;
-  onToast: (msg: string, type: 'success' | 'error' | 'info') => void;
-}) {
-  const [cfg, setCfg] = useState<AutoPosConfig>(() => {
-    const all = loadMirrorConfigs();
-    return all[traderAccount] ? { ...DEFAULT_AUTO_CONFIG, ...all[traderAccount] } : { ...DEFAULT_AUTO_CONFIG };
-  });
-
-  const [logs, setLogs] = useState<MirrorLog[]>([]);
-  const [showLogs, setShowLogs] = useState(false);
-  const [showKeyHelp, setShowKeyHelp] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [lastCheck, setLastCheck] = useState<Date | null>(null);
-  const [openPosCount, setOpenPosCount] = useState<number>(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const knownSymbolsRef = useRef<Set<string>>(new Set());
-  const isFirstPollRef = useRef(true);
-
-  const addLog = (entry: Omit<MirrorLog, 'id' | 'ts'>) => {
-    setLogs(prev => [{ id: crypto.randomUUID(), ts: Date.now(), ...entry }, ...prev].slice(0, 80));
-  };
-
-  useEffect(() => { saveMirrorConfig(traderAccount, cfg); }, [cfg, traderAccount]);
-
-  const poll = useCallback(async () => {
-    if (!myAccount || !cfg.agentPrivateKey || !cfg.agentPublicKey) return;
-    setRunning(true);
-    try {
-      const { getPositions: getPosApi } = await import('@/lib/pacifica');
-      const [traderPositions, myPositions] = await Promise.all([
-        getPosApi(traderAccount),
-        getPosApi(myAccount),
-      ]);
-      setLastCheck(new Date());
-      const myPosMap = new Map(myPositions.map((p: import('@/lib/pacifica').Position) => [p.symbol, p]));
-      const traderPosMap = new Map(traderPositions.map((p: import('@/lib/pacifica').Position) => [p.symbol, p]));
-      setOpenPosCount(myPositions.length);
-
-      if (isFirstPollRef.current) {
-        isFirstPollRef.current = false;
-        traderPositions.forEach((p: import('@/lib/pacifica').Position) => knownSymbolsRef.current.add(p.symbol));
-        addLog({ symbol: '—', side: '—', action: 'skipped', msg: `Snapshot: trader ${traderPositions.length} açık pozisyon. Yeni açılanlar izleniyor...` });
-        return;
-      }
-
-      for (const tp of traderPositions as import('@/lib/pacifica').Position[]) {
-        if (knownSymbolsRef.current.has(tp.symbol)) continue;
-        knownSymbolsRef.current.add(tp.symbol);
-        if (myPosMap.has(tp.symbol)) { addLog({ symbol: tp.symbol, side: tp.side, action: 'skipped', msg: 'Zaten bu pozisyona sahibim' }); continue; }
-        if (cfg.maxPositions > 0 && myPositions.length >= cfg.maxPositions) { addLog({ symbol: tp.symbol, side: tp.side, action: 'skipped', msg: `Max pozisyon (${cfg.maxPositions}) doldu` }); continue; }
-
-        const tk = tickers[tp.symbol];
-        const markPx = getMarkPrice(tk);
-        if (!markPx) { addLog({ symbol: tp.symbol, side: tp.side, action: 'error', msg: 'Fiyat verisi yok' }); continue; }
-
-        const contracts = (cfg.amount * cfg.leverage) / markPx;
-        if (contracts <= 0) { addLog({ symbol: tp.symbol, side: tp.side, action: 'error', msg: '0 kontrat hesaplandı' }); continue; }
-
-        const side = tp.side as 'bid' | 'ask';
-        const isLong = side === 'bid';
-        const slPrice = cfg.slEnabled ? (isLong ? markPx * (1 - cfg.slPct / 100) : markPx * (1 + cfg.slPct / 100)) : null;
-        const tpPrice = cfg.tpEnabled ? (isLong ? markPx * (1 + cfg.tpPct / 100) : markPx * (1 - cfg.tpPct / 100)) : null;
-
-        try {
-          const { buildSigningPayload, buildRequestBody } = await import('@/lib/pacificaSigning');
-          const orderData: Record<string, unknown> = {
-            symbol: tp.symbol, amount: contracts.toFixed(4), side, reduce_only: false,
-            slippage_percent: '1', client_order_id: crypto.randomUUID(), builder_code: 'PACIFICALENS',
-            ...(slPrice ? { stop_loss: { stop_price: slPrice.toFixed(4) } } : {}),
-            ...(tpPrice ? { take_profit: { stop_price: tpPrice.toFixed(4) } } : {}),
-          };
-          const { payload, timestamp } = buildSigningPayload('create_market_order', orderData);
-          const signature = await signWithAgentKey(cfg.agentPrivateKey, new TextEncoder().encode(payload));
-          const body = { ...buildRequestBody(myAccount as string, signature, timestamp, orderData), agent_wallet: cfg.agentPublicKey };
-          const res = await fetch('https://api.pacifica.fi/api/v1/orders/create_market', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-          const json = await res.json();
-          if (json.success) {
-            addLog({ symbol: tp.symbol, side: tp.side, action: 'opened', msg: `${isLong ? 'Long' : 'Short'} açıldı · $${cfg.amount} · ${cfg.leverage}×${cfg.slEnabled ? ` · SL ${cfg.slPct}%` : ''}${cfg.tpEnabled ? ` · TP ${cfg.tpPct}%` : ''}` });
-            onToast(`⚡ Auto Mirror: ${tp.symbol} ${isLong ? 'Long' : 'Short'} açıldı!`, 'success');
-          } else {
-            addLog({ symbol: tp.symbol, side: tp.side, action: 'error', msg: json.error || JSON.stringify(json) });
-          }
-        } catch (e) { addLog({ symbol: tp.symbol, side: tp.side, action: 'error', msg: String(e) }); }
-      }
-
-      for (const sym of Array.from(knownSymbolsRef.current) as string[]) {
-        if (!traderPosMap.has(sym)) {
-          knownSymbolsRef.current.delete(sym);
-          const myPos = myPosMap.get(sym);
-          if (!myPos) continue;
-          try {
-            const { buildSigningPayload, buildRequestBody } = await import('@/lib/pacificaSigning');
-            const closeData: Record<string, unknown> = { symbol: sym, amount: myPos.amount, side: myPos.side === 'bid' ? 'ask' : 'bid', reduce_only: true, slippage_percent: '1', client_order_id: crypto.randomUUID(), builder_code: 'PACIFICALENS' };
-            const { payload, timestamp } = buildSigningPayload('create_market_order', closeData);
-            const sig = await signWithAgentKey(cfg.agentPrivateKey, new TextEncoder().encode(payload));
-            const body = { ...buildRequestBody(myAccount as string, sig, timestamp, closeData), agent_wallet: cfg.agentPublicKey };
-            const res = await fetch('https://api.pacifica.fi/api/v1/orders/create_market', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-            const json = await res.json();
-            if (json.success) { addLog({ symbol: sym as string, side: myPos.side as string, action: 'closed', msg: 'Trader kapattı → mirror kapandı' }); onToast(`⚡ Auto Mirror: ${sym} kapandı`, 'info'); }
-          } catch (e) { addLog({ symbol: sym as string, side: (myPos.side as string) ?? '—', action: 'error', msg: `Kapatma hatası: ${String(e)}` }); }
-        }
-      }
-    } catch (e) {
-      addLog({ symbol: '—', side: '—', action: 'error', msg: `Poll hatası: ${String(e)}` });
-    } finally { setRunning(false); }
-  }, [cfg, traderAccount, myAccount, tickers, onToast]);
-
-  useEffect(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (cfg.active && cfg.agentPrivateKey && cfg.agentPublicKey && myAccount) {
-      isFirstPollRef.current = true;
-      knownSymbolsRef.current.clear();
-      poll();
-      intervalRef.current = setInterval(poll, 15_000);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [cfg.active, cfg.agentPrivateKey, cfg.agentPublicKey, myAccount, poll]);
-
-  const canActivate = !!cfg.agentPrivateKey && !!cfg.agentPublicKey && !!myAccount;
-
-  return (
-    <div className="mt-2 rounded-2xl border border-[#00e5ff]/20 bg-gradient-to-br from-[#00e5ff]/[0.04] to-[#7c3aed]/[0.04] overflow-hidden">
-      <div className="px-4 py-3 flex items-center justify-between border-b border-[#00e5ff]/10">
-        <div className="flex items-center gap-2.5">
-          <div className={`relative w-2 h-2 rounded-full ${cfg.active ? 'bg-[#00e5ff]' : 'bg-text3'}`}>
-            {cfg.active && <span className="absolute inset-0 rounded-full bg-[#00e5ff] animate-ping opacity-60" />}
-          </div>
-          <span className="text-[12px] font-bold text-text1 tracking-wide">⚡ Auto Mirror</span>
-          {cfg.active && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#00e5ff]/15 text-[#00e5ff] border border-[#00e5ff]/30 animate-pulse">LIVE</span>}
-        </div>
-        <div className="flex items-center gap-2">
-          {lastCheck && cfg.active && <span className="text-[9px] text-text3 font-mono">Son: {lastCheck.toLocaleTimeString()}</span>}
-          {running && <div className="w-3 h-3 border border-[#00e5ff]/30 border-t-[#00e5ff] rounded-full animate-spin" />}
-        </div>
-      </div>
-
-      <div className="p-4 space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-text3 uppercase tracking-wide">API Agent Key</span>
-            <button onClick={() => setShowKeyHelp(v => !v)} className="text-[10px] text-[#00e5ff] hover:underline">
-              {showKeyHelp ? '▲ Gizle' : '▼ Nasıl alınır?'}
-            </button>
-          </div>
-          {showKeyHelp && (
-            <div className="px-3 py-2.5 bg-[#00e5ff]/5 border border-[#00e5ff]/20 rounded-xl text-[10px] text-text2 space-y-1 leading-relaxed">
-              <p className="font-semibold text-[#00e5ff]">API Agent Key nasıl alınır?</p>
-              <p>1. <a href="https://app.pacifica.fi/apikey" target="_blank" rel="noopener noreferrer" className="text-[#00e5ff] underline">app.pacifica.fi/apikey</a> adresine gidin</p>
-              <p>2. &quot;Generate API Agent Key&quot; butonuna tıklayın ve anahtarları kopyalayın</p>
-              <p className="text-warn">⚠ Private key yalnızca bu tarayıcıda saklanır, kimseyle paylaşmayın.</p>
-            </div>
-          )}
-          <input type="password" placeholder="Agent Private Key (Base58)" value={cfg.agentPrivateKey}
-            onChange={e => setCfg(p => ({ ...p, agentPrivateKey: e.target.value }))}
-            className="w-full bg-surface border border-border1 rounded-xl px-3 py-2 text-[11px] font-mono text-text1 outline-none focus:border-[#00e5ff]/60 placeholder-text3 transition-colors" />
-          <input type="text" placeholder="Agent Public Key (Base58)" value={cfg.agentPublicKey}
-            onChange={e => setCfg(p => ({ ...p, agentPublicKey: e.target.value }))}
-            className="w-full bg-surface border border-border1 rounded-xl px-3 py-2 text-[11px] font-mono text-text1 outline-none focus:border-[#00e5ff]/60 placeholder-text3 transition-colors" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Margin / Trade ($)</label>
-            <div className="relative">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-text3">$</span>
-              <input type="number" min={1} value={cfg.amount} onChange={e => setCfg(p => ({ ...p, amount: Number(e.target.value) }))}
-                className="w-full bg-surface border border-border1 rounded-xl pl-6 pr-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-[#00e5ff]/60 transition-colors" />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Kaldıraç</label>
-            <div className="relative">
-              <input type="number" min={1} max={50} value={cfg.leverage} onChange={e => setCfg(p => ({ ...p, leverage: Math.max(1, Math.min(50, Number(e.target.value))) }))}
-                className="w-full bg-surface border border-border1 rounded-xl px-3 pr-8 py-2 text-[12px] font-mono text-text1 outline-none focus:border-[#00e5ff]/60 transition-colors" />
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-text3 font-bold">×</span>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Max Pozisyon <span className="font-normal">(0=∞)</span></label>
-            <input type="number" min={0} max={20} value={cfg.maxPositions} onChange={e => setCfg(p => ({ ...p, maxPositions: Number(e.target.value) }))}
-              className="w-full bg-surface border border-border1 rounded-xl px-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-[#00e5ff]/60 transition-colors" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Toplam Büyüklük</label>
-            <div className="flex items-center h-9 px-3 bg-surface2 border border-border1 rounded-xl">
-              <span className="text-[12px] font-mono font-bold text-[#00e5ff]">${(cfg.amount * cfg.leverage).toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className={`border rounded-xl p-3 transition-all ${cfg.slEnabled ? 'border-danger/40 bg-danger/5' : 'border-border1'}`}>
-            <button onClick={() => setCfg(p => ({ ...p, slEnabled: !p.slEnabled }))}
-              className={`flex items-center gap-1.5 text-[11px] font-semibold mb-2 ${cfg.slEnabled ? 'text-danger' : 'text-text3'}`}>
-              <div className={`relative w-7 h-4 rounded-full transition-all ${cfg.slEnabled ? 'bg-danger' : 'bg-border2'}`}>
-                <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${cfg.slEnabled ? 'translate-x-3' : ''}`} />
-              </div>
-              Stop Loss
-            </button>
-            {cfg.slEnabled ? (
-              <>
-                <div className="flex justify-between text-[10px] mb-1"><span className="text-text3">Trigger</span><span className="font-bold text-danger font-mono">{cfg.slPct}%</span></div>
-                <input type="range" min={0.5} max={50} step={0.5} value={cfg.slPct} onChange={e => setCfg(p => ({ ...p, slPct: Number(e.target.value) }))} className="w-full accent-danger cursor-pointer" />
-              </>
-            ) : <div className="text-[10px] text-text3">Kapalı</div>}
-          </div>
-          <div className={`border rounded-xl p-3 transition-all ${cfg.tpEnabled ? 'border-success/40 bg-success/5' : 'border-border1'}`}>
-            <button onClick={() => setCfg(p => ({ ...p, tpEnabled: !p.tpEnabled }))}
-              className={`flex items-center gap-1.5 text-[11px] font-semibold mb-2 ${cfg.tpEnabled ? 'text-success' : 'text-text3'}`}>
-              <div className={`relative w-7 h-4 rounded-full transition-all ${cfg.tpEnabled ? 'bg-success' : 'bg-border2'}`}>
-                <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${cfg.tpEnabled ? 'translate-x-3' : ''}`} />
-              </div>
-              Take Profit
-            </button>
-            {cfg.tpEnabled ? (
-              <>
-                <div className="flex justify-between text-[10px] mb-1"><span className="text-text3">Hedef</span><span className="font-bold text-success font-mono">{cfg.tpPct}%</span></div>
-                <input type="range" min={1} max={200} step={1} value={cfg.tpPct} onChange={e => setCfg(p => ({ ...p, tpPct: Number(e.target.value) }))} className="w-full accent-success cursor-pointer" />
-              </>
-            ) : <div className="text-[10px] text-text3">Kapalı</div>}
-          </div>
-        </div>
-
-        <button disabled={!canActivate} onClick={() => canActivate && setCfg(p => ({ ...p, active: !p.active }))}
-          className={`w-full py-2.5 rounded-xl font-bold text-[12px] flex items-center justify-center gap-2 transition-all border ${
-            cfg.active ? 'bg-danger/10 text-danger border-danger/30 hover:bg-danger/20' :
-            canActivate ? 'bg-[#00e5ff]/10 text-[#00e5ff] border-[#00e5ff]/30 hover:bg-[#00e5ff]/20' :
-            'opacity-40 cursor-not-allowed bg-surface2 text-text3 border-border1'}`}>
-          {cfg.active ? <><div className="w-2 h-2 rounded-full bg-danger animate-pulse" />Durdur (Mirror Aktif)</> :
-           <><span>⚡</span>{canActivate ? "Mirror'ı Başlat" : 'Agent Key Gerekli'}</>}
-        </button>
-
-        {!canActivate && <p className="text-[10px] text-text3 text-center">Başlatmak için Agent Key girin</p>}
-
-        {logs.length > 0 && (
-          <div>
-            <button onClick={() => setShowLogs(v => !v)}
-              className="w-full flex items-center justify-between px-3 py-2 bg-surface2 border border-border1 rounded-xl text-[10px] font-semibold text-text2 hover:border-accent/30 transition-colors">
-              <span className="flex items-center gap-1.5">📋 Aktivite Logu <span className="bg-accent/20 text-accent text-[8px] font-bold px-1.5 py-0.5 rounded-full">{logs.length}</span></span>
-              <span className="text-[8px] text-text3">{showLogs ? '▲ Gizle' : '▼ Göster'}</span>
-            </button>
-            {showLogs && (
-              <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
-                {logs.map(log => (
-                  <div key={log.id} className={`flex items-start gap-2 px-2.5 py-2 rounded-lg border text-[10px] ${
-                    log.action === 'opened' ? 'bg-success/5 border-success/20 text-success' :
-                    log.action === 'closed' ? 'bg-accent/5 border-accent/20 text-accent' :
-                    log.action === 'error'  ? 'bg-danger/5 border-danger/20 text-danger' :
-                    'bg-surface2 border-border1 text-text3'}`}>
-                    <span className="shrink-0">{log.action === 'opened' ? '↑' : log.action === 'closed' ? '↓' : log.action === 'error' ? '✗' : '–'}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        {log.symbol !== '—' && <span className="font-bold">{log.symbol}</span>}
-                        <span className="text-[9px] opacity-60 font-mono">{new Date(log.ts).toLocaleTimeString()}</span>
-                      </div>
-                      <div className="opacity-90 leading-snug">{log.msg}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {cfg.active && (
-          <div className="flex items-center justify-between px-3 py-2 bg-[#00e5ff]/5 border border-[#00e5ff]/20 rounded-xl">
-            <div className="flex items-center gap-2 text-[10px] text-[#00e5ff]">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-pulse" />
-              <span>15s&apos;de bir kontrol · {openPosCount} açık poz.</span>
-            </div>
-            <span className="text-[9px] text-text3">Tarayıcı açık kalmalı</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Sort column header ───────────────────────────────────────────────────────
 
 function Th({ label, field, cur, dir, onClick }: {
@@ -540,11 +131,365 @@ function Th({ label, field, cur, dir, onClick }: {
   );
 }
 
-// ─── Favorite Card (expanded) ─────────────────────────────────────────────────
+// ─── CopyTradePanel ──────────────────────────────────────────────────────────
+
+function CopyTradePanel({
+  traderAccount, myAccount, markets, tickers, onToast,
+}: {
+  traderAccount: string;
+  myAccount:     string | null;
+  markets:       Market[];
+  tickers:       Record<string, Ticker>;
+  onToast:       (msg: string, type: 'success'|'error'|'info') => void;
+}) {
+  const [cfg, setCfg]           = useState<CopyTradeConfig>(() => ({ ...DEFAULT_CT, ...loadCT()[traderAccount] }));
+  const [logs, setLogs]         = useState<CTLog[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [running, setRunning]   = useState(false);
+  const [lastPoll, setLastPoll] = useState<Date | null>(null);
+  const [myPosCount, setMyPosCount] = useState(0);
+  const timerRef        = useRef<ReturnType<typeof setInterval> | null>(null);
+  const knownRef        = useRef<Set<string>>(new Set());
+  const firstPollRef    = useRef(true);
+
+  const log = (e: Omit<CTLog,'id'|'ts'>) =>
+    setLogs(p => [{ id: crypto.randomUUID(), ts: Date.now(), ...e }, ...p].slice(0, 120));
+
+  useEffect(() => { saveCT(traderAccount, cfg); }, [cfg, traderAccount]);
+
+  // Per-symbol order sizing
+  function sizeOrder(symbol: string, traderPos: import('@/lib/pacifica').Position) {
+    const tk  = tickers[symbol];
+    const px  = getMarkPrice(tk);
+    if (!px || px <= 0) return null;
+
+    const mkt    = markets.find(m => m.symbol === symbol);
+    const maxLev = mkt ? Number(mkt.max_leverage) : 20;
+    const lot    = mkt?.lot_size ? Number(mkt.lot_size) : 0.0001;
+    const dec    = Math.max(0, Math.ceil(-Math.log10(lot)));
+
+    let lev: number;
+    if (cfg.leverageMode === 'mirror') {
+      // use trader's actual leverage: prefer the leverage field, fall back to computing from margin
+      if (traderPos.leverage && Number(traderPos.leverage) > 0) {
+        lev = Number(traderPos.leverage);
+      } else if (traderPos.margin && Number(traderPos.margin) > 0) {
+        lev = Math.round((Number(traderPos.entry_price) * Number(traderPos.amount)) / Number(traderPos.margin));
+      } else {
+        lev = 1;
+      }
+      lev = Math.max(1, Math.min(lev, maxLev));
+    } else {
+      lev = Math.max(1, Math.min(cfg.customLeverage, maxLev));
+    }
+
+    const contracts = (cfg.marginUsd * lev) / px;
+    const minSize   = mkt?.min_order_size ? Number(mkt.min_order_size) : 0;
+    if (minSize > 0 && contracts < minSize) return null;
+
+    return { contracts: contracts.toFixed(dec), lev, px };
+  }
+
+  const poll = useCallback(async () => {
+    if (!myAccount || !cfg.agentPrivateKey || !cfg.agentPublicKey) return;
+    setRunning(true);
+    try {
+      const { getPositions: gp } = await import('@/lib/pacifica');
+      const [tPs, mPs] = await Promise.all([gp(traderAccount), gp(myAccount)]);
+      setLastPoll(new Date());
+      setMyPosCount(mPs.length);
+
+      const myMap = new Map(mPs.map((p: import('@/lib/pacifica').Position) => [p.symbol, p]));
+      const trMap = new Map(tPs.map((p: import('@/lib/pacifica').Position) => [p.symbol, p]));
+
+      // First poll – snapshot only
+      if (firstPollRef.current) {
+        firstPollRef.current = false;
+        tPs.forEach((p: import('@/lib/pacifica').Position) => knownRef.current.add(p.symbol));
+        log({ symbol: '—', side: '—', action: 'skipped', msg: `Snapshot: ${tPs.length} open position(s). Watching for new entries...` });
+        return;
+      }
+
+      // ── New positions trader opened ─────────────────────────────────────────
+      for (const tp of tPs as import('@/lib/pacifica').Position[]) {
+        if (knownRef.current.has(tp.symbol)) continue;
+        knownRef.current.add(tp.symbol);
+
+        if (myMap.has(tp.symbol))                                        { log({ symbol: tp.symbol, side: tp.side, action: 'skipped', msg: 'Already holding this symbol' }); continue; }
+        if (cfg.maxPositions > 0 && mPs.length >= cfg.maxPositions)     { log({ symbol: tp.symbol, side: tp.side, action: 'skipped', msg: `Max positions (${cfg.maxPositions}) reached` }); continue; }
+
+        const order = sizeOrder(tp.symbol, tp);
+        if (!order) { log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: 'Cannot size order (no price or below min size)' }); continue; }
+
+        const { contracts, lev, px } = order;
+        const side    = tp.side as 'bid'|'ask';
+        const isLong  = side === 'bid';
+        const slPx    = cfg.slEnabled ? (isLong ? px*(1-cfg.slPct/100) : px*(1+cfg.slPct/100)) : null;
+        const tpPx    = cfg.tpEnabled ? (isLong ? px*(1+cfg.tpPct/100) : px*(1-cfg.tpPct/100)) : null;
+
+        try {
+          const { buildSigningPayload, buildRequestBody } = await import('@/lib/pacificaSigning');
+          const data: Record<string,unknown> = {
+            symbol: tp.symbol, amount: contracts, side, reduce_only: false,
+            slippage_percent: '1', client_order_id: crypto.randomUUID(),
+            builder_code: BUILDER_CODE,
+            ...(slPx ? { stop_loss:   { stop_price: slPx.toFixed(4) } } : {}),
+            ...(tpPx ? { take_profit: { stop_price: tpPx.toFixed(4) } } : {}),
+          };
+          const { payload, timestamp } = buildSigningPayload('create_market_order', data);
+          const sig  = await agentSign(cfg.agentPrivateKey, new TextEncoder().encode(payload));
+          const body = { ...buildRequestBody(myAccount, sig, timestamp, data), agent_wallet: cfg.agentPublicKey };
+          const res  = await fetch('https://api.pacifica.fi/api/v1/orders/create_market', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          const json = await res.json();
+          if (json.success) {
+            log({ symbol: tp.symbol, side: tp.side, action: 'opened',
+              msg: `${isLong?'Long':'Short'} opened · $${cfg.marginUsd} margin · ${lev}× leverage${cfg.slEnabled?` · SL ${cfg.slPct}%`:''}${cfg.tpEnabled?` · TP ${cfg.tpPct}%`:''}` });
+            onToast(`Copy Trade: ${tp.symbol} ${isLong?'Long':'Short'} opened (${lev}×)`, 'success');
+          } else {
+            log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: json.error || JSON.stringify(json) });
+          }
+        } catch (e) { log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: String(e) }); }
+      }
+
+      // ── Positions trader closed ─────────────────────────────────────────────
+      for (const sym of Array.from(knownRef.current) as string[]) {
+        if (trMap.has(sym)) continue;
+        knownRef.current.delete(sym);
+        const mine = myMap.get(sym);
+        if (!mine) continue;
+        try {
+          const { buildSigningPayload, buildRequestBody } = await import('@/lib/pacificaSigning');
+          const data: Record<string,unknown> = {
+            symbol: sym, amount: mine.amount,
+            side: mine.side === 'bid' ? 'ask' : 'bid',
+            reduce_only: true, slippage_percent: '1',
+            client_order_id: crypto.randomUUID(), builder_code: BUILDER_CODE,
+          };
+          const { payload, timestamp } = buildSigningPayload('create_market_order', data);
+          const sig  = await agentSign(cfg.agentPrivateKey, new TextEncoder().encode(payload));
+          const body = { ...buildRequestBody(myAccount as string, sig, timestamp, data), agent_wallet: cfg.agentPublicKey };
+          const res  = await fetch('https://api.pacifica.fi/api/v1/orders/create_market', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          const json = await res.json();
+          if (json.success) {
+            log({ symbol: sym, side: mine.side as string, action: 'closed', msg: 'Trader exited → position closed' });
+            onToast(`Copy Trade: ${sym} closed (trader exited)`, 'info');
+          }
+        } catch (e) { log({ symbol: sym, side: mine.side as string, action: 'error', msg: `Close failed: ${String(e)}` }); }
+      }
+    } catch (e) {
+      log({ symbol: '—', side: '—', action: 'error', msg: `Poll error: ${String(e)}` });
+    } finally { setRunning(false); }
+  }, [cfg, traderAccount, myAccount, tickers, markets, onToast]);
+
+  // Start / stop engine
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (cfg.active && cfg.agentPrivateKey && cfg.agentPublicKey && myAccount) {
+      firstPollRef.current = true;
+      knownRef.current.clear();
+      poll();
+      timerRef.current = setInterval(poll, 15_000);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [cfg.active, cfg.agentPrivateKey, cfg.agentPublicKey, myAccount, poll]);
+
+  const canStart = !!cfg.agentPrivateKey && !!cfg.agentPublicKey && !!myAccount;
+
+  return (
+    <div className="border-t border-border1 bg-surface2/30">
+      {/* Status bar */}
+      <div className="px-4 py-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`w-1.5 h-1.5 rounded-full ${cfg.active ? 'bg-success animate-pulse' : 'bg-border2'}`} />
+          <span className="text-[11px] font-bold text-text1">Copy Trade</span>
+          {cfg.active && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-success/15 text-success border border-success/25">ACTIVE</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          {lastPoll && cfg.active && <span className="text-[9px] text-text3 font-mono">{lastPoll.toLocaleTimeString()}</span>}
+          {running && <div className="w-3 h-3 border border-accent/30 border-t-accent rounded-full animate-spin" />}
+        </div>
+      </div>
+
+      <div className="px-4 pb-4 space-y-3">
+
+        {/* API Agent Keys */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-semibold text-text3 uppercase tracking-wide">API Agent Keys</span>
+            <button onClick={() => setShowHelp(v => !v)} className="text-[9px] text-accent hover:underline">
+              {showHelp ? 'Hide' : 'How to get?'}
+            </button>
+          </div>
+          {showHelp && (
+            <div className="px-3 py-2 bg-accent/5 border border-accent/20 rounded-xl text-[9px] text-text2 space-y-1 leading-relaxed">
+              <p className="font-semibold text-accent">How to get API Agent Keys</p>
+              <p>1. Go to <a href="https://app.pacifica.fi/apikey" target="_blank" rel="noopener noreferrer" className="text-accent underline">app.pacifica.fi/apikey</a></p>
+              <p>2. Click &quot;Generate API Agent Key&quot; and copy both keys</p>
+              <p>3. Paste them below — saved only in your browser&apos;s local storage</p>
+              <p className="text-warn">⚠ Never share your private key with anyone.</p>
+            </div>
+          )}
+          <input type="password" placeholder="Agent Private Key (Base58)"
+            value={cfg.agentPrivateKey}
+            onChange={e => setCfg(p => ({ ...p, agentPrivateKey: e.target.value.trim() }))}
+            className="w-full bg-surface border border-border1 rounded-xl px-3 py-2 text-[10px] font-mono text-text1 outline-none focus:border-accent/60 placeholder-text3 transition-colors" />
+          <input type="text" placeholder="Agent Public Key (Base58)"
+            value={cfg.agentPublicKey}
+            onChange={e => setCfg(p => ({ ...p, agentPublicKey: e.target.value.trim() }))}
+            className="w-full bg-surface border border-border1 rounded-xl px-3 py-2 text-[10px] font-mono text-text1 outline-none focus:border-accent/60 placeholder-text3 transition-colors" />
+        </div>
+
+        {/* Leverage mode */}
+        <div className="space-y-1.5">
+          <span className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Leverage</span>
+          <div className="flex bg-surface border border-border1 rounded-xl overflow-hidden">
+            {(['mirror','custom'] as const).map(m => (
+              <button key={m} onClick={() => setCfg(p => ({ ...p, leverageMode: m }))}
+                className={`flex-1 py-1.5 text-[11px] font-semibold transition-all ${cfg.leverageMode === m ? 'bg-accent text-white' : 'text-text3 hover:text-text2'}`}>
+                {m === 'mirror' ? 'Mirror Trader' : 'Custom'}
+              </button>
+            ))}
+          </div>
+          {cfg.leverageMode === 'mirror'
+            ? <p className="text-[9px] text-text3 px-1">Uses the trader&apos;s actual leverage per symbol, capped at each market&apos;s maximum.</p>
+            : <div className="flex items-center gap-2">
+                <input type="number" min={1} max={50} value={cfg.customLeverage}
+                  onChange={e => setCfg(p => ({ ...p, customLeverage: Math.max(1, Math.min(50, Number(e.target.value))) }))}
+                  className="w-20 bg-surface border border-border1 rounded-xl px-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-accent/60 transition-colors" />
+                <span className="text-[11px] text-text3 font-semibold">× (capped at market max)</span>
+              </div>
+          }
+        </div>
+
+        {/* Margin + Max positions */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Margin / Trade</label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-text3">$</span>
+              <input type="number" min={1} value={cfg.marginUsd}
+                onChange={e => setCfg(p => ({ ...p, marginUsd: Math.max(1, Number(e.target.value)) }))}
+                className="w-full bg-surface border border-border1 rounded-xl pl-5 pr-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-accent/60 transition-colors" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Max Positions <span className="font-normal">(0 = ∞)</span></label>
+            <input type="number" min={0} max={20} value={cfg.maxPositions}
+              onChange={e => setCfg(p => ({ ...p, maxPositions: Number(e.target.value) }))}
+              className="w-full bg-surface border border-border1 rounded-xl px-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-accent/60 transition-colors" />
+          </div>
+        </div>
+
+        {/* SL / TP */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Stop Loss */}
+          <div className={`border rounded-xl p-2.5 transition-all ${cfg.slEnabled ? 'border-danger/40 bg-danger/5' : 'border-border1'}`}>
+            <button onClick={() => setCfg(p => ({ ...p, slEnabled: !p.slEnabled }))}
+              className={`flex items-center gap-1.5 text-[10px] font-semibold mb-1.5 ${cfg.slEnabled ? 'text-danger' : 'text-text3'}`}>
+              <div className={`relative w-6 h-3.5 rounded-full transition-all ${cfg.slEnabled ? 'bg-danger' : 'bg-border2'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 bg-white rounded-full shadow transition-transform ${cfg.slEnabled ? 'translate-x-2.5' : ''}`} />
+              </div>
+              Stop Loss
+            </button>
+            {cfg.slEnabled
+              ? <><div className="flex justify-between text-[9px] mb-1"><span className="text-text3">Trigger</span><span className="font-bold text-danger">{cfg.slPct}%</span></div>
+                  <input type="range" min={0.5} max={50} step={0.5} value={cfg.slPct} onChange={e => setCfg(p => ({ ...p, slPct: Number(e.target.value) }))} className="w-full accent-danger cursor-pointer h-1" /></>
+              : <div className="text-[9px] text-text3">Off</div>
+            }
+          </div>
+          {/* Take Profit */}
+          <div className={`border rounded-xl p-2.5 transition-all ${cfg.tpEnabled ? 'border-success/40 bg-success/5' : 'border-border1'}`}>
+            <button onClick={() => setCfg(p => ({ ...p, tpEnabled: !p.tpEnabled }))}
+              className={`flex items-center gap-1.5 text-[10px] font-semibold mb-1.5 ${cfg.tpEnabled ? 'text-success' : 'text-text3'}`}>
+              <div className={`relative w-6 h-3.5 rounded-full transition-all ${cfg.tpEnabled ? 'bg-success' : 'bg-border2'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 bg-white rounded-full shadow transition-transform ${cfg.tpEnabled ? 'translate-x-2.5' : ''}`} />
+              </div>
+              Take Profit
+            </button>
+            {cfg.tpEnabled
+              ? <><div className="flex justify-between text-[9px] mb-1"><span className="text-text3">Target</span><span className="font-bold text-success">{cfg.tpPct}%</span></div>
+                  <input type="range" min={1} max={200} step={1} value={cfg.tpPct} onChange={e => setCfg(p => ({ ...p, tpPct: Number(e.target.value) }))} className="w-full accent-success cursor-pointer h-1" /></>
+              : <div className="text-[9px] text-text3">Off</div>
+            }
+          </div>
+        </div>
+
+        {/* Activate / Deactivate */}
+        <button disabled={!canStart}
+          onClick={() => canStart && setCfg(p => ({ ...p, active: !p.active }))}
+          className={`w-full py-2.5 rounded-xl font-bold text-[12px] flex items-center justify-center gap-2 transition-all border ${
+            cfg.active
+              ? 'bg-danger/10 text-danger border-danger/30 hover:bg-danger/20'
+              : canStart
+                ? 'bg-success/10 text-success border-success/30 hover:bg-success/20'
+                : 'opacity-40 cursor-not-allowed bg-surface2 text-text3 border-border1'
+          }`}>
+          {cfg.active
+            ? <><div className="w-2 h-2 rounded-full bg-danger animate-pulse" /> Stop Copy Trade</>
+            : <>{canStart ? 'Start Copy Trade' : 'Enter Agent Keys to activate'}</>
+          }
+        </button>
+
+        {/* Running status */}
+        {cfg.active && (
+          <div className="flex items-center justify-between px-3 py-1.5 bg-success/5 border border-success/20 rounded-xl text-[9px]">
+            <span className="flex items-center gap-1.5 text-success">
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse inline-block" />
+              Polling every 15s · {myPosCount} open position(s)
+            </span>
+            <span className="text-text3">Keep browser open</span>
+          </div>
+        )}
+
+        {/* Builder code notice */}
+        <p className="text-[9px] text-text3 text-center">
+          Builder code <span className="font-mono text-accent">PACIFICALENS</span> applied to all orders
+        </p>
+
+        {/* Activity log */}
+        {logs.length > 0 && (
+          <div>
+            <button onClick={() => setShowLogs(v => !v)}
+              className="w-full flex items-center justify-between px-3 py-2 bg-surface border border-border1 rounded-xl text-[10px] font-semibold text-text2 hover:border-accent/30 transition-colors">
+              <span className="flex items-center gap-1.5">
+                Activity Log
+                <span className="bg-accent/20 text-accent text-[8px] font-bold px-1.5 py-0.5 rounded-full">{logs.length}</span>
+              </span>
+              <span className="text-[8px] text-text3">{showLogs ? '▲ Hide' : '▼ Show'}</span>
+            </button>
+            {showLogs && (
+              <div className="mt-1.5 max-h-44 overflow-y-auto space-y-1">
+                {logs.map(l => (
+                  <div key={l.id} className={`flex items-start gap-2 px-2.5 py-1.5 rounded-lg border text-[9px] ${
+                    l.action === 'opened'  ? 'bg-success/5 border-success/20 text-success' :
+                    l.action === 'closed'  ? 'bg-accent/5  border-accent/20  text-accent'  :
+                    l.action === 'error'   ? 'bg-danger/5  border-danger/20  text-danger'  :
+                    'bg-surface2 border-border1 text-text3'}`}>
+                    <span className="shrink-0 font-bold">{l.action==='opened'?'↑':l.action==='closed'?'↓':l.action==='error'?'✗':'–'}</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        {l.symbol !== '—' && <span className="font-bold">{l.symbol}</span>}
+                        <span className="opacity-60 font-mono">{new Date(l.ts).toLocaleTimeString()}</span>
+                      </div>
+                      <div className="opacity-90 break-words">{l.msg}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Favorite Card ────────────────────────────────────────────────────────────
 
 function FavoriteCard({
-  fav, lbEntry, score, trades, tradesLoading, tickers,
-  onRemove, onCopyTrade, onRefreshTrades,
+  fav, lbEntry, score, trades, tradesLoading, tickers, markets, myAccount,
+  onRemove, onCopyTrade, onRefreshTrades, onToast,
 }: {
   fav: FavoriteTrader;
   lbEntry?: LeaderboardEntry;
@@ -552,25 +497,38 @@ function FavoriteCard({
   trades: TraderTrade[];
   tradesLoading: boolean;
   tickers: Record<string, Ticker>;
+  markets: Market[];
+  myAccount: string | null;
   onRemove: () => void;
   onCopyTrade: (trade: TraderTrade) => void;
   onRefreshTrades: () => void;
+  onToast: (msg: string, type: 'success'|'error'|'info') => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded]         = useState(false);
+  const [showCopyTrade, setShowCopyTrade] = useState(false);
+
+  const isCTActive = !!loadCT()[fav.account]?.active;
 
   return (
     <div className="border border-border1 rounded-2xl bg-surface overflow-hidden shadow-card">
-      {/* Header */}
-      <div className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-surface2/50 transition-colors"
-        onClick={() => setExpanded(v => !v)}>
-        <div className="flex-1 min-w-0">
+
+      {/* Header row */}
+      <div className="px-4 py-3 flex items-center gap-3">
+
+        {/* Left: address + stats — click to expand */}
+        <div className="flex-1 min-w-0 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center text-[9px] font-bold text-accent">
-              {fav.account.slice(0, 2).toUpperCase()}
+              {fav.account.slice(0,2).toUpperCase()}
             </div>
             <span className="text-[12px] font-mono text-text1 font-semibold">{fmtShortAddr(fav.account)}</span>
-              {score && <ScoreBadge score={score} />}
-
+            {score && <ScoreBadge score={score} />}
+            {isCTActive && (
+              <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-success/15 text-success border border-success/20 flex items-center gap-0.5">
+                <span className="w-1 h-1 rounded-full bg-success animate-pulse inline-block" />
+                Copying
+              </span>
+            )}
           </div>
           {lbEntry && (
             <div className="flex items-center gap-3 mt-1">
@@ -582,15 +540,41 @@ function FavoriteCard({
           )}
         </div>
 
+        {/* Copy Trade button */}
+        <button
+          onClick={e => { e.stopPropagation(); setShowCopyTrade(v => !v); }}
+          className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
+            showCopyTrade || isCTActive
+              ? 'bg-success/10 text-success border-success/30'
+              : 'bg-surface2 text-text3 border-border1 hover:border-success/40 hover:text-success'
+          }`}>
+          {isCTActive && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
+          Copy Trade
+        </button>
+
+        {/* Remove */}
         <button onClick={e => { e.stopPropagation(); onRemove(); }}
           className="w-7 h-7 flex items-center justify-center rounded-lg text-text3 hover:text-danger hover:bg-danger/5 transition-all text-[14px]">×</button>
-        <span className={`text-text3 text-[10px] transition-transform ${expanded ? 'rotate-180' : ''}`}>▾</span>
+
+        {/* Expand chevron */}
+        <span className={`text-text3 text-[10px] transition-transform cursor-pointer select-none ${expanded ? 'rotate-180' : ''}`}
+          onClick={() => setExpanded(v => !v)}>▾</span>
       </div>
 
+      {/* Copy Trade Panel — inline, below header */}
+      {showCopyTrade && (
+        <CopyTradePanel
+          traderAccount={fav.account}
+          myAccount={myAccount}
+          markets={markets}
+          tickers={tickers}
+          onToast={onToast}
+        />
+      )}
+
+      {/* Expanded: recent trades */}
       {expanded && (
         <div className="border-t border-border1">
-
-          {/* Recent trades */}
           <div className="px-4 py-3">
             <div className="flex items-center justify-between mb-3">
               <span className="text-[10px] text-text3 uppercase font-semibold tracking-wide">Recent Trades</span>
@@ -628,7 +612,7 @@ function FavoriteCard({
                       {isOpenTrade && (
                         <button onClick={() => onCopyTrade(t)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-accent text-white text-[10px] font-bold px-2.5 py-1 rounded-lg hover:bg-accent/90 shrink-0">
-                          🔁 Copy
+                          Copy
                         </button>
                       )}
                     </div>
@@ -643,7 +627,7 @@ function FavoriteCard({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Component ─────────────────────────────────────────────────────────────
 
 interface CopyTradingProps {
   markets: Market[];
@@ -1277,9 +1261,12 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                       trades={traderTrades[fav.account] || []}
                       tradesLoading={!!tradesLoading[fav.account]}
                       tickers={tickers}
+                      markets={markets}
+                      myAccount={wallet}
                       onRemove={() => removeFavorite(fav.account)}
                       onCopyTrade={trade => setCopyModal({ trade, traderAddress: fav.account, fav })}
                       onRefreshTrades={() => fetchTraderTrades(fav.account)}
+                      onToast={onToast}
                     />
                   );
                 })}
@@ -1436,22 +1423,49 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                               ? (markPx > 0 && entryPx > 0 ? (isLong ? 1 : -1) * (markPx - entryPx) * amt : 0)
                               : rawPnl;
                             const posVal = entryPx * amt;
+                            const marginVal = Number(pos.margin || 0);
                             const pnlPct = posVal > 0 ? (pnl / posVal * 100) : 0;
                             return (
-                              <PositionCard
-                                key={i}
-                                pos={pos}
-                                isLong={isLong}
-                                pnl={pnl}
-                                pnlPct={pnlPct}
-                                tk={tk}
-                                selectedTrader={selectedTrader!}
-                                isCopyFav={isCopyFav}
-                                wallet={wallet}
-                                tickers={tickers}
-                                onCopyModal={(trade) => setCopyModal({ trade, traderAddress: selectedTrader!, fav: isCopyFav })}
-                                onToast={onToast}
-                              />
+                              <div key={i} className="bg-surface2 border border-border1 rounded-xl px-3 py-2.5">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[13px] font-bold text-text1">{pos.symbol}</span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isLong ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
+                                      {isLong ? 'Long' : 'Short'}
+                                    </span>
+
+
+                                  </div>
+                                  <span className={`text-[13px] font-bold font-mono ${pnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                                    {pnl >= 0 ? '+' : ''}${Math.abs(pnl).toLocaleString('en-US', { maximumFractionDigits: 2 })} ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] mb-2">
+                                  <div className="flex justify-between"><span className="text-text3">Size</span><span className="text-text2 font-mono">{Number(pos.amount).toFixed(4)} {pos.symbol}</span></div>
+                                  <div className="flex justify-between"><span className="text-text3">Mark Price</span><span className="text-text2 font-mono">${fmtPrice(getMarkPrice(tk))}</span></div>
+                                  <div className="flex justify-between"><span className="text-text3">Entry / Breakeven</span><span className="text-text2 font-mono">${fmtPrice(Number(pos.entry_price))}</span></div>
+                                  <div className="flex justify-between"><span className="text-text3">Margin</span><span className="text-text2 font-mono">{pos.isolated ? 'Isolated' : 'Cross'}{pos.margin ? ` $${Number(pos.margin).toFixed(2)}` : ''}</span></div>
+                                  {pos.liquidation_price && <div className="flex justify-between col-span-2"><span className="text-text3">Liq. Price</span><span className="text-danger font-mono">${fmtPrice(Number(pos.liquidation_price))}</span></div>}
+                                </div>
+                                {/* Show trader leverage badge */}
+                                {(() => {
+                                  const lev = pos.leverage && Number(pos.leverage) > 0
+                                    ? Number(pos.leverage)
+                                    : (pos.margin && Number(pos.margin) > 0
+                                        ? Math.round((Number(pos.entry_price) * Number(pos.amount)) / Number(pos.margin))
+                                        : null);
+                                  return lev && lev > 1 ? (
+                                    <div className="mb-2 flex items-center gap-1.5 text-[9px] text-text3">
+                                      <span className="font-semibold px-1.5 py-0.5 rounded bg-border2 text-text2 font-mono">{lev}×</span>
+                                      <span>trader leverage</span>
+                                    </div>
+                                  ) : null;
+                                })()}
+                                <button onClick={() => setCopyModal({ trade: { symbol: pos.symbol, side: isLong ? 'open_long' : 'open_short', price: pos.entry_price, amount: pos.amount, created_at: pos.created_at }, traderAddress: selectedTrader!, fav: isCopyFav })}
+                                  className="w-full py-1.5 bg-accent/10 text-accent border border-accent/20 rounded-lg text-[11px] font-semibold hover:bg-accent/20 transition-colors">
+                                  Copy this position
+                                </button>
+                              </div>
                             );
                           })}
                         </div>
