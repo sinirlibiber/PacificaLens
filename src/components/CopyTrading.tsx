@@ -229,8 +229,7 @@ function CopyTradePanel({
     // If below min size, snap up to minSize so the order can proceed
     const finalContracts = (minSize > 0 && contracts < minSize) ? minSize : contracts;
 
-    const tickSize = mkt?.tick_size || '0.01';
-    return { contracts: finalContracts.toFixed(dec), lev, px, belowMin: minSize > 0 && contracts < minSize, minSize, tickSize };
+    return { contracts: finalContracts.toFixed(dec), lev, px, belowMin: minSize > 0 && contracts < minSize, minSize };
   }
 
   const poll = useCallback(async () => {
@@ -277,7 +276,7 @@ function CopyTradePanel({
         const order = sizeOrder(tp.symbol, tp);
         if (!order) { log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: 'Cannot size order (no price available)' }); continue; }
 
-        const { contracts, lev, px, belowMin, minSize, tickSize } = order;
+        const { contracts, lev, px, belowMin, minSize } = order;
         if (belowMin) {
           log({ symbol: tp.symbol, side: tp.side, action: 'info',
             msg: `Margin $${cfg.marginUsd} too low for min size ${minSize} — using min size instead` });
@@ -292,8 +291,8 @@ function CopyTradePanel({
           const data: Record<string,unknown> = {
             symbol: tp.symbol, amount: contracts, side, reduce_only: false,
             slippage_percent: '1', client_order_id: crypto.randomUUID(),
-            ...(slPx ? { stop_loss:   { stop_price: roundToTick(slPx, tickSize) } } : {}),
-            ...(tpPx ? { take_profit: { stop_price: roundToTick(tpPx, tickSize) } } : {}),
+            ...(slPx ? { stop_loss:   { stop_price: roundToTick(slPx, mkt?.tick_size || '0.01') } } : {}),
+            ...(tpPx ? { take_profit: { stop_price: roundToTick(tpPx, mkt?.tick_size || '0.01') } } : {}),
           };
           const { payload, timestamp } = buildSigningPayload('create_market_order', data);
           const sig  = await agentSign(cfg.agentPrivateKey, new TextEncoder().encode(payload));
