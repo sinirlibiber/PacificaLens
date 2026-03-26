@@ -189,6 +189,8 @@ function CopyTradePanel({
   const knownRef        = useRef<Set<string>>(loadKnown(traderAccount));
   const amountRef       = useRef<Map<string, number>>(new Map()); // track trader's position sizes for partial close detection
   const firstPollRef    = useRef(knownRef.current.size === 0); // if we have persisted known symbols, skip first-poll snapshot
+  // Hold latest poll fn in a ref so interval doesn't restart on every tickers update
+  const pollFnRef       = useRef<(() => Promise<void>) | null>(null);
 
   const log = (e: Omit<CTLog,'id'|'ts'>) =>
     setLogs(p => [{ id: crypto.randomUUID(), ts: Date.now(), ...e }, ...p].slice(0, 120));
@@ -388,7 +390,14 @@ function CopyTradePanel({
     } finally { setRunning(false); }
   }, [cfg, traderAccount, myAccount, tickers, markets, onToast]);
 
-  // Start / stop engine
+  // Keep pollFnRef always pointing to the latest poll function.
+  // This lets the interval call the latest version without restarting on every tickers update.
+  useEffect(() => { pollFnRef.current = poll; }, [poll]);
+
+  // Start / stop engine.
+  // NOTE: `poll` is intentionally NOT in the dependency array here.
+  // The interval calls pollFnRef.current() so it always uses the latest poll
+  // without restarting the interval every time tickers or markets change.
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (cfg.active && cfg.agentPrivateKey && cfg.agentPublicKey && myAccount) {
@@ -397,8 +406,9 @@ function CopyTradePanel({
         firstPollRef.current = true;
       }
       amountRef.current.clear();
-      poll();
-      timerRef.current = setInterval(poll, 10_000); // 10s for faster reaction
+      // Fire immediately, then every 10s — use ref so interval never restarts on tickers change
+      pollFnRef.current?.();
+      timerRef.current = setInterval(() => pollFnRef.current?.(), 10_000);
     } else if (!cfg.active) {
       // Clear persisted known when user manually stops, so next start is a fresh snapshot
       clearKnown(traderAccount);
@@ -407,7 +417,8 @@ function CopyTradePanel({
       firstPollRef.current = true;
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [cfg.active, cfg.agentPrivateKey, cfg.agentPublicKey, myAccount, poll, traderAccount]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg.active, cfg.agentPrivateKey, cfg.agentPublicKey, myAccount, traderAccount]);
 
   const pkValid  = isValidBase58(cfg.agentPrivateKey, 88);
   const pubValid = isValidBase58(cfg.agentPublicKey, 44);
