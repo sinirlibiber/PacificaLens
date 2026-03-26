@@ -138,8 +138,9 @@ export default function GlobeMap() {
     const container = mountRef.current;
     if (!container) return;
 
-    const W = container.clientWidth  || 800;
-    const H = container.clientHeight || 600;
+    // On mobile, clientWidth/Height can be 0 before paint — use window as fallback
+    const W = container.clientWidth  || window.innerWidth;
+    const H = container.clientHeight || window.innerHeight;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(W, H);
@@ -265,8 +266,9 @@ export default function GlobeMap() {
     container.addEventListener('wheel', onWheel, { passive: false });
 
     const onResize = () => {
-      const nW = container.clientWidth;
-      const nH = container.clientHeight;
+      const nW = container.clientWidth  || window.innerWidth;
+      const nH = container.clientHeight || window.innerHeight;
+      if (nW === 0 || nH === 0) return;
       renderer.setSize(nW, nH);
       camera.aspect = nW / nH;
       camera.updateProjectionMatrix();
@@ -374,10 +376,12 @@ export default function GlobeMap() {
         <div
           className="absolute z-30 rounded-2xl"
           style={{
-            top           : '50%',
-            right         : '28px',
-            transform     : 'translateY(-50%)',
-            width         : '300px',
+            top           : 'auto',
+            bottom        : '90px',
+            left          : '50%',
+            right         : 'auto',
+            transform     : 'translateX(-50%)',
+            width         : 'min(300px, calc(100vw - 32px))',
             background    : 'rgba(8,14,22,0.86)',
             border        : '1px solid rgba(0,210,210,0.30)',
             backdropFilter: 'blur(18px)',
@@ -418,9 +422,9 @@ export default function GlobeMap() {
         <div
           className="absolute z-50 rounded-2xl p-4 shadow-2xl"
           style={{
-            left          : modal.sx,
+            left          : 'max(8px, min(' + modal.sx + 'px, calc(100vw - 264px)))',
             top           : modal.sy,
-            width         : '248px',
+            width         : 'min(248px, calc(100vw - 32px))',
             background    : 'rgba(13,17,23,0.96)',
             border        : '1px solid rgba(0,180,216,0.3)',
             backdropFilter: 'blur(12px)',

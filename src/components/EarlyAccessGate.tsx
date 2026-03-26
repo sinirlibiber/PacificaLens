@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 const STORAGE_KEY = 'pacificalens_access_v1';
 
@@ -14,7 +14,6 @@ type View = 'code' | 'waitlist' | 'waitlist_done';
 
 export function EarlyAccessGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [unlocked, setUnlocked] = useState(false);
   const [ready, setReady] = useState(false);
   const [view, setView] = useState<View>('code');
@@ -77,37 +76,68 @@ export function EarlyAccessGate({ children }: { children: React.ReactNode }) {
     }
   }, [email]);
 
-  // Ana sayfa (globe) her zaman görünür — gate sadece diğer sayfalarda devreye girer
   if (!ready) return null;
   if (unlocked || pathname === '/') return <>{children}</>;
 
   return (
     <div
-      className="flex flex-col items-center justify-center w-screen h-screen"
-      style={{ background: '#060c12' }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100dvh',
+        width: '100%',
+        background: '#060c12',
+        padding: '24px 16px',
+        boxSizing: 'border-box',
+      }}
     >
-      <div className="flex items-center gap-2.5 mb-10">
+      {/* Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '32px' }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="PacificaLens" className="w-9 h-9 object-contain" />
-        <span className="font-bold text-base tracking-widest" style={{ color: '#e6edf3' }}>
+        <img src="/logo.png" alt="PacificaLens" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
+        <span style={{ fontWeight: 700, fontSize: '14px', letterSpacing: '3px', color: '#e6edf3' }}>
           PACIFICALENS
         </span>
       </div>
 
+      {/* Card */}
       <div
-        className="w-full max-w-sm rounded-2xl p-8"
-        style={{ background: '#0d1f2d', border: '0.5px solid #1a3346' }}
+        style={{
+          width: '100%',
+          maxWidth: '400px',
+          background: '#0d1f2d',
+          border: '0.5px solid #1a3346',
+          borderRadius: '16px',
+          padding: '28px 24px',
+          boxSizing: 'border-box',
+        }}
       >
         {/* Toggle */}
-        <div className="flex rounded-lg overflow-hidden mb-6" style={{ background: '#060c12' }}>
+        <div
+          style={{
+            display: 'flex',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            background: '#060c12',
+            marginBottom: '24px',
+          }}
+        >
           {(['code', 'waitlist'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className="flex-1 py-2 text-sm font-semibold transition-all"
               style={{
+                flex: 1,
+                padding: '10px',
+                fontSize: '13px',
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
                 background: view === v ? '#00b4d8' : 'transparent',
                 color: view === v ? '#fff' : '#4a7a8a',
+                transition: 'all 0.15s',
               }}
             >
               {v === 'code' ? 'I have a code' : 'Join waitlist'}
@@ -117,76 +147,126 @@ export function EarlyAccessGate({ children }: { children: React.ReactNode }) {
 
         {/* Code view */}
         {view === 'code' && (
-          <>
-            <p className="text-sm mb-4" style={{ color: '#8b949e' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <p style={{ fontSize: '13px', color: '#8b949e', margin: 0, lineHeight: 1.6 }}>
               Enter your invite code to access PacificaLens.
             </p>
             <input
               autoFocus
-              className="w-full rounded-xl px-4 py-3 text-center text-sm font-mono mb-3 outline-none tracking-widest"
-              style={{ background: '#060c12', border: '0.5px solid #1a3346', color: '#e6edf3' }}
+              style={{
+                width: '100%',
+                background: '#060c12',
+                border: '0.5px solid #1a3346',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                fontSize: '15px',
+                fontFamily: 'monospace',
+                color: '#e6edf3',
+                textAlign: 'center',
+                letterSpacing: '0.2em',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
               placeholder="XXXXXXXX"
               value={code}
               onChange={(e) => { setCode(e.target.value.toUpperCase()); setCodeError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && code && handleVerifyCode()}
               maxLength={16}
             />
-            {codeError && <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{codeError}</p>}
+            {codeError && (
+              <p style={{ fontSize: '12px', color: '#ef4444', margin: 0 }}>{codeError}</p>
+            )}
             <button
               onClick={handleVerifyCode}
               disabled={codeLoading || !code}
-              className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
-              style={{ background: '#00b4d8', color: '#fff', opacity: codeLoading || !code ? 0.5 : 1 }}
+              style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: '12px',
+                border: 'none',
+                background: '#00b4d8',
+                color: '#fff',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: codeLoading || !code ? 'not-allowed' : 'pointer',
+                opacity: codeLoading || !code ? 0.5 : 1,
+              }}
             >
               {codeLoading ? 'Verifying…' : 'Enter Dashboard →'}
             </button>
-          </>
+          </div>
         )}
 
         {/* Waitlist view */}
         {view === 'waitlist' && (
-          <>
-            <p className="text-sm mb-4" style={{ color: '#8b949e' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <p style={{ fontSize: '13px', color: '#8b949e', margin: 0, lineHeight: 1.6 }}>
               Drop your email — we'll send your invite when a spot opens.
             </p>
             <input
               autoFocus
               type="email"
-              className="w-full rounded-xl px-4 py-3 text-sm mb-3 outline-none"
-              style={{ background: '#060c12', border: '0.5px solid #1a3346', color: '#e6edf3' }}
+              style={{
+                width: '100%',
+                background: '#060c12',
+                border: '0.5px solid #1a3346',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                fontSize: '15px',
+                color: '#e6edf3',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setEmailError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && email && handleJoinWaitlist()}
             />
-            {emailError && <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{emailError}</p>}
+            {emailError && (
+              <p style={{ fontSize: '12px', color: '#ef4444', margin: 0 }}>{emailError}</p>
+            )}
             <button
               onClick={handleJoinWaitlist}
               disabled={emailLoading || !email}
-              className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
-              style={{ background: '#00b4d8', color: '#fff', opacity: emailLoading || !email ? 0.5 : 1 }}
+              style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: '12px',
+                border: 'none',
+                background: '#00b4d8',
+                color: '#fff',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: emailLoading || !email ? 'not-allowed' : 'pointer',
+                opacity: emailLoading || !email ? 0.5 : 1,
+              }}
             >
               {emailLoading ? 'Sending…' : 'Request Access'}
             </button>
-          </>
+          </div>
         )}
 
         {/* Waitlist done */}
         {view === 'waitlist_done' && (
-          <div className="text-center py-4">
-            <div className="text-2xl mb-3">👀</div>
-            <p className="text-sm font-semibold mb-1" style={{ color: '#e6edf3' }}>You're on the list.</p>
-            <p className="text-xs mb-4" style={{ color: '#4a7a8a' }}>
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <div style={{ fontSize: '28px', marginBottom: '12px' }}>👀</div>
+            <p style={{ fontSize: '14px', fontWeight: 600, color: '#e6edf3', margin: '0 0 6px' }}>
+              You're on the list.
+            </p>
+            <p style={{ fontSize: '12px', color: '#4a7a8a', margin: '0 0 16px' }}>
               We'll email your invite code soon.
             </p>
-            <button onClick={() => setView('code')} className="text-xs" style={{ color: '#00b4d8' }}>
+            <button
+              onClick={() => setView('code')}
+              style={{ fontSize: '12px', color: '#00b4d8', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
               Already have a code?
             </button>
           </div>
         )}
       </div>
 
-      <p className="text-xs mt-6" style={{ color: '#2d4a5a' }}>
+      <p style={{ fontSize: '11px', color: '#2d4a5a', marginTop: '24px' }}>
         #Pacifica · #Solana · Early Access
       </p>
     </div>

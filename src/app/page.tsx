@@ -7,13 +7,17 @@ import { useRouter } from 'next/navigation';
 const GlobeMap = dynamic(() => import('@/components/GlobeMap'), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center w-full h-full" style={{ background: '#060c12' }}>
-      <div className="flex flex-col items-center gap-4">
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', background: '#060c12' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
         <div
-          className="w-14 h-14 rounded-full border-4 animate-spin"
-          style={{ borderColor: 'rgba(0,180,216,0.25)', borderTopColor: '#00b4d8' }}
+          style={{
+            width: '48px', height: '48px', borderRadius: '50%',
+            border: '3px solid rgba(0,180,216,0.2)',
+            borderTopColor: '#00b4d8',
+            animation: 'spin 0.8s linear infinite',
+          }}
         />
-        <p className="text-sm" style={{ color: '#656d76' }}>Loading globe…</p>
+        <p style={{ fontSize: '13px', color: '#656d76', margin: 0 }}>Loading globe…</p>
       </div>
     </div>
   ),
@@ -86,28 +90,44 @@ export default function Home() {
   }, [email]);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden" style={{ background: '#060c12' }}>
-      <div className="absolute inset-0"><GlobeMap /></div>
+    <div style={{ position: 'relative', width: '100vw', height: '100dvh', overflow: 'hidden', background: '#060c12' }}>
+
+      {/* Globe */}
+      <div style={{ position: 'absolute', inset: 0 }}>
+        <GlobeMap />
+      </div>
 
       {/* Top bar */}
       <div
-        className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-3"
-        style={{ background: 'linear-gradient(to bottom, rgba(6,12,18,0.88) 0%, transparent 100%)' }}
+        style={{
+          position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '12px 16px',
+          background: 'linear-gradient(to bottom, rgba(6,12,18,0.9) 0%, transparent 100%)',
+        }}
       >
-        <div className="flex items-center gap-2.5">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="PacificaLens" className="w-8 h-8 object-contain" />
-          <span className="font-bold text-base tracking-widest" style={{ color: '#e6edf3' }}>PACIFICALENS</span>
+          <img src="/logo.png" alt="PacificaLens" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+          <span style={{ fontWeight: 700, fontSize: '13px', letterSpacing: '3px', color: '#e6edf3' }}>
+            PACIFICALENS
+          </span>
         </div>
         {view === 'idle' && (
-          <div className="flex items-center gap-2">
-            <button onClick={() => setView('waitlist')} className="text-sm font-semibold px-4 py-2 rounded-xl" style={{ color: '#8b949e' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => setView('waitlist')}
+              style={{ fontSize: '12px', fontWeight: 600, padding: '8px 12px', borderRadius: '10px', border: 'none', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}
+            >
               Join Waitlist
             </button>
             <button
               onClick={() => setView('code')}
-              className="text-sm font-semibold px-5 py-2 rounded-xl transition-all hover:scale-[1.03] active:scale-100"
-              style={{ background: '#00b4d8', color: '#fff', boxShadow: '0 0 18px rgba(0,180,216,0.35)' }}
+              style={{
+                fontSize: '12px', fontWeight: 600, padding: '8px 14px', borderRadius: '10px', border: 'none',
+                background: '#00b4d8', color: '#fff', cursor: 'pointer',
+                boxShadow: '0 0 14px rgba(0,180,216,0.35)',
+              }}
             >
               I have a code →
             </button>
@@ -117,93 +137,129 @@ export default function Home() {
 
       {/* Bottom CTA */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-10 pt-20"
-        style={{ background: 'linear-gradient(to top, rgba(6,12,18,0.95) 0%, transparent 100%)' }}
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          paddingBottom: 'max(28px, env(safe-area-inset-bottom, 28px))',
+          paddingTop: '64px',
+          paddingLeft: '16px', paddingRight: '16px',
+          background: 'linear-gradient(to top, rgba(6,12,18,0.96) 0%, transparent 100%)',
+        }}
       >
-        <p className="text-sm mb-1" style={{ color: '#8b949e' }}>
+        <p style={{ fontSize: '13px', marginBottom: '4px', color: '#8b949e', textAlign: 'center' }}>
           The all-in-one trading intelligence for{' '}
           <span style={{ color: '#e6edf3', fontWeight: 600 }}>Pacifica.fi</span>
         </p>
-        <p className="text-xs mb-6" style={{ color: '#656d76' }}>
+        <p style={{ fontSize: '11px', marginBottom: '20px', color: '#656d76', textAlign: 'center' }}>
           Smart leaderboard · Arbitrage scanner · Whale watcher · Risk manager
         </p>
 
+        {/* IDLE */}
         {view === 'idle' && (
-          <div className="flex flex-col items-center gap-3">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
             <button
               onClick={() => setView('code')}
-              className="text-sm font-semibold px-8 py-3 rounded-xl transition-all hover:scale-[1.03] active:scale-100"
-              style={{ background: '#00b4d8', color: '#fff', boxShadow: '0 0 24px rgba(0,180,216,0.4)' }}
+              style={{
+                fontSize: '14px', fontWeight: 600, padding: '13px 32px', borderRadius: '12px', border: 'none',
+                background: '#00b4d8', color: '#fff', cursor: 'pointer',
+                boxShadow: '0 0 20px rgba(0,180,216,0.4)',
+              }}
             >
               Request Early Access →
             </button>
-            <p className="text-[11px]" style={{ color: '#3d444d' }}>Limited spots available</p>
+            <p style={{ fontSize: '11px', color: '#3d444d', margin: 0 }}>Limited spots available</p>
           </div>
         )}
 
+        {/* CODE */}
         {view === 'code' && (
-          <div className="flex flex-col items-center gap-3 w-full max-w-xs px-4">
-            <p className="text-xs" style={{ color: '#8b949e' }}>Enter your invite code</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', width: '100%', maxWidth: '320px' }}>
+            <p style={{ fontSize: '12px', color: '#8b949e', margin: 0 }}>Enter your invite code</p>
             <input
               autoFocus
-              className="w-full rounded-xl px-4 py-3 text-center text-sm font-mono outline-none tracking-widest"
-              style={{ background: '#0d1f2d', border: '0.5px solid #1a3346', color: '#e6edf3' }}
+              style={{
+                width: '100%', background: '#0d1f2d', border: '0.5px solid #1a3346', borderRadius: '12px',
+                padding: '13px 16px', fontSize: '15px', fontFamily: 'monospace', color: '#e6edf3',
+                textAlign: 'center', letterSpacing: '0.2em', outline: 'none', boxSizing: 'border-box',
+              }}
               placeholder="XXXXXXXX"
               value={code}
               onChange={(e) => { setCode(e.target.value.toUpperCase()); setCodeError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && code && handleVerifyCode()}
               maxLength={16}
             />
-            {codeError && <p className="text-xs" style={{ color: '#ef4444' }}>{codeError}</p>}
+            {codeError && <p style={{ fontSize: '12px', color: '#ef4444', margin: 0 }}>{codeError}</p>}
             <button
               onClick={handleVerifyCode}
               disabled={codeLoading || !code}
-              className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
-              style={{ background: '#00b4d8', color: '#fff', opacity: codeLoading || !code ? 0.5 : 1 }}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
+                background: '#00b4d8', color: '#fff', fontSize: '14px', fontWeight: 600,
+                cursor: codeLoading || !code ? 'not-allowed' : 'pointer',
+                opacity: codeLoading || !code ? 0.5 : 1,
+              }}
             >
               {codeLoading ? 'Verifying…' : 'Enter Dashboard →'}
             </button>
-            <button onClick={() => setView('waitlist')} className="text-xs" style={{ color: '#4a7a8a' }}>
+            <button
+              onClick={() => setView('waitlist')}
+              style={{ fontSize: '12px', color: '#4a7a8a', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
               No code? Join the waitlist
             </button>
           </div>
         )}
 
+        {/* WAITLIST */}
         {view === 'waitlist' && (
-          <div className="flex flex-col items-center gap-3 w-full max-w-xs px-4">
-            <p className="text-xs" style={{ color: '#8b949e' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', width: '100%', maxWidth: '320px' }}>
+            <p style={{ fontSize: '12px', color: '#8b949e', margin: 0, textAlign: 'center' }}>
               Drop your email — we'll send your invite when a spot opens.
             </p>
             <input
               autoFocus
               type="email"
-              className="w-full rounded-xl px-4 py-3 text-sm outline-none"
-              style={{ background: '#0d1f2d', border: '0.5px solid #1a3346', color: '#e6edf3' }}
+              style={{
+                width: '100%', background: '#0d1f2d', border: '0.5px solid #1a3346', borderRadius: '12px',
+                padding: '13px 16px', fontSize: '15px', color: '#e6edf3',
+                outline: 'none', boxSizing: 'border-box',
+              }}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setEmailError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && email && handleJoinWaitlist()}
             />
-            {emailError && <p className="text-xs" style={{ color: '#ef4444' }}>{emailError}</p>}
+            {emailError && <p style={{ fontSize: '12px', color: '#ef4444', margin: 0 }}>{emailError}</p>}
             <button
               onClick={handleJoinWaitlist}
               disabled={emailLoading || !email}
-              className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
-              style={{ background: '#00b4d8', color: '#fff', opacity: emailLoading || !email ? 0.5 : 1 }}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
+                background: '#00b4d8', color: '#fff', fontSize: '14px', fontWeight: 600,
+                cursor: emailLoading || !email ? 'not-allowed' : 'pointer',
+                opacity: emailLoading || !email ? 0.5 : 1,
+              }}
             >
               {emailLoading ? 'Sending…' : 'Request Access'}
             </button>
-            <button onClick={() => setView('code')} className="text-xs" style={{ color: '#4a7a8a' }}>
+            <button
+              onClick={() => setView('code')}
+              style={{ fontSize: '12px', color: '#4a7a8a', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
               Already have a code?
             </button>
           </div>
         )}
 
+        {/* WAITLIST DONE */}
         {view === 'waitlist_done' && (
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-sm font-semibold" style={{ color: '#e6edf3' }}>You're on the list. 👀</p>
-            <p className="text-xs" style={{ color: '#4a7a8a' }}>We'll email your invite code soon.</p>
-            <button onClick={() => setView('code')} className="text-xs mt-2" style={{ color: '#00b4d8' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+            <p style={{ fontSize: '14px', fontWeight: 600, color: '#e6edf3', margin: 0 }}>You're on the list. 👀</p>
+            <p style={{ fontSize: '12px', color: '#4a7a8a', margin: 0 }}>We'll email your invite code soon.</p>
+            <button
+              onClick={() => setView('code')}
+              style={{ fontSize: '12px', color: '#00b4d8', background: 'none', border: 'none', cursor: 'pointer', marginTop: '8px' }}
+            >
               Already have a code? Enter here
             </button>
           </div>
