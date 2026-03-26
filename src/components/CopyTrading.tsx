@@ -293,7 +293,8 @@ function CopyTradePanel({
           // Leverage must be set per symbol before placing order (required by Pacifica API)
           const levResult = await doUpdateLev(
             myAccount, tp.symbol, lev,
-            async (msg: Uint8Array) => agentSign(cfg.agentPrivateKey, msg)
+            async (msg: Uint8Array) => agentSign(cfg.agentPrivateKey, msg),
+            cfg.agentPublicKey,
           );
           if (!levResult.success) {
             log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: `Leverage set failed: ${levResult.error}` });

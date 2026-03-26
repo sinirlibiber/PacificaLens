@@ -167,33 +167,35 @@ export function toBase58(bytes: Uint8Array): string {
 
 type SignFn = (msg: Uint8Array) => Promise<Uint8Array | string>;
 
-// ── Update Leverage (must be called before placing an order to set leverage per symbol) ─────────
-// NOTE: leverage endpoint does NOT use builder_code — it uses its own signing format
+// ── Update Leverage ──────────────────────────────────────────────────────────
+// Per Pacifica docs: same signing flow as orders, but data has no builder_code.
+// Agent wallet signs instead of main wallet; agent_wallet must be in body.
 export async function updateLeverage(
   account: string,
   symbol: string,
   leverage: number,
-  signMessage: SignFn
+  signMessage: SignFn,
+  agentPublicKey?: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const timestamp = Date.now();
-    // Pacifica leverage endpoint: data must NOT contain builder_code
-    // leverage must be a string, not a number
+    const expiry_window = 60000;
+    // Do NOT include builder_code in leverage data — only order endpoints use it
     const data: Record<string, unknown> = { symbol, leverage };
-    const header = { timestamp, expiry_window: 60000, type: 'update_leverage' };
-    const combined = { ...header, data };
-    const sorted = sortJsonKeys(combined);
-    const payload = JSON.stringify(sorted);
+    const toSign = sortJsonKeys({ timestamp, expiry_window, type: 'update_leverage', data });
+    const payload = JSON.stringify(toSign);
 
     const msgBytes = new TextEncoder().encode(payload);
     const sigResult = await signMessage(msgBytes);
     const sig = typeof sigResult === 'string' ? sigResult : toBase58(sigResult as Uint8Array);
 
+    // Final body: flatten data fields to top level, add agent_wallet if provided
     const body: Record<string, unknown> = {
       account,
+      agent_wallet: agentPublicKey ?? null,
       signature: sig,
       timestamp,
-      expiry_window: 60000,
+      expiry_window,
       symbol,
       leverage,
     };
