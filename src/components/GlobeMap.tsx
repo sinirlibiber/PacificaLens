@@ -106,7 +106,7 @@ export default function GlobeMap() {
   const pauseTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pausedRef   = useRef(false);
   const zoomRef     = useRef(
-    typeof window !== 'undefined' && window.innerWidth < 768 ? 3.8 : 2.6
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 4.2 : 2.6
   );
   const tiltRef     = useRef(0);
 
@@ -190,7 +190,21 @@ export default function GlobeMap() {
       return { x: p.clientX, y: p.clientY };
     };
 
+    // Pinch zoom state
+    let lastPinchDist = 0;
+
+    const getPinchDist = (e: TouchEvent) => {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
     const onDown = (e: MouseEvent | TouchEvent) => {
+      if ('touches' in e && e.touches.length === 2) {
+        lastPinchDist = getPinchDist(e);
+        dragging.current = false;
+        return;
+      }
       const { x, y } = getXY(e);
       dragging.current  = true;
       hasMoved.current  = false;
@@ -200,6 +214,18 @@ export default function GlobeMap() {
     };
 
     const onMove = (e: MouseEvent | TouchEvent) => {
+      // Pinch zoom — two fingers
+      if ('touches' in e && e.touches.length === 2) {
+        const dist = getPinchDist(e);
+        if (lastPinchDist > 0) {
+          const delta = lastPinchDist - dist;
+          zoomRef.current = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomRef.current + delta * 0.01));
+          camera.position.z = zoomRef.current;
+        }
+        lastPinchDist = dist;
+        return;
+      }
+
       if (!dragging.current) return;
       const { x, y } = getXY(e);
       const dx = x - prevMouse.current.x;
@@ -263,7 +289,7 @@ export default function GlobeMap() {
     container.addEventListener('mousedown',  onDown as EventListener);
     container.addEventListener('touchstart', onDown as EventListener, { passive: true });
     window.addEventListener('mousemove', onMove as EventListener);
-    window.addEventListener('touchmove', onMove as EventListener, { passive: true });
+    window.addEventListener('touchmove', onMove as EventListener, { passive: false });
     window.addEventListener('mouseup',   onUp   as EventListener);
     window.addEventListener('touchend',  onUp   as EventListener);
     container.addEventListener('wheel', onWheel, { passive: false });
