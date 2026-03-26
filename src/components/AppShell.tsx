@@ -149,7 +149,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Shared wallet sign function — used by all order flows
   async function walletSignFn(msgBytes: Uint8Array): Promise<string> {
-    console.log('[walletSignFn] wallet addr:', wallet, '| solanaWallets:', solanaWallets.map(w => w.address));
+    const win2 = typeof window !== 'undefined' ? (window as unknown as Record<string, any>) : null;
+    console.log('[walletSignFn] wallet addr:', wallet);
+    console.log('[walletSignFn] solanaWallets:', solanaWallets.map(w => w.address));
+    console.log('[walletSignFn] window.solana?.publicKey:', win2?.solana?.publicKey?.toString?.());
+    console.log('[walletSignFn] window.backpack?.publicKey:', win2?.backpack?.publicKey?.toString?.());
+    console.log('[walletSignFn] linkedSolanaAddr:', linkedSolanaAddr);
     const isUserRejection = (e: unknown) => {
       const msg = String(e).toLowerCase();
       return msg.includes('reject') || msg.includes('cancel') || msg.includes('denied') || msg.includes('user rejected');
