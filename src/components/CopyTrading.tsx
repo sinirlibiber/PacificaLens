@@ -1013,6 +1013,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     onToast(`Placing ${isLong ? 'LONG' : 'SHORT'} ${trade.symbol} ${leverage}×${slTpStr ? ' · ' + slTpStr : ''}...`, 'info');
 
     try {
+      onToast('Waiting for wallet signature...', 'info');
       const signFn = walletSignFn;
       let result;
 
@@ -1047,6 +1048,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
       } else {
         updateEntry(logId, { status: 'failed', error: result.error });
         onToast(`Order error: ${result.error}`, 'error');
+        throw new Error(result.error); // propagate so modal stays open
       }
     } catch (e) {
       onToast(`Error: ${String(e)}`, 'error');
@@ -1795,9 +1797,14 @@ function CopyTradeModal({
 
   async function handleConfirm() {
     setPlacing(true);
-    await onConfirm(amount, leverage, orderType, orderType === 'limit' ? limitPrice : undefined, slPrice, tpPrice);
-    setPlacing(false);
-    onClose();
+    try {
+      await onConfirm(amount, leverage, orderType, orderType === 'limit' ? limitPrice : undefined, slPrice, tpPrice);
+      onClose(); // only close on success
+    } catch (e) {
+      // error is handled by onConfirm via onToast — just reset placing state
+    } finally {
+      setPlacing(false);
+    }
   }
 
   function TipIcon({ text }: { text: string }) {
