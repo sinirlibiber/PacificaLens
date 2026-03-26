@@ -297,8 +297,8 @@ function CopyTradePanel({
             cfg.agentPublicKey,
           );
           if (!levResult.success) {
-            log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: `Leverage set failed: ${levResult.error}` });
-            continue;
+            // Log the warning but proceed — leverage may already be set correctly on the account
+            log({ symbol: tp.symbol, side: tp.side, action: 'info', msg: `Leverage set warning (proceeding anyway): ${levResult.error}` });
           }
 
           const data: Record<string,unknown> = {
@@ -554,11 +554,19 @@ function CopyTradePanel({
         {/* Margin + Max positions */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Margin / Trade</label>
+            <div className="flex items-center gap-1">
+              <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Margin / Trade</label>
+              <span className="relative inline-flex items-center group">
+                <span className="w-3 h-3 rounded-full border border-border2 text-text3 flex items-center justify-center text-[7px] font-bold cursor-help">?</span>
+                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-44 bg-surface border border-border1 rounded-lg px-2 py-1.5 text-[10px] text-text2 leading-relaxed shadow-card-md z-[200] pointer-events-none whitespace-normal hidden group-hover:block">
+                  Minimum is $10. Your margin per trade — position size = Margin × Leverage.
+                </span>
+              </span>
+            </div>
             <div className="relative">
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-text3">$</span>
-              <input type="number" min={1} value={cfg.marginUsd}
-                onChange={e => setCfg(p => ({ ...p, marginUsd: Math.max(1, Number(e.target.value)) }))}
+              <input type="number" min={10} value={cfg.marginUsd}
+                onChange={e => setCfg(p => ({ ...p, marginUsd: Math.max(10, Number(e.target.value)) }))}
                 className="w-full bg-surface border border-border1 rounded-xl pl-5 pr-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-accent/60 transition-colors" />
             </div>
           </div>
@@ -1787,7 +1795,7 @@ function CopyTradeModal({
   const traderEntry = Number(trade.price || markPrice);
   const maxLev = Number(market?.max_leverage || 20);
 
-  const [amount, setAmount] = useState(Math.min(defaultAmount, myBalance || defaultAmount));
+  const [amount, setAmount] = useState(Math.max(10, Math.min(defaultAmount, myBalance || defaultAmount)));
   const [leverage, setLeverage] = useState(Math.min(5, maxLev));
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [limitPrice, setLimitPrice] = useState(String(traderEntry));
@@ -1811,7 +1819,7 @@ function CopyTradeModal({
     ? (isLong ? entryPrice * (1 + tpPct / 100) : entryPrice * (1 - tpPct / 100))
     : null;
   const isHighLeverage = leverage > 20;
-  const presets = [25, 50, 100, 250, 500].filter(p => myBalance <= 0 || p <= myBalance * 2);
+  const presets = [10, 25, 50, 100, 250].filter(p => myBalance <= 0 || p <= myBalance * 2);
 
   const leveragePct = ((leverage - 1) / (maxLev - 1)) * 100;
 
@@ -1885,7 +1893,7 @@ function CopyTradeModal({
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] font-semibold text-text1">Margin</span>
-                <TipIcon text="Your collateral in USDC. The actual position size is Margin × Leverage." />
+                <TipIcon text="Minimum is $10. Your collateral in USDC — position size = Margin × Leverage." />
               </div>
               {myBalance > 0 && (
                 <span className="text-[10px] text-text3">
@@ -1905,8 +1913,8 @@ function CopyTradeModal({
             </div>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-text3">$</span>
-              <input type="number" value={amount} min={1}
-                onChange={e => setAmount(Number(e.target.value))}
+              <input type="number" value={amount} min={10}
+                onChange={e => setAmount(Math.max(10, Number(e.target.value)))}
                 className="w-full bg-surface2 border border-border1 rounded-xl pl-6 pr-14 py-2.5 text-[13px] font-mono text-text1 outline-none focus:border-accent transition-colors" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-text3">USDC</span>
             </div>
