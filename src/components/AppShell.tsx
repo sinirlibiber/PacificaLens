@@ -44,7 +44,7 @@ function RedirectHome() {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { ready, authenticated, user, signMessage } = usePrivy();
+  const { ready, authenticated, user } = usePrivy();
   const { wallets: solanaWallets } = useSolanaWallets();
   const pathname = usePathname();
   const router = useRouter();
@@ -119,21 +119,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // Not approved — prompt wallet signature
     setToast({ message: 'Please sign in your wallet to approve PACIFICALENS (one-time setup)...', type: 'loading', duration: 0 });
     try {
-      // Try to find the exact wallet by address first, then fall back to any available Solana wallet
-      const solanaWallet =
-        solanaWallets.find(w => w.address === wallet) ||
-        solanaWallets.find(w => w.address === linkedSolanaAddr) ||
-        solanaWallets[0];
-      if (!solanaWallet) {
-        setToast({ message: 'No Solana wallet found. Connect Phantom or Solflare.', type: 'error' });
-        return false;
-      }
-      const privySign = async (msgBytes: Uint8Array): Promise<string> => {
-        const sigResult = await solanaWallet.signMessage(msgBytes);
-        if (typeof sigResult === 'string') return sigResult;
-        return toBase58(sigResult as unknown as Uint8Array);
-      };
-      const result = await approveBuilderCode(wallet, privySign);
+      // Use shared walletSignFn which handles embedded + external wallets (Phantom, Solflare)
+      const result = await approveBuilderCode(wallet, walletSignFn);
       if (result.success) {
         setBuilderApproved(true);
         localStorage.setItem(`pacificalens_builder_approved_${wallet}`, '1');
@@ -162,68 +149,61 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Shared wallet sign function — used by CopyTrading for "Copy this position"
   async function walletSignFn(msgBytes: Uint8Array): Promise<string> {
-    // Try Privy Solana wallets first (Phantom, Solflare injected wallets)
+    // 1. Try Privy-managed Solana wallets (embedded wallets)
     const solanaWallet =
       solanaWallets.find(w => w.address === wallet) ||
-      solanaWallets.find(w => w.address) ||
+      solanaWallets.find(w => w.address === linkedSolanaAddr) ||
       solanaWallets[0];
     if (solanaWallet) {
       try {
         const sigResult = await solanaWallet.signMessage(msgBytes);
         if (typeof sigResult === 'string') return sigResult;
         return toBase58(sigResult as unknown as Uint8Array);
-      } catch { /* fall through to signMessage */ }
-    }
-    // Fallback: Privy embedded wallet via signMessage
-    // signMessage expects a string — pass raw bytes as-is decoded
-    if (signMessage) {
-      try {
-        const msgStr = new TextDecoder('latin1').decode(msgBytes);
-        const result = await signMessage(msgStr);
-        return typeof result === 'string' ? result : toBase58(result as unknown as Uint8Array);
       } catch { /* fall through */ }
     }
-    // Last resort: try linkedSolanaAddr wallet
-    const linkedWallet = solanaWallets.find(w => w.address === linkedSolanaAddr);
-    if (linkedWallet) {
-      const sigResult = await linkedWallet.signMessage(msgBytes);
-      if (typeof sigResult === 'string') return sigResult;
-      return toBase58(sigResult as unknown as Uint8Array);
+
+    // 2. Try window.solana (Phantom injected wallet)
+    const winSolana = (typeof window !== 'undefined' ? (window as any).solana : null);
+    if (winSolana?.isPhantom && winSolana.signMessage) {
+      try {
+        const resp = await winSolana.signMessage(msgBytes, 'utf8');
+        const sig: Uint8Array = resp.signature ?? resp;
+        return toBase58(sig);
+      } catch { /* fall through */ }
     }
-    throw new Error('No Solana wallet found. Connect Phantom or Solflare.');
+
+    // 3. Try window.solflare (Solflare injected wallet)
+    const winFlare = (typeof window !== 'undefined' ? (window as any).solflare : null);
+    if (winFlare?.isSolflare && winFlare.signMessage) {
+      try {
+        const resp = await winFlare.signMessage(msgBytes, 'utf8');
+        const sig: Uint8Array = resp.signature ?? resp;
+        return toBase58(sig);
+      } catch { /* fall through */ }
+    }
+
+    // 4. Try any window.solana compatible wallet (Backpack, etc.)
+    if (winSolana?.signMessage) {
+      try {
+        const resp = await winSolana.signMessage(msgBytes, 'utf8');
+        const sig: Uint8Array = resp.signature ?? resp;
+        return toBase58(sig);
+      } catch { /* fall through */ }
+    }
+
+    throw new Error('No Solana wallet found. Please open Phantom or Solflare and try again.');
   }
 
   async function handleExecute(r: CalcResult, symbol: string) {
     if (!wallet) { setToast({ message: 'Connect your wallet first', type: 'error' }); return; }
     const approved = await ensureBuilderApproved();
     if (!approved) return;
-    const solanaWallet =
-      solanaWallets.find(w => w.address === wallet) ||
-      solanaWallets.find(w => w.address === linkedSolanaAddr) ||
-      solanaWallets[0];
-    if (!solanaWallet) {
-      setToast({ message: 'No Solana wallet found. Connect Phantom or Solflare.', type: 'error' });
-      return;
-    }
     setToast({ message: `Preparing ${r.side.toUpperCase()} order for ${symbol}...`, type: 'info' });
     try {
       const market = markets.find(m => m.symbol === symbol);
       const markPrice = getMarkPrice(tickers[symbol]);
-      // privySign: takes Uint8Array (already encoded payload), returns base58 signature
-      const privySign = async (msgBytes: Uint8Array): Promise<string> => {
-        if (solanaWallet) {
-          // Privy Solana wallet: signMessage takes Uint8Array
-          const sigResult = await solanaWallet.signMessage(msgBytes);
-          if (typeof sigResult === 'string') return sigResult;
-          return toBase58(sigResult as unknown as Uint8Array);
-        } else if (signMessage) {
-          // Fallback: usePrivy signMessage (needs string)
-          const msgStr = new TextDecoder().decode(msgBytes);
-          const result = await signMessage(msgStr);
-          return typeof result === 'string' ? result : toBase58(result as unknown as Uint8Array);
-        }
-        throw new Error('No signing method available — connect a Solana wallet');
-      };
+      // Use shared walletSignFn which handles all wallet types (embedded + external)
+      const privySign = walletSignFn;
       const lotDecimals = market?.lot_size ? Math.ceil(-Math.log10(Number(market.lot_size))) : 4;
       const orderAmount = r.positionSize.toFixed(lotDecimals);
       // Bug 2 fix: use user's entry price for limit orders, fall back to mark price

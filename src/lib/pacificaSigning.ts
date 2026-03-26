@@ -25,13 +25,10 @@ export function buildSigningPayload(
 ): { payload: string; timestamp: number } {
   const timestamp = Date.now();
   const header = { timestamp, expiry_window: 5000, type };
-  // Per Pacifica docs: data contains ONLY the operation fields (symbol, amount, side, etc.)
-  // builder_code is NOT included in the signed payload for order operations
-  // It only appears in the final request body at the top level
-  // Exception: approve_builder_code has builder_code inside data (handled separately)
-  const dataClean = { ...data };
-  delete dataClean['builder_code']; // ensure builder_code never leaks into signed payload
-  const combined = { ...header, data: dataClean };
+  // builder_code MUST be inside data so it is covered by the signature
+  // This is required for builder attribution to work on Pacifica
+  const dataWithBuilder = { ...data, builder_code: BUILDER_CODE };
+  const combined = { ...header, data: dataWithBuilder };
   const sorted = sortJsonKeys(combined);
   return { payload: JSON.stringify(sorted), timestamp };
 }
@@ -43,17 +40,14 @@ export function buildRequestBody(
   timestamp: number,
   data: Record<string, unknown>
 ): Record<string, unknown> {
-  // Strip builder_code from data before spreading — it's added explicitly below
-  const { builder_code: _bc, ...cleanData } = data;
-  void _bc;
   return {
     account,
     agent_wallet: null,
     signature,
     timestamp,
     expiry_window: 5000,
-    builder_code: BUILDER_CODE,  // always at top level in request body
-    ...cleanData,
+    builder_code: BUILDER_CODE,
+    ...data,
   };
 }
 

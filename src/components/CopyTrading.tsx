@@ -428,7 +428,31 @@ function CopyTradePanel({
 
   const pkValid  = isValidBase58(cfg.agentPrivateKey, 88);
   const pubValid = isValidBase58(cfg.agentPublicKey, 44);
-  const canStart = pkValid && pubValid && !!myAccount;
+
+  // Derive public key from private key and check it matches what the user entered
+  const derivedPubKey = (() => {
+    if (!pkValid) return null;
+    try {
+      const raw = fromB58(cfg.agentPrivateKey);
+      const seed = raw.length === 64 ? raw.slice(0, 32) : raw;
+      const kp = nacl.sign.keyPair.fromSeed(seed);
+      // toBase58 the pubkey
+      const B58A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+      const bytes = kp.publicKey;
+      let lz = 0; for (let i = 0; i < bytes.length; i++) { if (bytes[i] === 0) lz++; else break; }
+      const digits = [0];
+      for (let bi = 0; bi < bytes.length; bi++) {
+        let carry = bytes[bi];
+        for (let i = 0; i < digits.length; i++) { carry += digits[i] << 8; digits[i] = carry % 58; carry = Math.floor(carry / 58); }
+        while (carry > 0) { digits.push(carry % 58); carry = Math.floor(carry / 58); }
+      }
+      while (digits.length > 1 && digits[digits.length - 1] === 0) digits.pop();
+      return '1'.repeat(lz) + digits.reverse().map((d: number) => B58A[d]).join('');
+    } catch { return null; }
+  })();
+
+  const pubKeyMismatch = pkValid && pubValid && derivedPubKey !== null && derivedPubKey !== cfg.agentPublicKey;
+  const canStart = pkValid && pubValid && !!myAccount && !pubKeyMismatch;
 
   return (
     <div className="border-t border-border1 bg-surface2/30">
@@ -482,8 +506,14 @@ function CopyTradePanel({
           {cfg.agentPublicKey && !pubValid && (
             <p className="text-[9px] text-danger px-1">⚠ Geçersiz Public Key — Base58 formatında ~44 karakter olmalı</p>
           )}
-          {cfg.agentPrivateKey && pkValid && cfg.agentPublicKey && pubValid && (
+          {cfg.agentPrivateKey && pkValid && cfg.agentPublicKey && pubValid && !pubKeyMismatch && (
             <p className="text-[9px] text-success px-1">✓ API Agent Keys geçerli görünüyor</p>
+          )}
+          {pubKeyMismatch && (
+            <p className="text-[9px] text-danger px-1">
+              ✗ Public key private key ile eşleşmiyor! Pacifica UI'dan her iki key'i yeniden kopyalayın.
+              {derivedPubKey && <span className="block font-mono opacity-70">Beklenen: {derivedPubKey}</span>}
+            </p>
           )}
         </div>
 
