@@ -85,10 +85,11 @@ function Th({ label, field, cur, dir, onClick }: {
   return (
     <th
       onClick={onClick}
-      className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-right cursor-pointer hover:text-accent select-none whitespace-nowrap transition-colors"
+      className="px-3 py-3 text-[10px] font-semibold uppercase tracking-widest text-right cursor-pointer select-none whitespace-nowrap transition-colors"
+      style={{ color: active ? 'var(--accent)' : 'var(--text3)' }}
     >
       {label}
-      <span className={'ml-1 ' + (active ? 'text-accent' : 'text-border2')}>
+      <span className="ml-1">
         {active ? (dir === 'desc' ? '▼' : '▲') : '⇅'}
       </span>
     </th>
@@ -495,76 +496,90 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
       <div className={`flex flex-col overflow-hidden transition-all duration-300 ${selectedTrader ? 'flex-1 min-w-0' : 'flex-1'}`}>
 
       {/* Top bar — all inside max-w-[1280px] wrapper */}
-      <div className="border-b border-border1 bg-surface shrink-0">
-        <div className="max-w-[1280px] mx-auto px-6 py-3 flex items-center gap-4">
-          {/* Tab switcher */}
-          <div className="flex bg-surface2 border border-border1 rounded-lg p-0.5 shrink-0">
-            <button
-              onClick={() => setActiveTab('leaderboard')}
-              className={`px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all ${
-                activeTab === 'leaderboard' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2'
-              }`}>
-              Leaderboard
-            </button>
-            <button
-              onClick={() => setActiveTab('favorites')}
-              className={`px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all flex items-center gap-1.5 ${
-                activeTab === 'favorites' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2'
-              }`}>
-              Watching
-              {favorites.length > 0 && (
-                <span className="bg-accent text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                  {favorites.length}
-                </span>
-              )}
-            </button>
+      <div className="shrink-0" style={{ borderBottom: '1px solid var(--border1)', background: 'var(--surface)' }}>
+        <div className="max-w-[1280px] mx-auto px-6 py-0 flex items-center gap-6 h-[52px]">
+          {/* Tab switcher — underline style matching screenshot */}
+          <div className="flex items-center gap-0 h-full">
+            {[
+              { id: 'leaderboard' as const, icon: (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline-block">
+                  <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+              ), label: 'Leaderboard' },
+              { id: 'favorites' as const, icon: (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline-block">
+                  <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              ), label: 'Watching' },
+            ].map(tab => {
+              const active = activeTab === tab.id;
+              return (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className="relative h-full flex items-center px-4 text-[13px] font-semibold transition-colors duration-150"
+                  style={{ color: active ? 'var(--accent)' : 'var(--text3)', borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent' }}>
+                  {tab.icon}{tab.label}
+                  {tab.id === 'favorites' && favorites.length > 0 && (
+                    <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
+                      style={{ background: 'var(--accent)', color: '#fff' }}>
+                      {favorites.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {activeTab === 'leaderboard' && (
             <>
               {/* Search */}
-              <div className="relative flex-1 max-w-64">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text3 text-[12px]">🔍</span>
+              <div className="relative" style={{ width: 260 }}>
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text3)' }}>
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
                 <input
                   type="text"
                   placeholder="Search wallet..."
                   value={searchQuery}
                   onChange={e => { setSearchQuery(e.target.value); setPage(0); }}
-                  className="w-full bg-surface2 border border-border1 rounded-xl pl-8 pr-3 py-1.5 text-[12px] text-text1 outline-none focus:border-accent transition-colors placeholder-text3"
+                  className="w-full rounded-xl pl-8 pr-3 py-1.5 text-[12px] outline-none transition-colors"
+                  style={{ background: 'var(--surface2)', border: '1px solid var(--border1)', color: 'var(--text1)' }}
+                  onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={e => (e.target.style.borderColor = 'var(--border1)')}
                 />
               </div>
 
               <div className="ml-auto flex items-center gap-3 shrink-0">
                 <button onClick={() => setShowFilters(v => !v)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all ${
-                    showFilters || hasActiveFilters
-                      ? 'bg-accent/10 border-accent/30 text-accent'
-                      : 'border-border1 text-text3 hover:border-accent/40 hover:text-accent'
-                  }`}>
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all"
+                  style={showFilters || hasActiveFilters
+                    ? { background: 'var(--accent-glow)', borderColor: 'var(--accent)', color: 'var(--accent)' }
+                    : { background: 'transparent', borderColor: 'var(--border1)', color: 'var(--text3)' }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
                   </svg>
-                  Filter
-                  {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+                  Filter Options
+                  {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent)' }} />}
                 </button>
-                <span className="text-[11px] text-text3">
+                <span className="text-[11px] px-3 py-1.5 rounded-xl border font-mono"
+                  style={{ borderColor: 'var(--border1)', color: 'var(--text3)', background: 'var(--surface2)' }}>
                   {hasActiveFilters
                     ? `${filteredLeaderboard.length.toLocaleString()} / ${leaderboard.length.toLocaleString()} traders`
                     : `${leaderboard.length.toLocaleString()} traders`
                   }
                 </span>
                 <button onClick={fetchLeaderboard} disabled={lbLoading}
-                  className="flex items-center gap-1.5 text-[11px] text-accent hover:underline disabled:opacity-50">
+                  className="flex items-center gap-1.5 text-[11px] disabled:opacity-50 transition-colors"
+                  style={{ color: 'var(--accent)' }}>
                   {lbLoading
-                    ? <><div className="w-3 h-3 border border-accent/30 border-t-accent rounded-full animate-spin" /> Loading...</>
+                    ? <><div className="w-3 h-3 border rounded-full animate-spin" style={{ borderColor: 'var(--border2)', borderTopColor: 'var(--accent)' }} /> Loading...</>
                     : <>↻ Refresh</>
                   }
                 </button>
                 {scoresComputedAt && (
-                  <span className="text-[10px] text-text3 border-l border-border1 pl-3">
-                    Score: {new Date(scoresComputedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  <span className="text-[10px] pl-3 border-l font-mono" style={{ borderColor: 'var(--border1)', color: 'var(--text3)' }}>
+                    Score {new Date(scoresComputedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} /ui
                     {' '}
-                    <button onClick={refreshScores} disabled={scoresLoading} className="text-accent hover:underline disabled:opacity-50">
+                    <button onClick={refreshScores} disabled={scoresLoading} className="disabled:opacity-50 hover:underline" style={{ color: 'var(--accent)' }}>
                       {scoresLoading ? '...' : '↻'}
                     </button>
                   </span>
@@ -576,7 +591,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
 
         {/* Filter panel */}
         {showFilters && activeTab === 'leaderboard' && (
-          <div className="border-t border-border1 bg-surface2">
+          <div style={{ borderTop: '1px solid var(--border1)', background: 'var(--surface2)' }}>
             <div className="max-w-[1280px] mx-auto px-6 py-3">
               <div className="grid grid-cols-6 gap-3 items-end">
                 {[
@@ -587,26 +602,30 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                   { label: 'Min Equity ($)', key: 'minEquity' },
                 ].map(f => (
                   <div key={f.key}>
-                    <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">{f.label}</label>
+                    <label className="text-[10px] uppercase font-semibold block mb-1" style={{ color: 'var(--text3)' }}>{f.label}</label>
                     <input type="number" placeholder="0"
                       value={filters[f.key as keyof typeof filters] as string}
                       onChange={e => { setFilters(prev => ({ ...prev, [f.key]: e.target.value })); setPage(0); }}
-                      className="w-full bg-surface border border-border1 rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-text1 outline-none focus:border-accent transition-colors" />
+                      className="w-full rounded-xl px-2.5 py-1.5 text-[12px] font-mono outline-none"
+                      style={{ background: 'var(--surface)', border: '1px solid var(--border1)', color: 'var(--text1)' }}
+                      onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+                      onBlur={e => (e.target.style.borderColor = 'var(--border1)')} />
                   </div>
                 ))}
                 <div className="flex flex-col gap-2">
                   <button onClick={() => { setFilters(prev => ({ ...prev, onlyProfitable: !prev.onlyProfitable })); setPage(0); }}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all ${
-                      filters.onlyProfitable ? 'bg-success/10 border-success/30 text-success' : 'border-border1 text-text3 hover:border-border2'
-                    }`}>
-                    <div className={`relative w-7 h-4 rounded-full transition-all ${filters.onlyProfitable ? 'bg-success' : 'bg-border2'}`}>
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all"
+                    style={filters.onlyProfitable
+                      ? { background: 'var(--success-bg)', borderColor: 'var(--success)', color: 'var(--success)' }
+                      : { background: 'transparent', borderColor: 'var(--border1)', color: 'var(--text3)' }}>
+                    <div className="relative w-7 h-4 rounded-full transition-all" style={{ background: filters.onlyProfitable ? 'var(--success)' : 'var(--border2)' }}>
                       <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${filters.onlyProfitable ? 'translate-x-3' : ''}`} />
                     </div>
                     Profitable only
                   </button>
                   {hasActiveFilters && (
                     <button onClick={() => { setFilters({ minPnl7d: '', minPnl30d: '', minPnlAll: '', minVolume: '', minEquity: '', onlyProfitable: false }); setPage(0); }}
-                      className="text-[11px] text-danger hover:underline text-left">
+                      className="text-[11px] hover:underline text-left" style={{ color: 'var(--danger)' }}>
                       Clear filters
                     </button>
                   )}
@@ -618,42 +637,41 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto bg-bg">
+      <div className="flex-1 overflow-y-auto" style={{ background: 'var(--bg)' }}>
         <div className="w-full max-w-[1280px] mx-auto">
 
         {/* ── LEADERBOARD TAB ── */}
         {activeTab === 'leaderboard' && (
           <>
             {lbError && (
-              <div className="m-4 p-4 bg-danger/5 border border-danger/20 rounded-xl text-[12px] text-danger">
+              <div className="m-4 p-4 rounded-2xl text-[12px] border" style={{ background: 'var(--danger-bg)', borderColor: 'var(--danger)', color: 'var(--danger)' }}>
                 ⚠ {lbError}
               </div>
             )}
 
             {lbLoading && !pagedList.length ? (
               <div className="flex items-center justify-center flex-1 h-64 gap-3">
-                <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-                <span className="text-[12px] text-text3">Loading leaderboard...</span>
+                <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border2)', borderTopColor: 'var(--accent)' }} />
+                <span className="text-[12px]" style={{ color: 'var(--text3)' }}>Loading leaderboard...</span>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="sticky top-0 bg-surface2 border-b border-border1 z-10">
+                  <thead className="sticky top-0 z-10" style={{ background: 'var(--surface2)', borderBottom: '1px solid var(--border1)' }}>
                     <tr>
-                      <th className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-left w-8">#</th>
-                      <th className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-left">Trader</th>
+                      <th className="px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-left w-10" style={{ color: 'var(--text3)' }}>#</th>
+                      <th className="px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-left" style={{ color: 'var(--text3)' }}>Trader</th>
                       {sortCols.map(c => (
                         <Th key={c.field} label={c.label} field={c.field}
                           cur={sortField} dir={sortDir} onClick={() => toggleSort(c.field)} />
                       ))}
                       <th
                         onClick={() => toggleSort('watching' as SortField)}
-                        className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-center cursor-pointer hover:text-accent select-none transition-colors"
+                        className="px-3 py-3 text-[10px] font-semibold uppercase tracking-widest text-center cursor-pointer select-none transition-colors"
+                        style={{ color: sortField === 'watching' ? 'var(--accent)' : 'var(--text3)' }}
                       >
                         Watch
-                        <span className={`ml-1 ${sortField === 'watching' ? 'text-accent' : 'text-border2'}`}>
-                          {sortField === 'watching' ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
-                        </span>
+                        <span className="ml-1">{sortField === 'watching' ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}</span>
                       </th>
                     </tr>
                   </thead>
@@ -661,21 +679,30 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                     {filteredPagedList.map((entry: LeaderboardEntry, i: number) => {
                       const rank = globalStart + i + 1;
                       const faved = isFavorite(entry.account);
+                      const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : '';
                       return (
                         <tr key={entry.account}
                           onClick={() => openTraderDrawer(entry.account)}
-                          className="border-b border-border1 last:border-0 hover:bg-surface2/60 transition-colors group cursor-pointer">
-                          <td className="px-3 py-2 text-[11px] text-text3 font-mono">{rank}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center text-[9px] font-bold text-accent">
+                          className="lb-row group cursor-pointer">
+                          <td className="px-4 py-3">
+                            <span className={`text-[12px] font-bold font-mono ${rankClass}`}
+                              style={!rankClass ? { color: 'var(--text3)' } : {}}>
+                              {rank}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              {/* Avatar circle */}
+                              <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+                                style={{ background: 'var(--accent-glow)', border: '1px solid var(--accent)', color: 'var(--accent)' }}>
                                 {entry.account.slice(0, 2).toUpperCase()}
                               </div>
                               <div>
-                                <div className="text-[12px] font-mono text-text1 font-semibold">{fmtShortAddr(entry.account)}</div>
+                                <div className="text-[12px] font-mono font-semibold" style={{ color: 'var(--text1)' }}>{fmtShortAddr(entry.account)}</div>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(entry.account); }}
-                                  className="text-[9px] text-text3 hover:text-accent transition-colors opacity-0 group-hover:opacity-100">
+                                  className="text-[9px] transition-opacity opacity-0 group-hover:opacity-100"
+                                  style={{ color: 'var(--text3)' }}>
                                   Copy address
                                 </button>
                               </div>
@@ -683,50 +710,48 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                           </td>
 
                           {/* Score */}
-                          <td className={`px-3 py-2 text-right ${sortField === 'score' ? 'bg-accent/3' : ''}`}>
+                          <td className="px-3 py-3 text-right">
                             <ScoreBadge score={getScore(entry.account)} />
                           </td>
 
                           {/* PnL cols */}
                           {(['pnl_7d', 'pnl_30d', 'pnl_all'] as const).map(f => (
-                            <td key={f} className={`px-3 py-2 text-right text-[12px] font-mono font-semibold ${
-                              entry[f] >= 0 ? 'text-success' : 'text-danger'
-                            } ${sortField === f ? 'bg-accent/3' : ''}`}>
+                            <td key={f} className="px-3 py-3 text-right text-[12px] font-mono font-semibold"
+                              style={{ color: entry[f] >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                               {fmtN(entry[f], true)}
                             </td>
                           ))}
 
                           {/* Volume cols */}
                           {(['volume_7d', 'volume_30d', 'volume_all'] as const).map(f => (
-                            <td key={f} className={`px-3 py-2 text-right text-[12px] font-mono text-text2 ${
-                              sortField === f ? 'bg-accent/3' : ''
-                            }`}>
+                            <td key={f} className="px-3 py-3 text-right text-[12px] font-mono"
+                              style={{ color: 'var(--text2)' }}>
                               {fmtN(entry[f])}
                             </td>
                           ))}
 
                           {/* Equity */}
-                          <td className={`px-3 py-2 text-right text-[12px] font-mono text-text2 ${
-                            sortField === 'equity_current' ? 'bg-accent/3' : ''
-                          }`}>
+                          <td className="px-3 py-3 text-right text-[12px] font-mono" style={{ color: 'var(--text2)' }}>
                             {fmtN(entry.equity_current)}
                           </td>
 
                           {/* OI */}
-                          <td className={`px-3 py-2 text-right text-[12px] font-mono text-text2 ${
-                            sortField === 'oi_current' ? 'bg-accent/3' : ''
-                          }`}>
+                          <td className="px-3 py-3 text-right text-[12px] font-mono" style={{ color: 'var(--text2)' }}>
                             {fmtN(entry.oi_current)}
                           </td>
 
                           {/* Trader Style */}
-                          <td className={`px-3 py-2 hidden md:table-cell ${sortField === 'style' ? 'bg-accent/3' : ''}`}>
+                          <td className="px-3 py-3 hidden md:table-cell">
                             {(() => {
                               const traderScore = getScore(entry.account);
-                              if (!traderScore) return <span className="text-[10px] text-text3">—</span>;
+                              if (!traderScore) return <span className="text-[10px]" style={{ color: 'var(--text3)' }}>—</span>;
                               const meta = STYLE_META[traderScore.style];
+                              const styleClass = traderScore.style.toLowerCase().includes('whale') ? 'badge-whale'
+                                : traderScore.style.toLowerCase().includes('risk') ? 'badge-hrisk'
+                                : traderScore.style.toLowerCase().includes('swing') ? 'badge-swing'
+                                : 'badge-balanced';
                               return (
-                                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${meta.color}`} title={meta.desc}>
+                                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${styleClass}`} title={meta.desc}>
                                   {meta.icon} {traderScore.style}
                                 </span>
                               );
@@ -734,15 +759,11 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                           </td>
 
                           {/* Favorite button */}
-                          <td className="px-3 py-2 text-center">
+                          <td className="px-3 py-3 text-center">
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleFavorite(entry.account); }}
                               title={faved ? 'Remove from watchlist' : 'Add to watchlist'}
-                              className={`w-8 h-8 flex items-center justify-center mx-auto rounded-lg transition-all text-[14px] ${
-                                faved
-                                  ? 'text-warn bg-warn/10 border border-warn/30 hover:bg-warn/20'
-                                  : 'text-text3 hover:text-warn hover:bg-warn/5 border border-transparent hover:border-warn/20'
-                              }`}>
+                              className={`star-btn w-8 h-8 flex items-center justify-center mx-auto rounded-lg transition-all text-[16px] ${faved ? 'active' : ''}`}>
                               {faved ? '★' : '☆'}
                             </button>
                           </td>
@@ -756,40 +777,50 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="px-6 py-3 border-t border-border1 flex items-center justify-between">
-                <span className="text-[11px] text-text3">
+              <div className="px-6 py-3 flex items-center justify-between" style={{ borderTop: '1px solid var(--border1)' }}>
+                <span className="text-[11px] font-mono" style={{ color: 'var(--text3)' }}>
                   Page {page + 1} / {totalPages} · {filteredTotal.toLocaleString()} results
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <button onClick={() => setPage(0)} disabled={page === 0}
-                    className="px-2.5 py-1 text-[11px] text-text2 bg-surface2 border border-border1 rounded-lg hover:border-accent/40 disabled:opacity-30 transition-all">
-                    «
-                  </button>
-                  <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                    className="px-2.5 py-1 text-[11px] text-text2 bg-surface2 border border-border1 rounded-lg hover:border-accent/40 disabled:opacity-30 transition-all">
-                    ‹
-                  </button>
+                <div className="flex items-center gap-1">
+                  {[
+                    { label: '«', action: () => setPage(0), disabled: page === 0 },
+                    { label: '‹', action: () => setPage(p => Math.max(0, p - 1)), disabled: page === 0 },
+                  ].map(btn => (
+                    <button key={btn.label} onClick={btn.action} disabled={btn.disabled}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl border text-[11px] font-semibold transition-all disabled:opacity-30"
+                      style={{ borderColor: 'var(--border1)', color: 'var(--text2)', background: 'var(--surface2)' }}
+                      onMouseEnter={e => !btn.disabled && ((e.currentTarget.style.borderColor = 'var(--accent)'))}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border1)')}>
+                      {btn.label}
+                    </button>
+                  ))}
                   {[...Array(Math.min(5, totalPages))].map((_, i) => {
                     const p = Math.max(0, Math.min(page - 2, totalPages - 5)) + i;
+                    const active = p === page;
                     return (
                       <button key={p} onClick={() => setPage(p)}
-                        className={`w-8 py-1 text-[11px] rounded-lg border transition-all ${
-                          p === page
-                            ? 'bg-accent text-white border-accent'
-                            : 'text-text2 bg-surface2 border-border1 hover:border-accent/40'
-                        }`}>
+                        className="w-8 h-8 flex items-center justify-center rounded-xl border text-[11px] font-semibold transition-all"
+                        style={{
+                          background: active ? 'var(--accent)' : 'var(--surface2)',
+                          borderColor: active ? 'var(--accent)' : 'var(--border1)',
+                          color: active ? '#fff' : 'var(--text2)',
+                        }}>
                         {p + 1}
                       </button>
                     );
                   })}
-                  <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
-                    className="px-2.5 py-1 text-[11px] text-text2 bg-surface2 border border-border1 rounded-lg hover:border-accent/40 disabled:opacity-30 transition-all">
-                    ›
-                  </button>
-                  <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}
-                    className="px-2.5 py-1 text-[11px] text-text2 bg-surface2 border border-border1 rounded-lg hover:border-accent/40 disabled:opacity-30 transition-all">
-                    »
-                  </button>
+                  {[
+                    { label: '›', action: () => setPage(p => Math.min(totalPages - 1, p + 1)), disabled: page >= totalPages - 1 },
+                    { label: '»', action: () => setPage(totalPages - 1), disabled: page >= totalPages - 1 },
+                  ].map(btn => (
+                    <button key={btn.label} onClick={btn.action} disabled={btn.disabled}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl border text-[11px] font-semibold transition-all disabled:opacity-30"
+                      style={{ borderColor: 'var(--border1)', color: 'var(--text2)', background: 'var(--surface2)' }}
+                      onMouseEnter={e => !btn.disabled && ((e.currentTarget.style.borderColor = 'var(--accent)'))}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border1)')}>
+                      {btn.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

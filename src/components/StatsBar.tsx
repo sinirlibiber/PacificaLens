@@ -16,26 +16,27 @@ export function StatsBar({ accountInfo, positions, accountSize, availableBalance
   const available = availableBalance ?? (accountInfo ? Number(accountInfo.available_to_spend || 0) : Math.max(0, accountSize - totalMarginUsed));
   const totalFunding = positions.reduce((s, p) => s + Number(p.funding || 0), 0);
   const portfolioRiskPct = equity > 0 ? Math.min((totalMarginUsed / equity) * 100, 100) : 0;
-  const riskColor = portfolioRiskPct < 10 ? 'text-success' : portfolioRiskPct < 25 ? 'text-warn' : 'text-danger';
+
+  const riskColor = portfolioRiskPct < 10 ? 'var(--success)' : portfolioRiskPct < 25 ? 'var(--warn)' : 'var(--danger)';
 
   const stats = [
     {
       label: 'Account Equity',
       value: equity > 0 ? `$${fmt(equity, 2)}` : '—',
       sub: accountInfo ? `Balance: $${fmt(Number(accountInfo.balance), 2)}` : 'Connect wallet',
-      color: 'text-accent',
+      color: 'var(--accent)',
     },
     {
       label: 'Available',
       value: equity > 0 ? `$${fmt(available, 2)}` : '—',
       sub: `Margin used: $${fmt(totalMarginUsed, 2)}`,
-      color: available < totalMarginUsed * 0.2 ? 'text-danger' : 'text-text1',
+      color: available < totalMarginUsed * 0.2 ? 'var(--danger)' : 'var(--text1)',
     },
     {
       label: 'Open Positions',
       value: String(positions.length),
       sub: `${positions.filter(p => p.side === 'bid').length}L · ${positions.filter(p => p.side === 'ask').length}S`,
-      color: 'text-text1',
+      color: 'var(--text1)',
     },
     {
       label: 'Portfolio Risk',
@@ -47,18 +48,24 @@ export function StatsBar({ accountInfo, positions, accountSize, availableBalance
       label: 'Funding Paid',
       value: `${totalFunding >= 0 ? '+' : ''}$${fmt(totalFunding, 4)}`,
       sub: 'Since position open',
-      color: totalFunding >= 0 ? 'text-success' : 'text-danger',
+      color: totalFunding >= 0 ? 'var(--success)' : 'var(--danger)',
     },
   ];
 
   return (
-    <div className="grid border border-border1 bg-surface rounded-t-2xl mt-5 overflow-hidden"
-      style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+    <div className="grid rounded-t-2xl mt-5 overflow-hidden"
+      style={{
+        gridTemplateColumns: 'repeat(5, 1fr)',
+        border: '1px solid var(--border1)',
+        background: 'var(--surface)',
+      }}>
       {stats.map((s, i) => (
-        <div key={s.label} className={`px-4 py-3.5 ${i < stats.length - 1 ? 'border-r border-border1' : ''}`}>
-          <div className="text-[9px] text-text3 uppercase tracking-widest mb-1 font-semibold">{s.label}</div>
-          <div className={`text-[18px] font-bold ${s.color}`}>{s.value}</div>
-          <div className="text-[10px] text-text3 mt-0.5">{s.sub}</div>
+        <div key={s.label}
+          className="px-4 py-3.5"
+          style={{ borderRight: i < stats.length - 1 ? '1px solid var(--border1)' : 'none' }}>
+          <div className="text-[9px] uppercase tracking-widest mb-1 font-semibold" style={{ color: 'var(--text3)' }}>{s.label}</div>
+          <div className="text-[18px] font-bold" style={{ color: s.color }}>{s.value}</div>
+          <div className="text-[10px] mt-0.5" style={{ color: 'var(--text3)' }}>{s.sub}</div>
         </div>
       ))}
     </div>

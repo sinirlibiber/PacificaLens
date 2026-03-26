@@ -208,9 +208,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (!ready) return (
-    <div className="flex items-center justify-center h-screen bg-bg gap-3">
-      <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-      <span className="text-[12px] text-text3">Loading PacificaLens...</span>
+    <div className="flex items-center justify-center h-screen gap-3" style={{ background: 'var(--bg)' }}>
+      <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border2)', borderTopColor: 'var(--accent)' }} />
+      <span className="text-[12px]" style={{ color: 'var(--text3)' }}>Loading PacificaLens...</span>
     </div>
   );
 
@@ -225,8 +225,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ) : (
           loading ? (
             <div className="flex items-center justify-center flex-1 gap-3">
-              <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-              <span className="text-[12px] text-text3">Loading markets...</span>
+              <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border2)', borderTopColor: 'var(--accent)' }} />
+              <span className="text-[12px]" style={{ color: 'var(--text3)' }}>Loading markets...</span>
             </div>
           ) : children
         )}
