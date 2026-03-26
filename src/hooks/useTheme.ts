@@ -8,7 +8,7 @@ export function useTheme() {
     // Load saved preference
     const saved = localStorage.getItem('pl_theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const dark = saved ? saved === 'dark' : prefersDark;
+    const dark = saved ? saved === 'dark' : true; // default to dark
     setIsDark(dark);
     if (dark) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');

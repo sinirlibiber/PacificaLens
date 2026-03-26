@@ -21,25 +21,27 @@
   --text3: #94a3b8;
   --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05);
+  --glow: none;
 }
 
 /* ── DARK THEME ── */
 html.dark {
-  --bg: #0d1117;
-  --surface: #161b22;
-  --surface2: #1c2128;
-  --border1: #30363d;
-  --border2: #3d444d;
-  --accent: #00b4d8;
-  --accent2: #0096c7;
-  --success: #3fb950;
-  --danger: #f85149;
-  --warn: #d29922;
-  --text1: #e6edf3;
-  --text2: #8b949e;
-  --text3: #656d76;
-  --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+  --bg: #070d1a;
+  --surface: rgba(10, 20, 45, 0.85);
+  --surface2: rgba(15, 28, 58, 0.9);
+  --border1: rgba(0, 180, 220, 0.18);
+  --border2: rgba(0, 200, 255, 0.28);
+  --accent: #00d4ff;
+  --accent2: #00a8cc;
+  --success: #00e676;
+  --danger: #ff4444;
+  --warn: #ffab00;
+  --text1: #e8f4ff;
+  --text2: #7eb8d4;
+  --text3: #3d6a82;
+  --shadow: 0 2px 16px rgba(0,180,255,0.08), 0 1px 4px rgba(0,0,0,0.6);
+  --shadow-md: 0 8px 32px rgba(0,180,255,0.12), 0 2px 8px rgba(0,0,0,0.5);
+  --glow: 0 0 20px rgba(0,212,255,0.15);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,6 +57,45 @@ html, body {
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ── DARK MODE ENHANCED STYLES ── */
+html.dark body {
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 180, 255, 0.12) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(0, 80, 180, 0.08) 0%, transparent 60%);
+  min-height: 100vh;
+}
+
+/* Glassmorphism surfaces in dark mode */
+html.dark .bg-surface {
+  background: var(--surface) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html.dark .bg-surface2 {
+  background: var(--surface2) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Glowing borders */
+html.dark .border-border1 {
+  border-color: var(--border1) !important;
+}
+html.dark .border-border2 {
+  border-color: var(--border2) !important;
+}
+
+/* Accent glow */
+html.dark .text-accent { color: var(--accent) !important; text-shadow: 0 0 12px rgba(0,212,255,0.5); }
+html.dark .bg-accent { background: var(--accent) !important; box-shadow: 0 0 16px rgba(0,212,255,0.4); }
+
+/* Success glow */
+html.dark .text-success { color: var(--success) !important; }
+
+/* Table rows hover */
+html.dark tr:hover td { background: rgba(0, 180, 255, 0.05) !important; }
 
 /* Remove number input arrows */
 input[type='number']::-webkit-outer-spin-button,
@@ -111,3 +152,134 @@ html.dark input::placeholder,
 html.dark textarea::placeholder { color: var(--text3); }
 html.dark input:focus,
 html.dark select:focus { border-color: var(--accent); }
+
+/* ══════════════════════════════════════════════════════
+   DARK THEME — Enhanced visual system (screenshot match)
+   ══════════════════════════════════════════════════════ */
+
+/* Scrollbar dark */
+html.dark ::-webkit-scrollbar-track { background: #070d1a; }
+html.dark ::-webkit-scrollbar-thumb { background: rgba(0,180,255,0.25); border-radius: 2px; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(0,212,255,0.4); }
+
+/* Header */
+html.dark header {
+  background: rgba(7, 13, 26, 0.92) !important;
+  border-bottom-color: rgba(0, 180, 220, 0.2) !important;
+}
+
+/* Table header */
+html.dark thead tr {
+  background: rgba(5, 15, 35, 0.95) !important;
+}
+html.dark thead th {
+  color: rgba(0, 180, 220, 0.7) !important;
+  border-bottom: 1px solid rgba(0, 180, 220, 0.15) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+}
+
+/* Table rows */
+html.dark tbody tr {
+  border-bottom: 1px solid rgba(0, 120, 180, 0.08) !important;
+  transition: background 0.15s ease;
+}
+html.dark tbody tr:hover {
+  background: rgba(0, 160, 220, 0.06) !important;
+}
+
+/* Cards / panels */
+html.dark .rounded-xl,
+html.dark .rounded-2xl {
+  border-color: rgba(0, 160, 220, 0.15);
+}
+
+/* Top bar */
+html.dark .border-b.bg-surface {
+  background: rgba(7, 13, 26, 0.95) !important;
+  border-bottom-color: rgba(0, 160, 220, 0.15) !important;
+}
+
+/* Active tab pill (leaderboard / watching switcher) */
+html.dark .bg-surface2.border.rounded-lg {
+  background: rgba(0, 30, 60, 0.6) !important;
+  border-color: rgba(0, 160, 220, 0.2) !important;
+}
+
+/* Accent button */
+html.dark .bg-accent {
+  background: #00d4ff !important;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.35), 0 2px 8px rgba(0,0,0,0.4) !important;
+}
+html.dark .bg-accent:hover {
+  background: #00b8e0 !important;
+}
+
+/* Success/danger badges */
+html.dark .text-success { color: #00e676 !important; }
+html.dark .text-danger  { color: #ff5252 !important; }
+html.dark .text-warn    { color: #ffab00 !important; }
+
+/* Score badges */
+html.dark .bg-success\/10 { background: rgba(0, 230, 118, 0.1) !important; }
+html.dark .bg-danger\/10  { background: rgba(255, 82, 82, 0.1)  !important; }
+
+/* Rank number */
+html.dark td:first-child {
+  color: rgba(120, 180, 220, 0.5) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Trader address mono */
+html.dark .font-mono {
+  color: var(--text1);
+}
+
+/* Inputs dark */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background: rgba(5, 15, 40, 0.8) !important;
+  border-color: rgba(0, 160, 220, 0.2) !important;
+  color: var(--text1) !important;
+}
+html.dark input:focus,
+html.dark select:focus {
+  border-color: rgba(0, 212, 255, 0.5) !important;
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.08) !important;
+}
+
+/* Range slider */
+html.dark input[type='range'] {
+  background: rgba(0, 100, 160, 0.3);
+}
+html.dark input[type='range']::-webkit-slider-thumb {
+  background: #00d4ff;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+}
+
+/* Filter/search bar */
+html.dark .bg-surface2.border.rounded-xl {
+  background: rgba(5, 18, 45, 0.85) !important;
+  border-color: rgba(0, 150, 210, 0.18) !important;
+}
+
+/* Pagination */
+html.dark .rounded-lg.border.text-text3 {
+  border-color: rgba(0, 140, 200, 0.2) !important;
+}
+
+/* Loading spinner accent */
+html.dark .border-t-accent {
+  border-top-color: #00d4ff !important;
+}
+
+/* Dividers */
+html.dark .border-border1 { border-color: rgba(0, 150, 210, 0.15) !important; }
+html.dark .border-border2 { border-color: rgba(0, 180, 230, 0.25) !important; }
+
+/* Logo glow */
+html.dark header img {
+  filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.4));
+}

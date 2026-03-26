@@ -86,37 +86,37 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
   const isBuilderWallet = address === BUILDER_WALLET;
 
   return (
-    <header className="flex items-center h-12 border-b border-border1 bg-surface shadow-card sticky top-0 z-50 px-4">
+    <header className="flex items-center h-14 border-b border-border1 bg-surface shadow-card sticky top-0 z-50 px-6" style={{backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)'}}>
       {/* Logo */}
       <a href="https://www.pacificalens.xyz/" target="_blank" rel="noopener noreferrer"
         className="flex items-center gap-1.5 w-44 shrink-0 hover:opacity-80 transition-opacity cursor-pointer">
         <Image src="/logo.png" alt="PacificaLens" width={36} height={36} className="object-contain" />
-        <div className="font-bold text-[15px] tracking-tight text-text1 leading-none">PACIFICALENS</div>
+        <div className="font-bold text-[15px] tracking-tight text-text1 leading-none" style={{letterSpacing:'0.08em'}}>PACIFICALENS</div>
       </a>
 
       {/* Tabs center */}
       <div className="flex-1 flex items-center justify-center">
         {authenticated && (
-          <div className="flex items-center bg-surface2 rounded-lg p-0.5 border border-border1 gap-0">
+          <div className="flex items-center gap-1">
 
             {/* Overview */}
             <button onClick={() => onTabChange('overview')}
-              className={'px-3 py-1.5 text-[11px] font-semibold rounded-md transition-all ' +
-                (tab === 'overview' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2')}>
+              className={'px-4 py-2 text-[13px] font-medium rounded-md transition-all relative ' +
+                (tab === 'overview' ? 'text-accent font-bold relative after:absolute after:bottom-[-18px] after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full' : 'text-text2 hover:text-text1')}>
               Overview
             </button>
 
             {/* Analytics */}
             <button onClick={() => onTabChange('analytics')}
-              className={'px-3 py-1.5 text-[11px] font-semibold rounded-md transition-all ' +
-                (tab === 'analytics' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2')}>
+              className={'px-4 py-2 text-[13px] font-medium rounded-md transition-all relative ' +
+                (tab === 'analytics' ? 'text-accent font-bold relative after:absolute after:bottom-[-18px] after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full' : 'text-text2 hover:text-text1')}>
               Analytics & AI
             </button>
 
             {/* Risk Manager */}
             <button onClick={() => onTabChange('risk')}
-              className={'px-3 py-1.5 text-[11px] font-semibold rounded-md transition-all ' +
-                (tab === 'risk' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2')}>
+              className={'px-4 py-2 text-[13px] font-medium rounded-md transition-all relative ' +
+                (tab === 'risk' ? 'text-accent font-bold relative after:absolute after:bottom-[-18px] after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full' : 'text-text2 hover:text-text1')}>
               Risk Manager
             </button>
 
@@ -124,8 +124,8 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
             <div className="relative" ref={arbRef}>
               <button
                 onClick={() => setShowArb(v => !v)}
-                className={'px-3 py-1.5 text-[11px] font-semibold rounded-md transition-all flex items-center gap-1 ' +
-                (isArbActive ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2')}>
+                className={'px-4 py-2 text-[13px] font-medium rounded-md transition-all flex items-center gap-1 relative ' +
+                (isArbActive ? 'text-accent font-bold relative after:absolute after:bottom-[-18px] after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full' : 'text-text2 hover:text-text1')}>
                 Arbitrage
                 <span className={'text-[9px] opacity-60 transition-transform ' + (showArb ? 'rotate-180' : '')}>▾</span>
               </button>
@@ -159,15 +159,15 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
 
             {/* Smart Money (formerly Copy Trading) */}
             <button onClick={() => onTabChange('copy')}
-              className={'px-3 py-1.5 text-[11px] font-semibold rounded-md transition-all ' +
-                (tab === 'copy' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2')}>
+              className={'px-4 py-2 text-[13px] font-medium rounded-md transition-all relative ' +
+                (tab === 'copy' ? 'text-accent font-bold relative after:absolute after:bottom-[-18px] after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full' : 'text-text2 hover:text-text1')}>
               Smart Money
             </button>
 
             {/* Portfolio */}
             <button onClick={() => onTabChange('portfolio')}
-              className={'px-3 py-1.5 text-[11px] font-semibold rounded-md transition-all ' +
-                (tab === 'portfolio' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2')}>
+              className={'px-4 py-2 text-[13px] font-medium rounded-md transition-all relative ' +
+                (tab === 'portfolio' ? 'text-accent font-bold relative after:absolute after:bottom-[-18px] after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full' : 'text-text2 hover:text-text1')}>
               Portfolio
             </button>
 
