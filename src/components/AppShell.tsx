@@ -149,6 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Shared wallet sign function — used by all order flows
   async function walletSignFn(msgBytes: Uint8Array): Promise<string> {
+    console.log('[walletSignFn] wallet addr:', wallet, '| solanaWallets:', solanaWallets.map(w => w.address));
     const isUserRejection = (e: unknown) => {
       const msg = String(e).toLowerCase();
       return msg.includes('reject') || msg.includes('cancel') || msg.includes('denied') || msg.includes('user rejected');
@@ -170,32 +171,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // 2. Try window.solana (Phantom / injected Solana wallet)
-    const winSolana = (typeof window !== 'undefined' ? (window as unknown as Record<string, any>).solana : null);
-    if (winSolana?.signMessage) {
+    // 2. Try all known window-level Solana wallet providers
+    const win = typeof window !== 'undefined' ? (window as unknown as Record<string, any>) : null;
+    // Check providers in priority order: solana (Phantom), solflare, backpack, okxwallet.solana, coin98.sol
+    const solanaProviders = [
+      win?.solana,           // Phantom (and other wallets that hijack window.solana)
+      win?.solflare,         // Solflare
+      win?.backpack?.solana ?? win?.backpack, // Backpack
+      win?.okxwallet?.solana, // OKX
+      win?.coin98?.sol,       // Coin98
+      win?.glowSolana,        // Glow
+    ].filter(Boolean);
+
+    for (const provider of solanaProviders) {
+      if (!provider?.signMessage) continue;
       try {
-        const resp = await winSolana.signMessage(msgBytes, 'utf8');
+        const resp = await provider.signMessage(msgBytes, 'utf8');
+        // Different wallets return different formats:
+        // Phantom: { signature: Uint8Array, publicKey }
+        // Backpack: Uint8Array directly
+        // Solflare: { signature: Uint8Array }
         const sig: Uint8Array = resp?.signature ?? resp;
-        return toBase58(sig);
+        if (sig instanceof Uint8Array && sig.length === 64) {
+          return toBase58(sig);
+        }
       } catch (e) {
         if (isUserRejection(e)) throw new Error('Signature rejected by user.');
-        // fall through to solflare
+        // try next provider
       }
     }
 
-    // 3. Try window.solflare (Solflare injected wallet)
-    const winFlare = (typeof window !== 'undefined' ? (window as unknown as Record<string, any>).solflare : null);
-    if (winFlare?.signMessage) {
-      try {
-        const resp = await winFlare.signMessage(msgBytes, 'utf8');
-        const sig: Uint8Array = resp?.signature ?? resp;
-        return toBase58(sig);
-      } catch (e) {
-        if (isUserRejection(e)) throw new Error('Signature rejected by user.');
-      }
-    }
-
-    throw new Error('No Solana wallet found. Open Phantom or Solflare extension and try again.');
+    throw new Error('No Solana wallet found. Open Phantom, Solflare, or Backpack and try again.');
   }
 
   async function handleExecute(r: CalcResult, symbol: string) {
