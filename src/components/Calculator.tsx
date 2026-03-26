@@ -16,6 +16,7 @@ export interface CalcResult {
   side: 'long' | 'short';
   leverage: number;
   entryPrice: number; stopLoss: number;
+  orderType?: 'market' | 'limit';
 }
 
 interface CalculatorProps {

@@ -10,7 +10,7 @@ import { Header, getSolanaAddress } from '@/components/Header';
 
 import { Toast } from '@/components/Toast';
 import { getMarkPrice } from '@/lib/utils';
-import { submitLimitOrder, checkBuilderApproval, approveBuilderCode, toBase58 } from '@/lib/pacificaSigning';
+import { submitLimitOrder, submitMarketOrder, checkBuilderApproval, approveBuilderCode, toBase58 } from '@/lib/pacificaSigning';
 import { CalcResult } from '@/components/Calculator';
 import { useOrderLog } from '@/hooks/useOrderLog';
 
@@ -191,19 +191,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }
         throw new Error('No signing method available — connect a Solana wallet');
       };
-      const orderAmount = r.positionSize.toFixed(market?.lot_size ? Math.ceil(-Math.log10(Number(market.lot_size))) : 4);
-      const orderPrice = markPrice > 0 ? String(markPrice) : '0';
+      const lotDecimals = market?.lot_size ? Math.ceil(-Math.log10(Number(market.lot_size))) : 4;
+      const orderAmount = r.positionSize.toFixed(lotDecimals);
+      // Bug 2 fix: use user's entry price for limit orders, fall back to mark price
+      const orderPrice = r.orderType === 'market'
+        ? (markPrice > 0 ? String(markPrice) : '0')
+        : (r.entryPrice > 0 ? String(r.entryPrice) : (markPrice > 0 ? String(markPrice) : '0'));
+      const orderSide = r.side === 'long' ? 'bid' : 'ask';
+      // Bug 3 fix: leverage as string for API
+      const leverageStr = String(r.leverage || 10);
       const logId = addEntry({
-        symbol, side: r.side === 'long' ? 'bid' : 'ask',
+        symbol, side: orderSide,
         amount: orderAmount, price: orderPrice,
-        orderType: 'limit', status: 'pending', source: 'manual',
+        orderType: r.orderType === 'market' ? 'market' : 'limit',
+        status: 'pending', source: 'manual',
       });
-      const result = await submitLimitOrder(wallet, {
-        symbol, price: orderPrice, amount: orderAmount,
-        side: r.side === 'long' ? 'bid' : 'ask',
-        tif: 'GTC', reduce_only: false,
-        take_profit: r.tp1 > 0 ? { stop_price: String(r.tp1) } : undefined,
-      }, privySign);
+
+      let result: { success: boolean; orderId?: string; error?: string };
+      // Bug 1 fix: route to correct order function based on orderType
+      if (r.orderType === 'market') {
+        result = await submitMarketOrder(wallet, {
+          symbol, amount: orderAmount, side: orderSide,
+          reduce_only: false,
+          leverage: leverageStr,
+          take_profit: r.tp1 > 0 ? { stop_price: String(r.tp1) } : undefined,
+          // Bug 4 fix: send stop_loss when set
+          stop_loss: r.stopLoss > 0 ? { stop_price: String(r.stopLoss) } : undefined,
+        }, privySign);
+      } else {
+        result = await submitLimitOrder(wallet, {
+          symbol, price: orderPrice, amount: orderAmount, side: orderSide,
+          tif: 'GTC', reduce_only: false,
+          leverage: leverageStr,
+          take_profit: r.tp1 > 0 ? { stop_price: String(r.tp1) } : undefined,
+          // Bug 4 fix: send stop_loss when set
+          stop_loss: r.stopLoss > 0 ? { stop_price: String(r.stopLoss) } : undefined,
+        }, privySign);
+      }
       if (result.success) {
         updateEntry(logId, { status: 'success', orderId: result.orderId });
         setToast({ message: `✓ ${r.side.toUpperCase()} order placed!`, type: 'success', action: { label: 'View Portfolio', href: '/portfolio' } });

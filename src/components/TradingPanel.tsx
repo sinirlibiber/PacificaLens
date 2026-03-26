@@ -140,7 +140,7 @@ export function TradingPanel({ markets, tickers, wallet, onExecute, accountInfo 
       marginPct: 0,
       slPct: 0,
       liquidationPrice: liqPrice,
-      tp1: Number(tpPrice) || 0,
+      tp1: tpEnabled ? (Number(tpPrice) || 0) : 0,
       tp2: 0,
       tp3: 0,
       rrRatio: 0,
@@ -150,7 +150,10 @@ export function TradingPanel({ markets, tickers, wallet, onExecute, accountInfo 
       side,
       leverage,
       entryPrice,
-      stopLoss: liqPrice,
+      // Bug 5 fix: pass actual orderType so AppShell routes market vs limit correctly
+      orderType,
+      // Bug 4 fix: pass user's sl price (not liqPrice) when SL is enabled
+      stopLoss: slEnabled ? (Number(slPrice) || 0) : 0,
     };
     await onExecute(r, selected.symbol);
     setPlacing(false);

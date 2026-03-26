@@ -125,6 +125,7 @@ export interface LimitOrderData {
   side: OrderSide;
   tif: OrderTif;
   reduce_only: boolean;
+  leverage?: string;
   client_order_id?: string;
   take_profit?: { stop_price: string; limit_price?: string };
   stop_loss?: { stop_price: string; limit_price?: string };
@@ -193,7 +194,7 @@ export async function submitLimitOrder(
 // Uses create_market_order type + /orders/create_market endpoint (different from limit!)
 export async function submitMarketOrder(
   account: string,
-  data: Omit<LimitOrderData, 'price' | 'tif'> & { slippage_percent?: string },
+  data: Omit<LimitOrderData, 'price' | 'tif'> & { slippage_percent?: string; leverage?: string },
   signMessage: SignFn
 ): Promise<{ success: boolean; orderId?: string; error?: string }> {
   try {
