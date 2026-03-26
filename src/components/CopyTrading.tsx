@@ -110,9 +110,9 @@ async function agentSign(pkB58: string, msg: Uint8Array): Promise<string> {
   // tweetnacl expects 32-byte seed; some keys are stored as 64-byte (seed+pubkey)
   const seed = raw.length === 64 ? raw.slice(0, 32) : raw;
   const keypair = nacl.sign.keyPair.fromSeed(seed);
-  // nacl.sign returns 64-byte sig prepended to msg — slice off just the signature
-  const signed = nacl.sign(msg, keypair.secretKey);
-  const sig = signed.slice(0, 64);
+  // nacl.sign.detached() returns ONLY the 64-byte signature (correct for Pacifica)
+  // nacl.sign() returns sig+msg concatenated which is WRONG
+  const sig = nacl.sign.detached(msg, keypair.secretKey);
   return toBase58(sig);
 }
 
@@ -291,7 +291,6 @@ function CopyTradePanel({
           const data: Record<string,unknown> = {
             symbol: tp.symbol, amount: contracts, side, reduce_only: false,
             slippage_percent: '1', client_order_id: crypto.randomUUID(),
-            builder_code: BUILDER_CODE,
             leverage: String(lev),
             ...(slPx ? { stop_loss:   { stop_price: slPx.toFixed(4) } } : {}),
             ...(tpPx ? { take_profit: { stop_price: tpPx.toFixed(4) } } : {}),
@@ -325,7 +324,7 @@ function CopyTradePanel({
             symbol: sym, amount: mine.amount,
             side: mine.side === 'bid' ? 'ask' : 'bid',
             reduce_only: true, slippage_percent: '1',
-            client_order_id: crypto.randomUUID(), builder_code: BUILDER_CODE,
+            client_order_id: crypto.randomUUID(),
           };
           const { payload, timestamp } = buildSigningPayload('create_market_order', data);
           const sig  = await agentSign(cfg.agentPrivateKey, new TextEncoder().encode(payload));
@@ -375,7 +374,7 @@ function CopyTradePanel({
             amount: closeAmount.toFixed(dec),
             side: mine.side === 'bid' ? 'ask' : 'bid',
             reduce_only: true, slippage_percent: '1',
-            client_order_id: crypto.randomUUID(), builder_code: BUILDER_CODE,
+            client_order_id: crypto.randomUUID(),
           };
           const { payload, timestamp } = buildSigningPayload('create_market_order', data);
           const sig  = await agentSign(cfg.agentPrivateKey, new TextEncoder().encode(payload));

@@ -162,6 +162,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Shared wallet sign function — used by CopyTrading for "Copy this position"
   async function walletSignFn(msgBytes: Uint8Array): Promise<string> {
+    // Try Privy Solana wallets first (Phantom, Solflare injected wallets)
     const solanaWallet =
       solanaWallets.find(w => w.address === wallet) ||
       solanaWallets.find(w => w.address) ||
@@ -171,12 +172,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         const sigResult = await solanaWallet.signMessage(msgBytes);
         if (typeof sigResult === 'string') return sigResult;
         return toBase58(sigResult as unknown as Uint8Array);
+      } catch { /* fall through to signMessage */ }
+    }
+    // Fallback: Privy embedded wallet via signMessage
+    // signMessage expects a string — pass raw bytes as-is decoded
+    if (signMessage) {
+      try {
+        const msgStr = new TextDecoder('latin1').decode(msgBytes);
+        const result = await signMessage(msgStr);
+        return typeof result === 'string' ? result : toBase58(result as unknown as Uint8Array);
       } catch { /* fall through */ }
     }
-    if (signMessage) {
-      const msgStr = new TextDecoder().decode(msgBytes);
-      const result = await signMessage(msgStr);
-      return typeof result === 'string' ? result : toBase58(result as unknown as Uint8Array);
+    // Last resort: try linkedSolanaAddr wallet
+    const linkedWallet = solanaWallets.find(w => w.address === linkedSolanaAddr);
+    if (linkedWallet) {
+      const sigResult = await linkedWallet.signMessage(msgBytes);
+      if (typeof sigResult === 'string') return sigResult;
+      return toBase58(sigResult as unknown as Uint8Array);
     }
     throw new Error('No Solana wallet found. Connect Phantom or Solflare.');
   }
