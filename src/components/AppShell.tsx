@@ -119,7 +119,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // Not approved — prompt wallet signature
     setToast({ message: 'Please sign in your wallet to approve PACIFICALENS (one-time setup)...', type: 'loading', duration: 0 });
     try {
-      const solanaWallet = solanaWallets.find(w => w.address === wallet) || solanaWallets[0];
+      // Try to find the exact wallet by address first, then fall back to any available Solana wallet
+      const solanaWallet =
+        solanaWallets.find(w => w.address === wallet) ||
+        solanaWallets.find(w => w.address === linkedSolanaAddr) ||
+        solanaWallets[0];
       if (!solanaWallet) {
         setToast({ message: 'No Solana wallet found. Connect Phantom or Solflare.', type: 'error' });
         return false;
@@ -160,7 +164,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (!wallet) { setToast({ message: 'Connect your wallet first', type: 'error' }); return; }
     const approved = await ensureBuilderApproved();
     if (!approved) return;
-    const solanaWallet = solanaWallets.find(w => w.address === wallet) || solanaWallets[0];
+    const solanaWallet =
+      solanaWallets.find(w => w.address === wallet) ||
+      solanaWallets.find(w => w.address === linkedSolanaAddr) ||
+      solanaWallets[0];
+    if (!solanaWallet) {
+      setToast({ message: 'No Solana wallet found. Connect Phantom or Solflare.', type: 'error' });
+      return;
+    }
     setToast({ message: `Preparing ${r.side.toUpperCase()} order for ${symbol}...`, type: 'info' });
     try {
       const market = markets.find(m => m.symbol === symbol);
