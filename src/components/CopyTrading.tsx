@@ -13,6 +13,7 @@ import { fmt, fmtShortAddr, fmtPrice, getMarkPrice } from '@/lib/utils';
 import { Market, Ticker, AccountInfo, getAccountInfo, getPositions, getEquityHistory, getTradeHistory, getPortfolioStats, getTradesHistory, getOpenOrders, getOrderHistory, getFundingHistory, PortfolioStats } from '@/lib/pacifica';
 import { CalcResult } from './Calculator';
 import { submitMarketOrder, submitLimitOrder, toBase58 } from '@/lib/pacificaSigning';
+import * as nacl from 'tweetnacl';
 import { useOrderLog } from '@/hooks/useOrderLog';
 import { usePrivy, useSolanaWallets } from '@privy-io/react-auth';
 import { useTraderScore } from '@/hooks/useTraderScore';
@@ -107,12 +108,13 @@ function fromB58(s: string): Uint8Array {
 
 async function agentSign(pkB58: string, msg: Uint8Array): Promise<string> {
   const raw = fromB58(pkB58);
+  // tweetnacl expects 32-byte seed; some keys are stored as 64-byte (seed+pubkey)
   const seed = raw.length === 64 ? raw.slice(0, 32) : raw;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const key = await (crypto.subtle as any).importKey('raw', seed, { name: 'Ed25519' }, false, ['sign']);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sig = await (crypto.subtle as any).sign('Ed25519', key, msg);
-  return toBase58(new Uint8Array(sig));
+  const keypair = nacl.sign.keyPair.fromSeed(seed);
+  // nacl.sign returns 64-byte sig prepended to msg — slice off just the signature
+  const signed = nacl.sign(msg, keypair.secretKey);
+  const sig = signed.slice(0, 64);
+  return toBase58(sig);
 }
 
 
@@ -225,9 +227,10 @@ function CopyTradePanel({
 
     const contracts = (cfg.marginUsd * lev) / px;
     const minSize   = mkt?.min_order_size ? Number(mkt.min_order_size) : 0;
-    if (minSize > 0 && contracts < minSize) return null;
+    // If below min size, snap up to minSize so the order can proceed
+    const finalContracts = (minSize > 0 && contracts < minSize) ? minSize : contracts;
 
-    return { contracts: contracts.toFixed(dec), lev, px };
+    return { contracts: finalContracts.toFixed(dec), lev, px, belowMin: minSize > 0 && contracts < minSize, minSize };
   }
 
   const poll = useCallback(async () => {
@@ -272,9 +275,13 @@ function CopyTradePanel({
         if (cfg.maxPositions > 0 && mPs.length >= cfg.maxPositions)     { log({ symbol: tp.symbol, side: tp.side, action: 'skipped', msg: `Max positions (${cfg.maxPositions}) reached` }); continue; }
 
         const order = sizeOrder(tp.symbol, tp);
-        if (!order) { log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: 'Cannot size order (no price or below min size)' }); continue; }
+        if (!order) { log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: 'Cannot size order (no price available)' }); continue; }
 
-        const { contracts, lev, px } = order;
+        const { contracts, lev, px, belowMin, minSize } = order;
+        if (belowMin) {
+          log({ symbol: tp.symbol, side: tp.side, action: 'info',
+            msg: `Margin $${cfg.marginUsd} too low for min size ${minSize} — using min size instead` });
+        }
         const side    = tp.side as 'bid'|'ask';
         const isLong  = side === 'bid';
         const slPx    = cfg.slEnabled ? (isLong ? px*(1-cfg.slPct/100) : px*(1+cfg.slPct/100)) : null;
@@ -286,6 +293,7 @@ function CopyTradePanel({
             symbol: tp.symbol, amount: contracts, side, reduce_only: false,
             slippage_percent: '1', client_order_id: crypto.randomUUID(),
             builder_code: BUILDER_CODE,
+            leverage: String(lev),
             ...(slPx ? { stop_loss:   { stop_price: slPx.toFixed(4) } } : {}),
             ...(tpPx ? { take_profit: { stop_price: tpPx.toFixed(4) } } : {}),
           };
@@ -902,17 +910,29 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
 
   const buildSignFn = useCallback(() => {
     return async (msgBytes: Uint8Array): Promise<string> => {
-      const solanaWallet = solanaWallets.find(w => w.address === wallet) || solanaWallets[0];
+      // Try to find matching wallet by address, then any available Solana wallet
+      const solanaWallet =
+        solanaWallets.find(w => w.address === wallet) ||
+        solanaWallets.find(w => w.address) ||
+        solanaWallets[0];
       if (solanaWallet) {
-        const sigResult = await solanaWallet.signMessage(msgBytes);
-        if (typeof sigResult === 'string') return sigResult;
-        return toBase58(sigResult as unknown as Uint8Array);
-      } else if (signMessage) {
-        const msgStr = new TextDecoder().decode(msgBytes);
+        try {
+          const sigResult = await solanaWallet.signMessage(msgBytes);
+          if (typeof sigResult === 'string') return sigResult;
+          return toBase58(sigResult as unknown as Uint8Array);
+        } catch (e) {
+          // If Solana wallet fails, fall through to signMessage
+          console.warn('solanaWallet.signMessage failed, trying signMessage fallback:', e);
+        }
+      }
+      // Fallback: usePrivy signMessage — encodes bytes as base64 string
+      if (signMessage) {
+        // Privy's signMessage accepts a string; encode bytes as latin1 to preserve all byte values
+        const msgStr = new TextDecoder('latin1').decode(msgBytes);
         const result = await signMessage(msgStr);
         return typeof result === 'string' ? result : toBase58(result as unknown as Uint8Array);
       }
-      throw new Error('No signing method available');
+      throw new Error('No Solana wallet found. Connect Phantom or Solflare and try again.');
     };
   }, [solanaWallets, wallet, signMessage]);
 
