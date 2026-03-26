@@ -47,7 +47,7 @@ const DEFAULT_CT: CopyTradeConfig = {
   maxPositions: 5, active: false,
 };
 
-interface CTLog { id: string; ts: number; symbol: string; side: string; action: 'opened'|'closed'|'skipped'|'error'; msg: string; }
+interface CTLog { id: string; ts: number; symbol: string; side: string; action: 'opened'|'closed'|'skipped'|'error'|'info'; msg: string; }
 
 function loadCT(): Record<string, CopyTradeConfig> {
   try { const r = typeof window !== 'undefined' ? localStorage.getItem(CT_STORAGE) : null; return r ? JSON.parse(r) : {}; } catch { return {}; }
