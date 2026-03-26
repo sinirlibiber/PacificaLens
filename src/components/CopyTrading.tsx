@@ -288,7 +288,18 @@ function CopyTradePanel({
         const tpPx    = cfg.tpEnabled ? (isLong ? px*(1+cfg.tpPct/100) : px*(1-cfg.tpPct/100)) : null;
 
         try {
-          const { buildSigningPayload, buildRequestBody } = await import('@/lib/pacificaSigning');
+          const { buildSigningPayload, buildRequestBody, updateLeverage: doUpdateLev } = await import('@/lib/pacificaSigning');
+
+          // Leverage must be set per symbol before placing order (required by Pacifica API)
+          const levResult = await doUpdateLev(
+            myAccount, tp.symbol, lev,
+            async (msg: Uint8Array) => agentSign(cfg.agentPrivateKey, msg)
+          );
+          if (!levResult.success) {
+            log({ symbol: tp.symbol, side: tp.side, action: 'error', msg: `Leverage set failed: ${levResult.error}` });
+            continue;
+          }
+
           const data: Record<string,unknown> = {
             symbol: tp.symbol, amount: contracts, side, reduce_only: false,
             slippage_percent: '1', client_order_id: crypto.randomUUID(),
