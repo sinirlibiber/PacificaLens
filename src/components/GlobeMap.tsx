@@ -106,7 +106,7 @@ export default function GlobeMap() {
   const pauseTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pausedRef   = useRef(false);
   const zoomRef     = useRef(
-    typeof window !== 'undefined' && window.innerWidth < 768 ? 4.2 : 2.6
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 4.5 : 2.6
   );
   const tiltRef     = useRef(0);
 
