@@ -34,7 +34,7 @@ async function fetchSymbolLiqs(symbol: string): Promise<LiqSymbolData> {
 
     // DEBUG: log unique cause values to find correct liquidation identifier
     if (process.env.NODE_ENV === 'development' && trades.length > 0) {
-      const causes = [...new Set(trades.map(t => t.cause))];
+      const causes = trades.map(t => t.cause).filter((v, i, a) => a.indexOf(v) === i);
       console.log(`[LiqHeatmap] ${symbol} causes:`, causes, `total:${trades.length}`);
     }
     for (const t of trades) {
