@@ -91,10 +91,10 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   const markets = selfMarkets.length > 0 ? selfMarkets : (propMarkets || []);
   const tickers = Object.keys(selfTickers).length > 0 ? selfTickers : (propTickers || {});
 
-  // Liquidation filter — $1K / $10K / $50K / $100K
-  const LIQ_FILTERS = [1_000, 10_000, 50_000, 100_000] as const;
+  // Liquidation filter
+  const LIQ_FILTERS = [100, 1_000, 10_000, 50_000, 100_000] as const;
   type LiqFilter = typeof LIQ_FILTERS[number];
-  const [liqFilter, setLiqFilter] = useState<LiqFilter>(10_000);
+  const [liqFilter, setLiqFilter] = useState<LiqFilter>(1_000);
   const [selectedHeatmapSymbol, setSelectedHeatmapSymbol] = useState<string | null>(null);
 
   // Market Signals — reuse WhaleWatcher hook for OI/Funding alerts + liquidations
@@ -600,7 +600,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               </div>
               {/* Size filter */}
               <div className="flex gap-1 mb-3">
-                {([1_000, 10_000, 50_000, 100_000] as const).map(f => (
+                {([100, 1_000, 10_000, 50_000, 100_000] as const).map(f => (
                   <button
                     key={f}
                     onClick={() => setLiqFilter(f)}
@@ -611,7 +611,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                       border: liqFilter === f ? '1px solid rgba(239,68,68,0.4)' : '1px solid transparent',
                     }}
                   >
-                    {f >= 1_000 ? '$' + (f / 1_000) + 'K' : '$' + f}
+                    {f < 1_000 ? '$' + f : '$' + (f/1_000) + 'K'}
                   </button>
                 ))}
               </div>

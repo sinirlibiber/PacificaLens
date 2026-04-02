@@ -10,18 +10,18 @@ export interface LiqSymbolData {
   count:    number;
 }
 
-const REFRESH_MS = 2 * 60 * 1000; // 2 dakikada bir yenile
-const CACHE_KEY  = 'pl_liq_heatmap_v3'; // bumped to bust old cache
+const REFRESH_MS = 2 * 60 * 1000;
+const CACHE_KEY  = 'pl_liq_heatmap_v4';
 
-// ── localStorage cache ────────────────────────────────────────────────────────
-function loadCache(): { data: LiqSymbolData[]; fetchedAt: number } | null {
+function loadCache(marketCount: number): { data: LiqSymbolData[]; fetchedAt: number } | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const entry = JSON.parse(raw);
-    // 2 dakikadan eski değilse kullan
-    if (Date.now() - entry.fetchedAt < REFRESH_MS) return entry;
-    return null;
+    // stale if > 2min or market count changed
+    if (Date.now() - entry.fetchedAt > REFRESH_MS) return null;
+    if (entry.data?.length !== marketCount) return null;
+    return entry;
   } catch { return null; }
 }
 
@@ -31,56 +31,59 @@ function saveCache(data: LiqSymbolData[]) {
   } catch {}
 }
 
-// ── Fetch from Supabase via API route ─────────────────────────────────────────
 async function fetchFromDB(markets: Market[]): Promise<LiqSymbolData[]> {
   try {
     const res = await fetch('/api/liquidations?hours=24', { cache: 'no-store' });
-    if (!res.ok) throw new Error('api error');
+    if (!res.ok) throw new Error(`${res.status}`);
     const dbData: LiqSymbolData[] = await res.json();
 
-    // Merge with full market list so all 63 coins show (even with 0)
+    // Build lookup map
     const map = new Map<string, LiqSymbolData>();
     for (const d of dbData) map.set(d.symbol, d);
 
+    // Return ALL markets — with liq data where available, zeros otherwise
     const result: LiqSymbolData[] = markets.map(m =>
       map.get(m.symbol) ?? { symbol: m.symbol, longLiq: 0, shortLiq: 0, total: 0, count: 0 }
     );
 
-    return result.sort((a, b) => b.total - a.total);
-  } catch {
+    // Sort: liq coins first, then alphabetical
+    result.sort((a, b) => b.total - a.total || a.symbol.localeCompare(b.symbol));
+    return result;
+  } catch (e) {
+    console.error('[LiqHeatmap] fetch error:', e);
     return markets.map(m => ({ symbol: m.symbol, longLiq: 0, shortLiq: 0, total: 0, count: 0 }));
   }
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
 export function useLiquidationHeatmap(markets: Market[]) {
   const [data,      setData     ] = useState<LiqSymbolData[]>([]);
   const [loading,   setLoading  ] = useState(false);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
+    fetchedRef.current = false;
     return () => { mountedRef.current = false; };
   }, []);
 
   useEffect(() => {
     if (!markets.length) return;
+    if (timerRef.current) clearInterval(timerRef.current);
 
-    // 1. Anında cache'den yükle (sayfa yenilenince veri kaybolmaz)
-    const cached = loadCache();
-    if (cached) {
-      setData(cached.data);
-      setLastFetch(new Date(cached.fetchedAt));
-    }
-
-    const run = async (force = false) => {
+    const run = async () => {
       if (!mountedRef.current) return;
-      if (!force) {
-        const c = loadCache();
-        if (c) { setData(c.data); setLastFetch(new Date(c.fetchedAt)); return; }
+
+      // Try cache first
+      const cached = loadCache(markets.length);
+      if (cached && fetchedRef.current) {
+        setData(cached.data);
+        setLastFetch(new Date(cached.fetchedAt));
+        return;
       }
+
       setLoading(true);
       try {
         const result = await fetchFromDB(markets);
@@ -88,16 +91,15 @@ export function useLiquidationHeatmap(markets: Market[]) {
         saveCache(result);
         setData(result);
         setLastFetch(new Date());
+        fetchedRef.current = true;
       } finally {
         if (mountedRef.current) setLoading(false);
       }
     };
 
-    // Cache yoksa hemen fetch et
-    if (!cached) run(true);
-
-    // 2 dakikada bir yenile
-    timerRef.current = setInterval(() => run(true), REFRESH_MS);
+    // Always fetch immediately on mount
+    run();
+    timerRef.current = setInterval(run, REFRESH_MS);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [markets.length]);
 
