@@ -6,6 +6,7 @@ import { fmt } from '@/lib/utils';
 import { CoinLogo } from './CoinLogo';
 import AiAssistant from './AiAssistant';
 import { useWhaleWatcher } from '@/hooks/useWhaleWatcher';
+import { useLiquidationHeatmap } from '@/hooks/useLiquidationHeatmap';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
@@ -93,11 +94,11 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   const LIQ_FILTERS = [1_000, 10_000, 50_000, 100_000] as const;
   type LiqFilter = typeof LIQ_FILTERS[number];
   const [liqFilter, setLiqFilter] = useState<LiqFilter>(10_000);
-  // Heatmap has its own independent filter
-  const [heatmapFilter, setHeatmapFilter] = useState<LiqFilter>(10_000);
 
   // Market Signals — reuse WhaleWatcher hook for OI/Funding alerts + liquidations
   const { whaleTrades, oiAlerts, fundingAlerts, isScanning, lastScan } = useWhaleWatcher(markets, tickers, liqFilter);
+  // 24h liquidation heatmap — polls Pacifica trades API for all 63 coins
+  const { data: liqHeatmap24h, loading: heatmapLoading, lastFetch: heatmapFetched } = useLiquidationHeatmap(markets);
 
   // TTL filter: keep signals from last 3 hours only
   const TTL_MS = 3 * 60 * 60 * 1000;
@@ -155,8 +156,6 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   
   // Liquidations — derived from whaleTrades, filtered by size + 3h TTL
   const liquidations = whaleTrades.filter(t => t.isLiquidation && t.notional >= liqFilter && now3h - t.ts < TTL_MS);
-  // Heatmap uses its own independent filter
-  const heatmapLiquidations = whaleTrades.filter(t => t.isLiquidation && t.notional >= heatmapFilter && now3h - t.ts < TTL_MS);
 
   // Fetch news
   useEffect(() => {
@@ -241,16 +240,10 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     pct: totalVolume > 0 ? (m.volume / totalVolume * 100) : 0,
   }));
 
-  // Liquidation stats
+  // Liquidation stats (Recent Liqs panel — from live WS stream)
   const totalLiqValue = liquidations.reduce((s, l) => s + l.notional, 0);
-  const liqBySymbol = heatmapLiquidations.reduce((acc, l) => {
-    const key = l.symbol;
-    if (!acc[key]) acc[key] = { symbol: key, count: 0, value: 0 };
-    acc[key].count++;
-    acc[key].value += l.notional;
-    return acc;
-  }, {} as Record<string, { symbol: string; count: number; value: number }>);
-  const liqHeatmap = Object.values(liqBySymbol).sort((a, b) => b.value - a.value);
+  // 24h heatmap total
+  const heatmap24hTotal = liqHeatmap24h.reduce((s, l) => s + l.total, 0);
 
   // Long/Short ratio from funding bias — sorted by 24h volume (BTC/ETH first)
   const longShortData = [...markets]
@@ -610,45 +603,61 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
 
             {/* Liquidation Heatmap */}
             <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-              <div className="flex justify-between items-center mb-2">
-                <div className="text-[12px] font-bold text-text1">Liquidation Heatmap</div>
+              {/* Header */}
+              <div className="flex justify-between items-center mb-3">
+                <div className="text-[12px] font-bold text-text1">Liquidation Heatmap <span className="text-text3 font-normal">24h</span></div>
+                <div className="flex items-center gap-2">
+                  {heatmapLoading && <div className="w-3 h-3 border border-border2 border-t-danger rounded-full animate-spin" />}
+                  {heatmap24hTotal > 0 && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-danger/10 text-danger border border-danger/20">
+                      {fmtLarge(heatmap24hTotal)} total
+                    </span>
+                  )}
+                  {heatmapFetched && (
+                    <span className="text-[9px] text-text3">
+                      {heatmapFetched.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
               </div>
-              {/* Heatmap size filter — independent from Recent Liquidations */}
-              <div className="flex gap-1 mb-3">
-                {([1_000, 10_000, 50_000, 100_000] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setHeatmapFilter(f)}
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-all"
-                    style={{
-                      background: heatmapFilter === f ? 'rgba(239,68,68,0.18)' : 'rgba(255,255,255,0.05)',
-                      color: heatmapFilter === f ? '#ef4444' : 'var(--text3)',
-                      border: heatmapFilter === f ? '1px solid rgba(239,68,68,0.4)' : '1px solid transparent',
-                    }}
-                  >
-                    {f >= 1_000 ? '$' + (f / 1_000) + 'K' : '$' + f}
-                  </button>
-                ))}
-              </div>
-              {liqHeatmap.length === 0 ? (
-                <div className="py-8 text-center text-[11px] text-text3">No liquidation data available</div>
+              {/* 24h heatmap grid — all 63 coins */}
+              {liqHeatmap24h.length === 0 ? (
+                <div className="py-8 text-center space-y-1">
+                  <div className="text-[13px]">{heatmapLoading ? '⏳' : '✓'}</div>
+                  <div className="text-[11px] text-text3">{heatmapLoading ? 'Fetching 24h data...' : 'No liquidations in last 24h'}</div>
+                </div>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {liqHeatmap.map((l, i) => {
-                    const maxVal = liqHeatmap[0]?.value || 1;
-                    const intensity = Math.min(l.value / maxVal, 1);
-                    const size = Math.max(52, intensity * 100);
+                <div className="flex flex-wrap gap-1.5 overflow-y-auto" style={{ maxHeight: 220 }}>
+                  {liqHeatmap24h.map((l) => {
+                    const maxVal = liqHeatmap24h[0]?.total || 1;
+                    const intensity = Math.min(l.total / maxVal, 1);
+                    // size: 40px (small) → 90px (largest)
+                    const size = Math.round(40 + intensity * 50);
+                    // long vs short dominance color
+                    const longDom = l.longLiq >= l.shortLiq;
+                    const r = longDom ? 239 : 34;
+                    const g = longDom ? 68 : 197;
+                    const b = longDom ? 68 : 94;
+                    const alpha = 0.15 + intensity * 0.65;
                     return (
-                      <div key={l.symbol} title={`${l.symbol}: ${l.count} liqs · ${fmtLarge(l.value)}`}
-                        className="flex flex-col items-center justify-center rounded-xl cursor-default hover:opacity-80 transition-all"
+                      <div
+                        key={l.symbol}
+                        title={`${l.symbol} · ${l.count} liqs · ${fmtLarge(l.total)}\nLong liq: ${fmtLarge(l.longLiq)} · Short liq: ${fmtLarge(l.shortLiq)}`}
+                        className="flex flex-col items-center justify-center rounded-xl cursor-default hover:opacity-80 transition-all shrink-0"
                         style={{
                           width: size, height: size,
-                          background: `rgba(239,68,68,${0.15 + intensity * 0.6})`,
-                          border: '1px solid rgba(239,68,68,' + (0.2 + intensity * 0.5) + ')',
-                        }}>
-                        <CoinLogo symbol={l.symbol} size={Math.max(14, size * 0.28)} />
-                        <span className="text-[9px] font-bold text-text1 mt-0.5">{l.symbol}</span>
-                        <span className="text-[9px] text-danger font-mono">{fmtLarge(l.value)}</span>
+                          background: `rgba(${r},${g},${b},${alpha})`,
+                          border: `1px solid rgba(${r},${g},${b},${0.25 + intensity * 0.5})`,
+                        }}
+                      >
+                        <CoinLogo symbol={l.symbol} size={Math.max(12, size * 0.28)} />
+                        <span className="text-[9px] font-bold text-text1 mt-0.5 leading-none">{l.symbol.replace('-USD','')}</span>
+                        <span className="text-[8px] font-mono leading-none mt-0.5" style={{ color: `rgb(${r},${g},${b})` }}>{fmtLarge(l.total)}</span>
+                        {size >= 64 && (
+                          <span className="text-[7px] text-text3 leading-none mt-0.5">
+                            {longDom ? `L${Math.round(l.longLiq/l.total*100)}%` : `S${Math.round(l.shortLiq/l.total*100)}%`}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
