@@ -7,6 +7,7 @@ import { CoinLogo } from './CoinLogo';
 import AiAssistant from './AiAssistant';
 import { useWhaleWatcher } from '@/hooks/useWhaleWatcher';
 import { useLiquidationHeatmap } from '@/hooks/useLiquidationHeatmap';
+import LiquidationHeatmapModal from './LiquidationHeatmapModal';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
@@ -94,6 +95,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   const LIQ_FILTERS = [1_000, 10_000, 50_000, 100_000] as const;
   type LiqFilter = typeof LIQ_FILTERS[number];
   const [liqFilter, setLiqFilter] = useState<LiqFilter>(10_000);
+  const [selectedHeatmapSymbol, setSelectedHeatmapSymbol] = useState<string | null>(null);
 
   // Market Signals — reuse WhaleWatcher hook for OI/Funding alerts + liquidations
   const { whaleTrades, oiAlerts, fundingAlerts, isScanning, lastScan } = useWhaleWatcher(markets, tickers, liqFilter);
@@ -601,11 +603,14 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               )}
             </div>
 
-            {/* Liquidation Heatmap */}
+            {/* Liquidation Heatmap — 63 coins grid + click → detail modal */}
             <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
               {/* Header */}
               <div className="flex justify-between items-center mb-3">
-                <div className="text-[12px] font-bold text-text1">Liquidation Heatmap <span className="text-text3 font-normal">24h</span></div>
+                <div className="text-[12px] font-bold text-text1">
+                  Liquidation Heatmap <span className="text-text3 font-normal">24h</span>
+                  <span className="text-text3 font-normal text-[10px] ml-2">· click any coin for detail</span>
+                </div>
                 <div className="flex items-center gap-2">
                   {heatmapLoading && <div className="w-3 h-3 border border-border2 border-t-danger rounded-full animate-spin" />}
                   {heatmap24hTotal > 0 && (
@@ -620,51 +625,72 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                   )}
                 </div>
               </div>
-              {/* 24h heatmap grid — all 63 coins */}
-              {liqHeatmap24h.length === 0 ? (
-                <div className="py-8 text-center space-y-1">
-                  <div className="text-[13px]">{heatmapLoading ? '⏳' : '✓'}</div>
-                  <div className="text-[11px] text-text3">{heatmapLoading ? 'Fetching 24h data...' : 'No liquidations in last 24h'}</div>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-1.5 overflow-y-auto" style={{ maxHeight: 220 }}>
-                  {liqHeatmap24h.map((l) => {
-                    const maxVal = liqHeatmap24h[0]?.total || 1;
-                    const intensity = Math.min(l.total / maxVal, 1);
-                    // size: 40px (small) → 90px (largest)
-                    const size = Math.round(40 + intensity * 50);
-                    // long vs short dominance color
-                    const longDom = l.longLiq >= l.shortLiq;
-                    const r = longDom ? 239 : 34;
-                    const g = longDom ? 68 : 197;
-                    const b = longDom ? 68 : 94;
-                    const alpha = 0.15 + intensity * 0.65;
-                    return (
-                      <div
-                        key={l.symbol}
-                        title={`${l.symbol} · ${l.count} liqs · ${fmtLarge(l.total)}\nLong liq: ${fmtLarge(l.longLiq)} · Short liq: ${fmtLarge(l.shortLiq)}`}
-                        className="flex flex-col items-center justify-center rounded-xl cursor-default hover:opacity-80 transition-all shrink-0"
-                        style={{
-                          width: size, height: size,
-                          background: `rgba(${r},${g},${b},${alpha})`,
-                          border: `1px solid rgba(${r},${g},${b},${0.25 + intensity * 0.5})`,
-                        }}
-                      >
-                        <CoinLogo symbol={l.symbol} size={Math.max(12, size * 0.28)} />
-                        <span className="text-[9px] font-bold text-text1 mt-0.5 leading-none">{l.symbol.replace('-USD','')}</span>
-                        <span className="text-[8px] font-mono leading-none mt-0.5" style={{ color: `rgb(${r},${g},${b})` }}>{fmtLarge(l.total)}</span>
-                        {size >= 64 && (
-                          <span className="text-[7px] text-text3 leading-none mt-0.5">
-                            {longDom ? `L${Math.round(l.longLiq/l.total*100)}%` : `S${Math.round(l.shortLiq/l.total*100)}%`}
+
+              {/* All 63 coins grid — every market shown, liq data fills in */}
+              <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
+                {heatmapLoading && markets.length === 0 ? (
+                  <div className="py-8 text-center text-[11px] text-text3">Loading markets...</div>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {markets.map((m) => {
+                      const liq = liqHeatmap24h.find(l => l.symbol === m.symbol);
+                      const hasLiq = liq && liq.total > 0;
+                      const maxVal = liqHeatmap24h[0]?.total || 1;
+                      const intensity = hasLiq ? Math.min(liq.total / maxVal, 1) : 0;
+                      const longDom = liq ? liq.longLiq >= liq.shortLiq : true;
+                      const r = longDom ? 239 : 34;
+                      const g = longDom ? 68  : 197;
+                      const b = longDom ? 68  : 94;
+                      return (
+                        <button
+                          key={m.symbol}
+                          onClick={() => setSelectedHeatmapSymbol(m.symbol)}
+                          title={hasLiq
+                            ? `${m.symbol} · ${liq.count} liqs · ${fmtLarge(liq.total)}\nLong: ${fmtLarge(liq.longLiq)} · Short: ${fmtLarge(liq.shortLiq)}\nClick for detail heatmap`
+                            : `${m.symbol} · No liquidations in 24h\nClick for detail heatmap`}
+                          className="flex flex-col items-center justify-center rounded-lg transition-all hover:scale-110 hover:z-10 relative shrink-0"
+                          style={{
+                            width: 52, height: 52,
+                            background: hasLiq
+                              ? `rgba(${r},${g},${b},${0.12 + intensity * 0.6})`
+                              : 'rgba(255,255,255,0.04)',
+                            border: hasLiq
+                              ? `1px solid rgba(${r},${g},${b},${0.2 + intensity * 0.5})`
+                              : '1px solid rgba(255,255,255,0.07)',
+                          }}
+                        >
+                          <CoinLogo symbol={m.symbol} size={16} />
+                          <span className="text-[8px] font-bold text-text1 mt-0.5 leading-none">
+                            {m.symbol.replace('-USD','')}
                           </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                          {hasLiq ? (
+                            <span className="text-[7px] font-mono leading-none mt-0.5" style={{ color: `rgb(${r},${g},${b})` }}>
+                              {fmtLarge(liq.total)}
+                            </span>
+                          ) : (
+                            <span className="text-[7px] text-text3/50 leading-none mt-0.5">—</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+
+        </div>
+      </div>
+
+      {/* Modal */}
+      {selectedHeatmapSymbol && (
+        <LiquidationHeatmapModal
+          symbol={selectedHeatmapSymbol}
+          onClose={() => setSelectedHeatmapSymbol(null)}
+        />
+      )}
+
+      {/* ─── RIGHT: News + Calendar ─── */          </div>
 
         </div>
       </div>
