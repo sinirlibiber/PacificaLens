@@ -690,11 +690,6 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
         />
       )}
 
-      {/* ─── RIGHT: News + Calendar ─── */          </div>
-
-        </div>
-      </div>
-
       {/* ─── RIGHT: News + Calendar ─── */}
       <div className="w-[320px] shrink-0 border-l border-border1 flex flex-col min-h-0">
 
