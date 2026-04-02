@@ -42,13 +42,18 @@ async function fetchSymbols() {
 }
 
 // ── Upsert liquidations to Supabase ──────────────────────────────────────────
+// Track flushed trade_ids to avoid re-sending known rows
+const flushedIds = new Set();
+
 async function flushToSupabase() {
   if (!pendingLiqs.length) return;
-  const rows = [...pendingLiqs];
+  // Dedupe: skip already-flushed trade_ids
+  const rows = pendingLiqs.filter(r => !flushedIds.has(r.trade_id));
   pendingLiqs = [];
+  if (!rows.length) return;
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/liquidations?on_conflict=trade_id`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/liquidations`, {
       method: 'POST',
       headers: {
         'apikey':        SUPABASE_KEY,
@@ -58,15 +63,18 @@ async function flushToSupabase() {
       },
       body: JSON.stringify(rows),
     });
+    // Mark as flushed regardless of result (409 = already in DB = OK)
+    rows.forEach(r => {
+      flushedIds.add(r.trade_id);
+      if (flushedIds.size > 5000) {
+        const first = flushedIds.values().next().value;
+        flushedIds.delete(first);
+      }
+    });
     if (res.ok) {
       console.log(`[supabase] Inserted ${rows.length} rows`);
-    } else if (res.status === 409) {
-      // duplicate — silently ignore
-    } else {
-      const txt = await res.text();
-      console.error(`[supabase] Error ${res.status}: ${txt}`);
-      pendingLiqs.push(...rows);
     }
+    // 409 duplicate: silently ignore, already marked flushed above
   } catch (e) {
     console.error('[supabase] Fetch error:', e.message);
     pendingLiqs.push(...rows);
