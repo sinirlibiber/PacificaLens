@@ -2,8 +2,8 @@ name: Liquidation Cron
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # every 15 minutes
-  workflow_dispatch:           # manual trigger from GitHub UI
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
 
 jobs:
   fetch-liquidations:
@@ -21,14 +21,12 @@ jobs:
           const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
           const PACIFICA_API      = 'https://api.pacifica.fi/api/v1';
 
-          // Fetch all markets first
           async function getMarkets() {
             const res = await fetch(`${PACIFICA_API}/info`);
             const json = await res.json();
             return (json.success && Array.isArray(json.data)) ? json.data.map(m => m.symbol) : [];
           }
 
-          // Fetch recent trades for a symbol, return only liquidations in last 20 min
           async function getLiqs(symbol) {
             try {
               const res = await fetch(`${PACIFICA_API}/trades?symbol=${symbol}&limit=200`, {
@@ -37,7 +35,16 @@ jobs:
               const json = await res.json();
               const trades = (json.success && Array.isArray(json.data)) ? json.data : [];
 
-              const cutoff = Date.now() - 20 * 60 * 1000; // last 20 min
+              // DEBUG: log unique cause values for first symbol
+              if (symbol === 'BTC-USD' && trades.length > 0) {
+                const causes = trades.map(t => t.cause).filter((v, i, a) => a.indexOf(v) === i);
+                const sample = trades[0];
+                console.log(`[DEBUG] BTC-USD sample trade:`, JSON.stringify(sample));
+                console.log(`[DEBUG] Unique cause values:`, causes);
+                console.log(`[DEBUG] Total trades returned: ${trades.length}`);
+              }
+
+              const cutoff = Date.now() - 20 * 60 * 1000;
 
               return trades
                 .filter(t => {
@@ -65,12 +72,12 @@ jobs:
                   };
                 })
                 .filter(t => t.notional > 0);
-            } catch {
+            } catch (e) {
+              console.log(`[ERROR] ${symbol}: ${e.message}`);
               return [];
             }
           }
 
-          // Upsert batch to Supabase
           async function upsert(rows) {
             if (!rows.length) return 0;
             const res = await fetch(`${SUPABASE_URL}/rest/v1/liquidations`, {
@@ -83,10 +90,13 @@ jobs:
               },
               body: JSON.stringify(rows),
             });
+            if (!res.ok) {
+              const txt = await res.text();
+              console.log(`[UPSERT ERROR] ${res.status}: ${txt}`);
+            }
             return res.ok ? rows.length : 0;
           }
 
-          // Delete rows older than 24h
           async function cleanup() {
             const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
             await fetch(`${SUPABASE_URL}/rest/v1/liquidations?ts=lt.${since}`, {
@@ -98,10 +108,9 @@ jobs:
             });
           }
 
-          // Main
           (async () => {
             if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-              console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
+              console.error('Missing secrets');
               process.exit(1);
             }
 
@@ -109,28 +118,23 @@ jobs:
             const symbols = await getMarkets();
             console.log(`Found ${symbols.length} markets`);
 
-            // Fetch in batches of 10 (parallel)
             const BATCH = 10;
             let allRows = [];
             for (let i = 0; i < symbols.length; i += BATCH) {
               const batch = symbols.slice(i, i + BATCH);
               const results = await Promise.all(batch.map(getLiqs));
               allRows = allRows.concat(results.flat());
-              // Small delay between batches to be polite to API
               if (i + BATCH < symbols.length) await new Promise(r => setTimeout(r, 300));
             }
 
             console.log(`Found ${allRows.length} liquidation events`);
 
-            // Upsert in chunks of 100
             let total = 0;
             for (let i = 0; i < allRows.length; i += 100) {
-              const chunk = allRows.slice(i, i + 100);
-              total += await upsert(chunk);
+              total += await upsert(allRows.slice(i, i + 100));
             }
             console.log(`Inserted ${total} rows`);
 
-            // Cleanup old data
             await cleanup();
             console.log('Cleanup done — rows older than 24h deleted');
           })();
