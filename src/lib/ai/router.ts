@@ -1,15 +1,15 @@
 /**
- * router.ts — Gelen soruyu Elfa mı Gemini mi yönlendirecek karar verir.
+ * router.ts — Gelen soruyu Elfa mı Groq mu yönlendirecek karar verir.
  *
  * Kural:
  *   - Twitter/sosyal trend soruları  → Elfa  (1000 req/ay, cache 15dk)
- *   - Diğer her şey                  → Gemini (ücretsiz, cache 5dk)
+ *   - Diğer her şey                  → Groq  (ücretsiz, cache 30dk)
  */
 
-import { queryElfa, type ElfaResult }   from './elfa';
-import { queryGemini, type GeminiResult } from './gemini';
+import { queryElfa, type ElfaResult } from './elfa';
+import { queryGroq, type GroqResult } from './groq';
 
-export type AIResult = ElfaResult | GeminiResult;
+export type AIResult = ElfaResult | GroqResult;
 
 /**
  * Sorunun Elfa'ya gitmesi gerekip gerekmediğini belirler.
@@ -45,5 +45,5 @@ export async function routeQuery(question: string, priceContext = ''): Promise<A
   if (isElfaQuery(question)) {
     return queryElfa(question);
   }
-  return queryGemini(question, priceContext);
+  return queryGroq(question, priceContext);
 }
