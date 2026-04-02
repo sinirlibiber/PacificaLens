@@ -670,8 +670,9 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                   <div className="py-8 text-center text-[11px] text-text3">Loading markets...</div>
                 ) : (
                   <div className="flex flex-wrap gap-1">
-                    {markets.map((m) => {
-                      const liq = liqHeatmap24h.find(l => l.symbol === m.symbol);
+                    {(liqHeatmap24h.length > 0 ? liqHeatmap24h : markets.map(m => ({ symbol: m.symbol, longLiq: 0, shortLiq: 0, total: 0, count: 0 }))).map((liq) => {
+                      const m = markets.find(mk => mk.symbol === liq.symbol);
+                      if (!m) return null;
                       const hasLiq = liq && liq.total > 0;
                       const maxVal = liqHeatmap24h[0]?.total || 1;
                       const intensity = hasLiq ? Math.min(liq.total / maxVal, 1) : 0;

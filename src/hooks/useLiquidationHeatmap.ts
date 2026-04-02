@@ -61,11 +61,9 @@ export function useLiquidationHeatmap(markets: Market[]) {
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
-  const fetchedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
-    fetchedRef.current = false;
     return () => { mountedRef.current = false; };
   }, []);
 
@@ -73,17 +71,17 @@ export function useLiquidationHeatmap(markets: Market[]) {
     if (!markets.length) return;
     if (timerRef.current) clearInterval(timerRef.current);
 
+    // Clear stale cache on market change
+    const cached = loadCache(markets.length);
+
+    // Show cached data immediately if fresh
+    if (cached) {
+      setData(cached.data);
+      setLastFetch(new Date(cached.fetchedAt));
+    }
+
     const run = async () => {
       if (!mountedRef.current) return;
-
-      // Try cache first
-      const cached = loadCache(markets.length);
-      if (cached && fetchedRef.current) {
-        setData(cached.data);
-        setLastFetch(new Date(cached.fetchedAt));
-        return;
-      }
-
       setLoading(true);
       try {
         const result = await fetchFromDB(markets);
@@ -91,13 +89,12 @@ export function useLiquidationHeatmap(markets: Market[]) {
         saveCache(result);
         setData(result);
         setLastFetch(new Date());
-        fetchedRef.current = true;
       } finally {
         if (mountedRef.current) setLoading(false);
       }
     };
 
-    // Always fetch immediately on mount
+    // Always fetch fresh data on mount regardless of cache
     run();
     timerRef.current = setInterval(run, REFRESH_MS);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
