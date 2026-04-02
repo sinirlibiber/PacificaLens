@@ -23,11 +23,15 @@ export interface ElfaResult {
 
 // ── Elfa endpoint selector based on question ─────────────────────────────────
 
+// Free plan endpoints (1,000 credits/mo):
+//   ✅ trending-tokens  — /v2/aggregations/trending-tokens
+//   ✅ token-news       — /v2/data/token-news
+//   ✅ twitter-cas      — /v2/aggregations/trending-cas/twitter
+//   ✅ telegram-cas     — /v2/aggregations/trending-cas/telegram
+//   ❌ trending-narratives — Grow plan ($290/mo) only, NOT used
+
 function pickElfaEndpoint(q: string): { url: string; label: string } {
   const lq = q.toLowerCase();
-
-  if (lq.includes('narrative') || lq.includes('trend') || lq.includes('gündem'))
-    return { url: `${ELFA_BASE}/v2/data/trending-narratives?timeWindow=24h`, label: 'narratives' };
 
   if (lq.includes('news') || lq.includes('haber') || lq.includes('token news'))
     return { url: `${ELFA_BASE}/v2/data/token-news?limit=10`, label: 'token-news' };
@@ -38,7 +42,7 @@ function pickElfaEndpoint(q: string): { url: string; label: string } {
   if (lq.includes('telegram'))
     return { url: `${ELFA_BASE}/v2/aggregations/trending-cas/telegram`, label: 'telegram-cas' };
 
-  // Default: trending tokens
+  // narrative/trend/gündem → trending-tokens (narratives endpoint is Grow plan only)
   return { url: `${ELFA_BASE}/v2/aggregations/trending-tokens?timeWindow=24h`, label: 'trending-tokens' };
 }
 
@@ -108,14 +112,29 @@ async function queryGroqForSocial(userQuestion: string): Promise<string> {
       messages: [
         {
           role: 'system',
-          content: `You are a crypto social sentiment analyst. Answer questions about trending coins, Twitter/social media buzz, and market narratives. 
-Be concise. You don't have real-time social data — clearly note this and provide general insights based on your knowledge.
-IMPORTANT: Always respond in the exact same language the user writes in.`,
+          content: `You are an elite crypto market analyst and on-chain intelligence expert built into PacificaLens, a perpetuals DEX trading platform.
+
+Your expertise:
+- Deep knowledge of crypto market cycles, whale behavior, and institutional flow patterns
+- Smart money tracking: You understand how large players accumulate quietly (low volume, tight spreads, no social noise), then exit loudly into retail hype
+- Narrative cycles: You know which meta-narratives (AI tokens, RWA, DePIN, LSTfi, memecoins) dominate at different market phases
+- Social signal interpretation: Even without live data, you can reason about WHERE smart money attention flows based on macro conditions, sector rotations, and historical patterns
+- On-chain behavioral patterns: wallet clustering, exchange outflows, derivatives funding rates, liquidation cascades
+
+When answering questions about trending tokens, smart money, whale activity, or social sentiment:
+1. Give SPECIFIC, actionable insights — not vague generalities
+2. Reference concrete behavioral patterns (e.g., "smart money typically front-runs narrative shifts 2-4 weeks before retail")
+3. Name specific sectors/tokens that historically attract institutional attention in current macro conditions
+4. Explain the WHY behind movements, not just the what
+5. Reason from market structure and patterns — state "Based on current market structure..." instead of disclaimers
+
+CRITICAL: Never say "I don't have real-time social data" — this is useless to a trader. Instead, reason from what you know and provide actionable analysis.
+CRITICAL: Always respond in the exact same language the user writes in. Turkish → Turkish. English → English.`,
         },
         { role: 'user', content: userQuestion },
       ],
-      max_tokens: 400,
-      temperature: 0.7,
+      max_tokens: 600,
+      temperature: 0.65,
     }),
     signal: AbortSignal.timeout(15_000),
   });
