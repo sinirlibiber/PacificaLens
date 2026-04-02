@@ -102,6 +102,22 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   // 24h liquidation heatmap — polls Pacifica trades API for all 63 coins
   const { data: liqHeatmap24h, loading: heatmapLoading, lastFetch: heatmapFetched } = useLiquidationHeatmap(markets);
 
+  // Recent liquidations from Supabase (last 1h) — persists across page refreshes
+  const [dbLiqs, setDbLiqs] = useState<Array<{
+    symbol: string; side: string; notional: number; ts: string; cause: string;
+  }>>([]);
+  useEffect(() => {
+    const fetchDbLiqs = async () => {
+      try {
+        const res = await fetch('/api/liquidations/recent?hours=1');
+        if (res.ok) { const d = await res.json(); if (Array.isArray(d)) setDbLiqs(d); }
+      } catch {}
+    };
+    fetchDbLiqs();
+    const t = setInterval(fetchDbLiqs, 30_000); // refresh every 30s
+    return () => clearInterval(t);
+  }, []);
+
   // TTL filter: keep signals from last 3 hours only
   const TTL_MS = 3 * 60 * 60 * 1000;
   const [now3h, setNow3h] = useState(Date.now());
@@ -242,8 +258,30 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     pct: totalVolume > 0 ? (m.volume / totalVolume * 100) : 0,
   }));
 
-  // Liquidation stats (Recent Liqs panel — from live WS stream)
-  const totalLiqValue = liquidations.reduce((s, l) => s + l.notional, 0);
+  // Merge WS stream liqs + Supabase liqs (deduplicated by id/ts+symbol)
+  const mergedLiqs = (() => {
+    // Convert dbLiqs to same shape as WhaleTrade
+    const dbMapped = dbLiqs.map(d => ({
+      id: `db-${d.symbol}-${d.ts}`,
+      symbol: d.symbol,
+      side: d.side as 'open_long' | 'open_short' | 'close_long' | 'close_short',
+      cause: d.cause,
+      price: 0,
+      amount: 0,
+      notional: Number(d.notional),
+      ts: new Date(d.ts).getTime(),
+      isLiquidation: true,
+    }));
+    // Merge: WS stream first (has price), then DB ones not already in WS
+    const wsIds = new Set(liquidations.map(l => `${l.symbol}-${l.ts}`));
+    const dbUniq = dbMapped.filter(d => !wsIds.has(`${d.symbol}-${d.ts}`));
+    return [...liquidations, ...dbUniq]
+      .filter(l => l.notional >= liqFilter)
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 50);
+  })();
+  // Liquidation stats (Recent Liqs panel — merged WS + DB)
+  const totalLiqValue = mergedLiqs.reduce((s, l) => s + l.notional, 0);
   // 24h heatmap total
   const heatmap24hTotal = liqHeatmap24h.reduce((s, l) => s + l.total, 0);
 
@@ -577,15 +615,15 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                   </button>
                 ))}
               </div>
-              {liquidations.length === 0 ? (
+              {mergedLiqs.length === 0 ? (
                 <div className="py-8 text-center space-y-1">
                   <div className="text-[13px]">{isScanning ? '🔍' : '✓'}</div>
-                  <div className="text-[11px] text-text3">{isScanning ? 'Connecting to stream...' : 'No liquidations in last 3h'}</div>
-                  <div className="text-[10px] text-text3">{lastScan ? `Last event: ${lastScan.toLocaleTimeString()}` : 'Waiting for data...'}</div>
+                  <div className="text-[11px] text-text3">{isScanning ? 'Connecting to stream...' : 'No liquidations in last 1h'}</div>
+                  <div className="text-[10px] text-text3">{lastScan ? `Last scan: ${lastScan.toLocaleTimeString()}` : 'Waiting for data...'}</div>
                 </div>
               ) : (
                 <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {liquidations.slice(0, 15).map((l, i) => {
+                  {mergedLiqs.slice(0, 20).map((l, i) => {
                     const isLong = l.side?.includes('long');
                     return (
                       <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface2/50 transition-colors">

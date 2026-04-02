@@ -11,7 +11,7 @@ export interface LiqSymbolData {
 }
 
 const REFRESH_MS = 2 * 60 * 1000; // 2 dakikada bir yenile
-const CACHE_KEY  = 'pl_liq_heatmap_v2';
+const CACHE_KEY  = 'pl_liq_heatmap_v3'; // bumped to bust old cache
 
 // ── localStorage cache ────────────────────────────────────────────────────────
 function loadCache(): { data: LiqSymbolData[]; fetchedAt: number } | null {
