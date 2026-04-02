@@ -1,0 +1,137 @@
+name: Liquidation Cron
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 minutes
+  workflow_dispatch:           # manual trigger from GitHub UI
+
+jobs:
+  fetch-liquidations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Fetch & store liquidations
+        env:
+          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          node << 'SCRIPT'
+          const SUPABASE_URL      = process.env.SUPABASE_URL;
+          const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+          const PACIFICA_API      = 'https://api.pacifica.fi/api/v1';
+
+          // Fetch all markets first
+          async function getMarkets() {
+            const res = await fetch(`${PACIFICA_API}/info`);
+            const json = await res.json();
+            return (json.success && Array.isArray(json.data)) ? json.data.map(m => m.symbol) : [];
+          }
+
+          // Fetch recent trades for a symbol, return only liquidations in last 20 min
+          async function getLiqs(symbol) {
+            try {
+              const res = await fetch(`${PACIFICA_API}/trades?symbol=${symbol}&limit=200`, {
+                signal: AbortSignal.timeout(8000),
+              });
+              const json = await res.json();
+              const trades = (json.success && Array.isArray(json.data)) ? json.data : [];
+
+              const cutoff = Date.now() - 20 * 60 * 1000; // last 20 min
+
+              return trades
+                .filter(t => {
+                  const isLiq = t.cause === 'market_liquidation'
+                    || t.cause === 'backstop_liquidation'
+                    || (t.cause && t.cause.toLowerCase().includes('liq'));
+                  if (!isLiq) return false;
+                  const ts = t.created_at > 1e12 ? t.created_at : t.created_at * 1000;
+                  return ts >= cutoff;
+                })
+                .map(t => {
+                  const ts = t.created_at > 1e12 ? t.created_at : t.created_at * 1000;
+                  const price    = parseFloat(t.price)  || 0;
+                  const amount   = parseFloat(t.amount) || 0;
+                  const notional = price * amount;
+                  return {
+                    trade_id: `${symbol}-${t.created_at}-${Math.round(price*1000)}`,
+                    symbol,
+                    side:     t.side    || 'unknown',
+                    cause:    t.cause   || 'unknown',
+                    price,
+                    amount,
+                    notional,
+                    ts: new Date(ts).toISOString(),
+                  };
+                })
+                .filter(t => t.notional > 0);
+            } catch {
+              return [];
+            }
+          }
+
+          // Upsert batch to Supabase
+          async function upsert(rows) {
+            if (!rows.length) return 0;
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/liquidations`, {
+              method: 'POST',
+              headers: {
+                'apikey':        SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type':  'application/json',
+                'Prefer':        'resolution=ignore-duplicates',
+              },
+              body: JSON.stringify(rows),
+            });
+            return res.ok ? rows.length : 0;
+          }
+
+          // Delete rows older than 24h
+          async function cleanup() {
+            const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+            await fetch(`${SUPABASE_URL}/rest/v1/liquidations?ts=lt.${since}`, {
+              method: 'DELETE',
+              headers: {
+                'apikey':        SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              },
+            });
+          }
+
+          // Main
+          (async () => {
+            if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+              console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
+              process.exit(1);
+            }
+
+            console.log('Fetching markets...');
+            const symbols = await getMarkets();
+            console.log(`Found ${symbols.length} markets`);
+
+            // Fetch in batches of 10 (parallel)
+            const BATCH = 10;
+            let allRows = [];
+            for (let i = 0; i < symbols.length; i += BATCH) {
+              const batch = symbols.slice(i, i + BATCH);
+              const results = await Promise.all(batch.map(getLiqs));
+              allRows = allRows.concat(results.flat());
+              // Small delay between batches to be polite to API
+              if (i + BATCH < symbols.length) await new Promise(r => setTimeout(r, 300));
+            }
+
+            console.log(`Found ${allRows.length} liquidation events`);
+
+            // Upsert in chunks of 100
+            let total = 0;
+            for (let i = 0; i < allRows.length; i += 100) {
+              const chunk = allRows.slice(i, i + 100);
+              total += await upsert(chunk);
+            }
+            console.log(`Inserted ${total} rows`);
+
+            // Cleanup old data
+            await cleanup();
+            console.log('Cleanup done — rows older than 24h deleted');
+          })();
+          SCRIPT
