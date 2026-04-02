@@ -105,9 +105,7 @@ export default function GlobeMap() {
   const prevMouse   = useRef({ x: 0, y: 0 });
   const pauseTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pausedRef   = useRef(false);
-  const zoomRef     = useRef(
-    typeof window !== 'undefined' && window.innerWidth < 768 ? 4.5 : 2.6
-  );
+  const zoomRef     = useRef(2.6);
   const tiltRef     = useRef(0);
 
   const [pins,      setPins    ] = useState<Pin[]>([]);
@@ -140,19 +138,17 @@ export default function GlobeMap() {
     const container = mountRef.current;
     if (!container) return;
 
-    // On mobile, clientWidth/Height can be 0 before paint — use window as fallback
-    const W = container.clientWidth  || window.innerWidth;
-    const H = container.clientHeight || window.innerHeight;
+    const W = container.clientWidth  || 800;
+    const H = container.clientHeight || 600;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(W, H);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, window.innerWidth < 768 ? 1.5 : 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
     const scene  = new THREE.Scene();
-    const isMobile = W < 768;
-    const camera = new THREE.PerspectiveCamera(isMobile ? 38 : 42, W / H, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 1000);
     camera.position.z = zoomRef.current;
     cameraRef.current = camera;
 
@@ -190,21 +186,7 @@ export default function GlobeMap() {
       return { x: p.clientX, y: p.clientY };
     };
 
-    // Pinch zoom state
-    let lastPinchDist = 0;
-
-    const getPinchDist = (e: TouchEvent) => {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    };
-
     const onDown = (e: MouseEvent | TouchEvent) => {
-      if ('touches' in e && e.touches.length === 2) {
-        lastPinchDist = getPinchDist(e);
-        dragging.current = false;
-        return;
-      }
       const { x, y } = getXY(e);
       dragging.current  = true;
       hasMoved.current  = false;
@@ -214,18 +196,6 @@ export default function GlobeMap() {
     };
 
     const onMove = (e: MouseEvent | TouchEvent) => {
-      // Pinch zoom — two fingers
-      if ('touches' in e && e.touches.length === 2) {
-        const dist = getPinchDist(e);
-        if (lastPinchDist > 0) {
-          const delta = lastPinchDist - dist;
-          zoomRef.current = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomRef.current + delta * 0.01));
-          camera.position.z = zoomRef.current;
-        }
-        lastPinchDist = dist;
-        return;
-      }
-
       if (!dragging.current) return;
       const { x, y } = getXY(e);
       const dx = x - prevMouse.current.x;
@@ -289,15 +259,14 @@ export default function GlobeMap() {
     container.addEventListener('mousedown',  onDown as EventListener);
     container.addEventListener('touchstart', onDown as EventListener, { passive: true });
     window.addEventListener('mousemove', onMove as EventListener);
-    window.addEventListener('touchmove', onMove as EventListener, { passive: false });
+    window.addEventListener('touchmove', onMove as EventListener, { passive: true });
     window.addEventListener('mouseup',   onUp   as EventListener);
     window.addEventListener('touchend',  onUp   as EventListener);
     container.addEventListener('wheel', onWheel, { passive: false });
 
     const onResize = () => {
-      const nW = container.clientWidth  || window.innerWidth;
-      const nH = container.clientHeight || window.innerHeight;
-      if (nW === 0 || nH === 0) return;
+      const nW = container.clientWidth;
+      const nH = container.clientHeight;
       renderer.setSize(nW, nH);
       camera.aspect = nW / nH;
       camera.updateProjectionMatrix();
@@ -405,12 +374,10 @@ export default function GlobeMap() {
         <div
           className="absolute z-30 rounded-2xl"
           style={{
-            top           : 'auto',
-            bottom        : '90px',
-            left          : '50%',
-            right         : 'auto',
-            transform     : 'translateX(-50%)',
-            width         : 'min(300px, calc(100vw - 32px))',
+            top           : '50%',
+            right         : '28px',
+            transform     : 'translateY(-50%)',
+            width         : '300px',
             background    : 'rgba(8,14,22,0.86)',
             border        : '1px solid rgba(0,210,210,0.30)',
             backdropFilter: 'blur(18px)',
@@ -451,9 +418,9 @@ export default function GlobeMap() {
         <div
           className="absolute z-50 rounded-2xl p-4 shadow-2xl"
           style={{
-            left          : 'max(8px, min(' + modal.sx + 'px, calc(100vw - 264px)))',
+            left          : modal.sx,
             top           : modal.sy,
-            width         : 'min(248px, calc(100vw - 32px))',
+            width         : '248px',
             background    : 'rgba(13,17,23,0.96)',
             border        : '1px solid rgba(0,180,216,0.3)',
             backdropFilter: 'blur(12px)',
