@@ -1,11 +1,20 @@
 'use client';
 /**
- * LiquidationHeatmapModal — Coinglass-style liquidation heatmap
- * - X axis: time (48 × 1h candles)
- * - Y axis: price levels (horizontal bands)
- * - Color intensity: liquidation density at that price×time
- * - Price line overlay
- * - Supports light + dark theme via CSS var detection
+ * LiquidationHeatmapModal — Coinglass-style dual-mode liquidation heatmap
+ *
+ * Layout:
+ *   - X = time buckets (candle intervals)
+ *   - Y = price levels
+ *   - Each column = vertical bars:
+ *       top half  (above price) = SHORT liq — red/orange heat
+ *       bottom half (below price) = LONG liq  — cyan/green heat
+ *   - Right side: dual legend (Short top, Long bottom)
+ *   - Price line overlay (red)
+ *   - Dollar labels on significant liq clusters
+ *   - Crosshair + rich tooltip
+ *   - Range filter: 12h / 24h / 48h / 7d
+ *   - Side filter: All / Long / Short
+ *   - Light + dark theme aware
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -16,76 +25,112 @@ interface Trade  { cause: string; side: string; price: string; amount: string; c
 
 interface Props { symbol: string; onClose: () => void; }
 
-// ── Color scale: purple → blue → cyan → green → yellow → white ────────────────
-function heatRgb(v: number): string {
-  if (v <= 0)    return 'rgba(30,10,60,0)';
-  // stops: 0=dark purple, 0.2=indigo, 0.4=cyan, 0.65=lime, 0.85=yellow, 1=white
-  type Stop = [number, number, number, number, number]; // t, r, g, b, a
-  const stops: Stop[] = [
-    [0,    20,  5,  50, 0.05],
-    [0.08, 40, 20, 110, 0.2 ],
-    [0.2,  0,  60, 180, 0.45],
-    [0.38, 0, 180, 170, 0.62],
-    [0.55, 0, 210,  80, 0.75],
-    [0.72,180, 230,  0, 0.85],
-    [0.88,255, 220,  0, 0.93],
-    [1,   255, 255,200, 1   ],
+// ── Color scales ───────────────────────────────────────────────────────────────
+// Short liq: dark red → orange → yellow → white
+function shortColor(v: number): string {
+  if (v <= 0) return 'transparent';
+  type S = [number,number,number,number,number];
+  const stops: S[] = [
+    [0,    60,  0,  0, 0.15],
+    [0.15,120, 10,  0, 0.35],
+    [0.35,200, 50,  0, 0.58],
+    [0.55,240,120,  0, 0.72],
+    [0.75,255,200,  0, 0.85],
+    [0.9, 255,230, 80, 0.93],
+    [1,   255,255,200, 1   ],
   ];
-  let lo = stops[0], hi = stops[stops.length - 1];
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (v >= stops[i][0] && v <= stops[i+1][0]) { lo = stops[i]; hi = stops[i+1]; break; }
-  }
-  const t = lo[0] === hi[0] ? 0 : (v - lo[0]) / (hi[0] - lo[0]);
-  const lerp = (a: number, b: number) => a + (b - a) * t;
-  return `rgba(${Math.round(lerp(lo[1],hi[1]))},${Math.round(lerp(lo[2],hi[2]))},${Math.round(lerp(lo[3],hi[3]))},${(lerp(lo[4],hi[4])).toFixed(2)})`;
+  let lo = stops[0], hi = stops[stops.length-1];
+  for (let i=0;i<stops.length-1;i++) if(v>=stops[i][0]&&v<=stops[i+1][0]){lo=stops[i];hi=stops[i+1];break;}
+  const t = lo[0]===hi[0] ? 0 : (v-lo[0])/(hi[0]-lo[0]);
+  const l = (a:number,b:number)=>a+(b-a)*t;
+  return `rgba(${Math.round(l(lo[1],hi[1]))},${Math.round(l(lo[2],hi[2]))},${Math.round(l(lo[3],hi[3]))},${l(lo[4],hi[4]).toFixed(2)})`;
+}
+
+// Long liq: dark teal → cyan → green → yellow-green
+function longColor(v: number): string {
+  if (v <= 0) return 'transparent';
+  type S = [number,number,number,number,number];
+  const stops: S[] = [
+    [0,    0, 30, 50, 0.15],
+    [0.15, 0, 80,100, 0.35],
+    [0.35, 0,170,160, 0.58],
+    [0.55, 0,210, 90, 0.72],
+    [0.75, 80,230, 40, 0.85],
+    [0.9, 180,240, 30, 0.93],
+    [1,   220,255,100, 1   ],
+  ];
+  let lo = stops[0], hi = stops[stops.length-1];
+  for (let i=0;i<stops.length-1;i++) if(v>=stops[i][0]&&v<=stops[i+1][0]){lo=stops[i];hi=stops[i+1];break;}
+  const t = lo[0]===hi[0] ? 0 : (v-lo[0])/(hi[0]-lo[0]);
+  const l = (a:number,b:number)=>a+(b-a)*t;
+  return `rgba(${Math.round(l(lo[1],hi[1]))},${Math.round(l(lo[2],hi[2]))},${Math.round(l(lo[3],hi[3]))},${l(lo[4],hi[4]).toFixed(2)})`;
 }
 
 const TIME_RANGES = [
-  { label: '12h', hours: 12, interval: '15m', intervalMs: 15*60*1000 },
-  { label: '24h', hours: 24, interval: '1h',  intervalMs: 60*60*1000 },
-  { label: '48h', hours: 48, interval: '1h',  intervalMs: 60*60*1000 },
-  { label: '7d',  hours: 168,interval: '4h',  intervalMs: 4*60*60*1000 },
+  { label:'12h', hours:12,  interval:'15m', intervalMs:15*60*1000  },
+  { label:'24h', hours:24,  interval:'1h',  intervalMs:60*60*1000  },
+  { label:'48h', hours:48,  interval:'1h',  intervalMs:60*60*1000  },
+  { label:'7d',  hours:168, interval:'4h',  intervalMs:4*60*60*1000},
 ];
+type SideMode = 'all' | 'long' | 'short';
 
-const ROWS = 80; // price buckets
+const ROWS = 80;
+const LEGEND_W = 90;
 
 function fmtPrice(p: number) {
-  if (p >= 10000) return p.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  if (p >= 1)     return p.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (p >= 0.01)  return p.toPrecision(4);
-  return p.toExponential(3);
+  if (p >= 10000) return '$' + p.toLocaleString('en-US',{maximumFractionDigits:0});
+  if (p >= 1)     return '$' + p.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if (p >= 0.001) return '$' + p.toPrecision(4);
+  return '$' + p.toExponential(3);
 }
 function fmtUSD(v: number) {
-  return v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : v >= 1e3 ? `$${(v/1e3).toFixed(1)}K` : `$${v.toFixed(0)}`;
+  return v>=1e6?`$${(v/1e6).toFixed(2)}M`:v>=1e3?`$${(v/1e3).toFixed(1)}K`:`$${v.toFixed(0)}`;
+}
+function intensityLabel(v: number) {
+  if (v > 0.85) return 'Extreme';
+  if (v > 0.65) return 'Very High';
+  if (v > 0.45) return 'High';
+  if (v > 0.25) return 'Medium';
+  return 'Low';
 }
 
 export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
   const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const overlayRef = useRef<HTMLCanvasElement>(null); // for crosshair only
-  const [rangeIdx, setRangeIdx] = useState(1); // default 24h
-  const [loading, setLoading]   = useState(true);
-  const [error,   setError]     = useState('');
-  const [stats, setStats]       = useState({ currentPrice: 0, longLiq: 0, shortLiq: 0, candleCount: 0 });
-  const [tooltip, setTooltip]   = useState<{ x: number; y: number; price: string; time: string; liq: string } | null>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
+  const [rangeIdx, setRangeIdx] = useState(2); // default 48h
+  const [sideMode, setSideMode] = useState<SideMode>('all');
+  const [loading,  setLoading ] = useState(true);
+  const [error,    setError   ] = useState('');
+  const [stats,    setStats   ] = useState({ currentPrice:0, longLiq:0, shortLiq:0 });
+  const [tooltip,  setTooltip ] = useState<{
+    x:number; y:number;
+    date:string; price:string;
+    liqVol:number; side:string; intensity:string;
+  } | null>(null);
+
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
-  // Store rendered grid meta for tooltip/crosshair
   const metaRef = useRef({
-    minP: 0, maxP: 0, minT: 0, maxT: 0, cols: 0,
-    cellW: 0, cellH: 0, W: 0, H: 0,
-    grid: [] as number[][], // [col][row] normalized 0-1
+    minP:0, maxP:0, minT:0, maxT:0, COLS:0,
+    cellW:0, cellH:0, W:0, H:0,
+    // per-col: liq notional bucketed by price row
+    shortGrid: [] as number[][], // [col][row]
+    longGrid:  [] as number[][], // [col][row]
+    // per-col totals for labels
+    colShortTotal: [] as number[],
+    colLongTotal:  [] as number[],
     candles: [] as Candle[],
   });
 
-  const render = useCallback((candles: Candle[], trades: Trade[]) => {
+  const render = useCallback((candles: Candle[], trades: Trade[], side: SideMode) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const W = canvas.width;
+    const W = canvas.width - LEGEND_W;
     const H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, canvas.width, H);
 
     if (!candles.length) { setLoading(false); return; }
 
@@ -94,10 +139,10 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     const lows  = candles.map(c => parseFloat(c.l));
     let maxP = Math.max(...highs);
     let minP = Math.min(...lows);
-    const pad = (maxP - minP) * 0.12;
+    const pad = (maxP - minP) * 0.1;
     maxP += pad; minP -= pad;
 
-    // Time range
+    // Time
     const times = candles.map(c => c.t > 1e12 ? c.t : c.t * 1000);
     const minT = Math.min(...times);
     const maxT = Math.max(...times);
@@ -106,189 +151,233 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     const cellW = W / COLS;
     const cellH = H / ROWS;
 
-    // Build raw liq grid [col][row]
-    const rawGrid: number[][] = Array.from({ length: COLS }, () => new Array(ROWS).fill(0));
+    // Build grids
+    const shortGrid: number[][] = Array.from({length:COLS}, ()=>new Array(ROWS).fill(0));
+    const longGrid:  number[][] = Array.from({length:COLS}, ()=>new Array(ROWS).fill(0));
+    const colShortTotal = new Array(COLS).fill(0);
+    const colLongTotal  = new Array(COLS).fill(0);
+    let totalLong=0, totalShort=0;
 
-    let longTotal = 0, shortTotal = 0;
+    const addToGrid = (grid: number[][], colTotals: number[], ci: number, price: number, notional: number) => {
+      const row = ROWS - 1 - Math.floor(((price - minP) / (maxP - minP)) * ROWS);
+      if (row < 0 || row >= ROWS) return;
+      // Spread across a band (Coinglass band effect)
+      const spread = Math.max(1, Math.floor(ROWS * 0.02));
+      for (let dr=-spread; dr<=spread; dr++) {
+        const r = row + dr;
+        if (r < 0 || r >= ROWS) continue;
+        const w = 1 - Math.abs(dr) / (spread + 1);
+        grid[ci][r] += notional * w;
+      }
+      colTotals[ci] += notional;
+    };
 
-    // 1. Real liquidation trades
+    // Real trades
     for (const t of trades) {
-      const isLiq = t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation'
-        || (typeof t.cause === 'string' && t.cause.toLowerCase().includes('liq'));
+      const isLiq = t.cause==='market_liquidation'||t.cause==='backstop_liquidation'
+        ||(typeof t.cause==='string'&&t.cause.toLowerCase().includes('liq'));
       if (!isLiq) continue;
       const ts = t.created_at > 1e12 ? t.created_at : t.created_at * 1000;
       const price = parseFloat(t.price);
       const notional = price * parseFloat(t.amount);
-      if (!notional || isNaN(notional)) continue;
-
-      const col = Math.floor(((ts - minT) / (maxT - minT + 1)) * COLS);
-      const row = ROWS - 1 - Math.floor(((price - minP) / (maxP - minP)) * ROWS);
-      if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
-        rawGrid[col][row] += notional;
-      }
-      if (t.side?.includes('long')) longTotal += notional; else shortTotal += notional;
+      if (!notional||isNaN(notional)) continue;
+      const ci = Math.min(Math.floor(((ts-minT)/(maxT-minT+1))*COLS), COLS-1);
+      if (ci < 0) continue;
+      const isLong = t.side?.includes('long');
+      if (isLong) { totalLong+=notional; addToGrid(longGrid, colLongTotal, ci, price, notional); }
+      else        { totalShort+=notional; addToGrid(shortGrid, colShortTotal, ci, price, notional); }
     }
 
-    // 2. Synthetic liq pressure from candle extremes (gives Coinglass-style bands)
-    //    High = short liquidation cluster zone, Low = long liquidation cluster zone
-    for (let ci = 0; ci < candles.length; ci++) {
+    // Synthetic bands from candle wicks (gives density when real liq data is sparse)
+    for (let ci=0; ci<candles.length; ci++) {
       const c = candles[ci];
-      const high  = parseFloat(c.h);
-      const low   = parseFloat(c.l);
-      const open  = parseFloat(c.o);
-      const close = parseFloat(c.c);
+      const high  = parseFloat(c.h), low  = parseFloat(c.l);
+      const open  = parseFloat(c.o), close= parseFloat(c.c);
       const vol   = parseFloat(c.v);
-      const body  = Math.abs(close - open);
-
-      // Distribute liq pressure across horizontal bands near key price levels
-      // This creates the "banded" Coinglass look
-      const addBand = (price: number, weight: number) => {
-        const baseRow = ROWS - 1 - Math.floor(((price - minP) / (maxP - minP)) * ROWS);
-        const spread = Math.max(1, Math.floor(ROWS * 0.025)); // ±2.5% price band
-        for (let dr = -spread; dr <= spread; dr++) {
-          const row = baseRow + dr;
-          if (row < 0 || row >= ROWS) continue;
-          const falloff = 1 - Math.abs(dr) / (spread + 1);
-          rawGrid[ci][row] += vol * weight * falloff * 0.3;
-        }
-      };
-
-      // High wick → short liq zone
-      const upperWick = high - Math.max(open, close);
-      if (upperWick > body * 0.2) addBand(high, upperWick / (maxP - minP));
-
-      // Low wick → long liq zone
-      const lowerWick = Math.min(open, close) - low;
-      if (lowerWick > body * 0.2) addBand(low, lowerWick / (maxP - minP));
-
-      // Round numbers → extra liq clusters (traders place stops there)
-      const magnitude = Math.pow(10, Math.floor(Math.log10(close)));
-      const nearestRound = Math.round(close / magnitude) * magnitude;
-      if (Math.abs(nearestRound - close) / close < 0.03) {
-        addBand(nearestRound, 0.5);
-      }
+      const body  = Math.abs(close-open);
+      const upperWick = high - Math.max(open,close);
+      const lowerWick = Math.min(open,close) - low;
+      const scale = vol * 0.0002;
+      if (upperWick > body*0.15) addToGrid(shortGrid, colShortTotal, ci, high, upperWick*scale);
+      if (lowerWick > body*0.15) addToGrid(longGrid,  colLongTotal,  ci, low,  lowerWick*scale);
     }
 
-    // Normalize with gamma
-    let maxVal = 0;
-    for (let ci = 0; ci < COLS; ci++)
-      for (let ri = 0; ri < ROWS; ri++)
-        if (rawGrid[ci][ri] > maxVal) maxVal = rawGrid[ci][ri];
+    // Normalize separately for long/short
+    let maxShort=0, maxLong=0;
+    for (let ci=0;ci<COLS;ci++) for(let ri=0;ri<ROWS;ri++) {
+      if (shortGrid[ci][ri]>maxShort) maxShort=shortGrid[ci][ri];
+      if (longGrid[ci][ri] >maxLong ) maxLong =longGrid[ci][ri];
+    }
+    const normShort=(v:number)=>maxShort>0?Math.pow(v/maxShort,0.45):0;
+    const normLong =(v:number)=>maxLong >0?Math.pow(v/maxLong, 0.45):0;
 
-    const normGrid: number[][] = Array.from({ length: COLS }, (_, ci) =>
-      rawGrid[ci].map(v => maxVal > 0 ? Math.pow(v / maxVal, 0.5) : 0)
-    );
+    metaRef.current = { minP, maxP, minT, maxT, COLS, cellW, cellH, W, H,
+      shortGrid, longGrid, colShortTotal, colLongTotal, candles };
 
-    metaRef.current = { minP, maxP, minT, maxT, cols: COLS, cellW, cellH, W, H, grid: normGrid, candles };
-
-    // ── Draw background ────────────────────────────────────────────────
+    // ── Background ────────────────────────────────────────────────────
     ctx.fillStyle = isDark ? '#06091a' : '#f0f4f8';
     ctx.fillRect(0, 0, W, H);
 
-    // ── Draw heatmap cells (horizontal band style) ─────────────────────
-    for (let ri = 0; ri < ROWS; ri++) {
-      for (let ci = 0; ci < COLS; ci++) {
-        const v = normGrid[ci][ri];
-        if (v < 0.04) continue;
-        ctx.fillStyle = heatRgb(v);
-        ctx.fillRect(
-          Math.floor(ci * cellW), Math.floor(ri * cellH),
-          Math.ceil(cellW) + 1,  Math.ceil(cellH) + 1
-        );
+    // ── Heatmap cells ─────────────────────────────────────────────────
+    for (let ci=0; ci<COLS; ci++) {
+      const closePx = parseFloat(candles[ci]?.c||'0');
+      const priceRow = ROWS-1-Math.floor(((closePx-minP)/(maxP-minP))*ROWS);
+
+      for (let ri=0; ri<ROWS; ri++) {
+        const abovePrice = ri <= priceRow;
+        // Above price → short liq zone; below → long liq zone
+        let color = 'transparent';
+        if ((side==='all'||side==='short') && abovePrice) {
+          const v = normShort(shortGrid[ci][ri]);
+          if (v > 0.03) color = shortColor(v);
+        }
+        if ((side==='all'||side==='long') && !abovePrice) {
+          const v = normLong(longGrid[ci][ri]);
+          if (v > 0.03) color = longColor(v);
+        }
+        if (color==='transparent') continue;
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.floor(ci*cellW), Math.floor(ri*cellH), Math.ceil(cellW)+1, Math.ceil(cellH)+1);
       }
     }
 
-    // ── Horizontal grid lines (subtle) ────────────────────────────────
-    const gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
-    ctx.strokeStyle = gridColor;
+    // ── Subtle horizontal grid lines ──────────────────────────────────
+    ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)';
     ctx.lineWidth = 1;
-    for (let i = 0; i <= 8; i++) {
-      const y = (i / 8) * H;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    for (let i=1; i<8; i++) {
+      const y = (i/8)*H;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    }
+
+    // ── Dollar labels for high-liq columns ───────────────────────────
+    ctx.font = 'bold 9px ui-sans-serif, sans-serif';
+    ctx.textAlign = 'center';
+    const labelThreshold = Math.max(maxShort, maxLong) * 0.25;
+    for (let ci=0; ci<COLS; ci++) {
+      const cx = (ci+0.5)*cellW;
+      if ((side==='all'||side==='short') && colShortTotal[ci] > labelThreshold*5) {
+        // Find peak row for label placement
+        let peakRow=0, peakVal=0;
+        for (let ri=0;ri<ROWS/2;ri++) if(shortGrid[ci][ri]>peakVal){peakVal=shortGrid[ci][ri];peakRow=ri;}
+        const y = Math.max(8, peakRow*cellH - 2);
+        ctx.fillStyle='rgba(255,200,0,0.9)';
+        ctx.fillText(fmtUSD(colShortTotal[ci])+' [S]', cx, y);
+      }
+      if ((side==='all'||side==='long') && colLongTotal[ci] > labelThreshold*5) {
+        let peakRow=ROWS-1, peakVal=0;
+        for (let ri=ROWS/2;ri<ROWS;ri++) if(longGrid[ci][ri]>peakVal){peakVal=longGrid[ci][ri];peakRow=ri;}
+        const y = Math.min(H-4, peakRow*cellH + 10);
+        ctx.fillStyle='rgba(100,255,180,0.9)';
+        ctx.fillText(fmtUSD(colLongTotal[ci])+' [L]', cx, y);
+      }
     }
 
     // ── Price line ────────────────────────────────────────────────────
     ctx.beginPath();
-    ctx.strokeStyle = '#ff4455';
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = 'rgba(255,50,70,0.5)';
-    ctx.shadowBlur = 3;
-    for (let ci = 0; ci < candles.length; ci++) {
+    ctx.strokeStyle='#ff3344';
+    ctx.lineWidth=1.5;
+    ctx.shadowColor='rgba(255,40,60,0.5)';
+    ctx.shadowBlur=4;
+    for (let ci=0; ci<candles.length; ci++) {
       const price = parseFloat(candles[ci].c);
-      const x = (ci + 0.5) * cellW;
-      const y = H - ((price - minP) / (maxP - minP)) * H;
-      if (ci === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      const x = (ci+0.5)*cellW;
+      const y = H - ((price-minP)/(maxP-minP))*H;
+      if (ci===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
     }
     ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // ── Price axis labels (right side) ────────────────────────────────
-    const labelCount = 7;
-    const labelColor = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)';
-    ctx.font = '10px ui-monospace, monospace';
-    ctx.textAlign = 'right';
-    for (let i = 0; i <= labelCount; i++) {
-      const pct = i / labelCount;
-      const price = maxP - pct * (maxP - minP);
-      const y = pct * H;
-      ctx.fillStyle = isDark ? 'rgba(20,30,60,0.7)' : 'rgba(240,244,248,0.8)';
-      const label = '$' + fmtPrice(price);
-      const tw = ctx.measureText(label).width;
-      ctx.fillRect(W - tw - 10, y - 8, tw + 8, 14);
-      ctx.fillStyle = labelColor;
-      ctx.fillText(label, W - 4, y + 4);
-    }
+    ctx.shadowBlur=0;
 
     // ── Current price dashed line ─────────────────────────────────────
-    const lastPrice = parseFloat(candles[candles.length - 1]?.c || '0');
+    const lastPrice = parseFloat(candles[candles.length-1]?.c||'0');
     if (lastPrice) {
-      const y = H - ((lastPrice - minP) / (maxP - minP)) * H;
-      ctx.setLineDash([5, 5]);
-      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W - 75, y); ctx.stroke();
+      const y = H - ((lastPrice-minP)/(maxP-minP))*H;
+      ctx.setLineDash([5,5]);
+      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)';
+      ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
       ctx.setLineDash([]);
     }
 
-    // ── Color scale legend (left side) ────────────────────────────────
-    const lgH = 100, lgW = 10, lgX = 6, lgY = H / 2 - lgH / 2;
-    for (let i = 0; i < lgH; i++) {
-      ctx.fillStyle = heatRgb(1 - i / lgH);
-      ctx.fillRect(lgX, lgY + i, lgW, 1);
+    // ── Y-axis price labels ────────────────────────────────────────────
+    const lc = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+    const lbg= isDark ? 'rgba(6,9,26,0.75)'     : 'rgba(240,244,248,0.85)';
+    ctx.font='10px ui-monospace,monospace';
+    ctx.textAlign='right';
+    for (let i=0;i<=7;i++) {
+      const pct=i/7;
+      const price=maxP-pct*(maxP-minP);
+      const y=pct*H;
+      const label=fmtPrice(price);
+      const tw=ctx.measureText(label).width;
+      ctx.fillStyle=lbg;
+      ctx.fillRect(W-tw-12,y-8,tw+10,14);
+      ctx.fillStyle=lc;
+      ctx.fillText(label,W-4,y+4);
     }
-    ctx.fillStyle = labelColor;
-    ctx.textAlign = 'left';
-    ctx.font = '9px ui-monospace, monospace';
-    ctx.fillText('High', lgX, lgY - 2);
-    ctx.fillText('Low',  lgX, lgY + lgH + 10);
 
-    setStats({ currentPrice: lastPrice, longLiq: longTotal, shortLiq: shortTotal, candleCount: candles.length });
+    // ── Right legend ───────────────────────────────────────────────────
+    const lx = W + 4;
+    const lgBarH = H/2 - 30;
+
+    // Short legend (top)
+    ctx.font='bold 9px ui-sans-serif,sans-serif';
+    ctx.textAlign='left';
+    ctx.fillStyle= isDark ? 'rgba(255,100,100,0.9)' : 'rgba(200,0,0,0.8)';
+    ctx.fillText('Short', lx, 14);
+    const shortTiers = ['>$2M','$750k–$2M','$250k–$750k','$0k–$250k'];
+    const shortVals  = [1, 0.65, 0.35, 0.12];
+    for (let i=0;i<4;i++) {
+      const y=22+i*((lgBarH)/4);
+      ctx.fillStyle=shortColor(shortVals[i]);
+      ctx.fillRect(lx,y,12,lgBarH/4-2);
+      ctx.fillStyle= isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+      ctx.font='8px ui-monospace,monospace';
+      ctx.fillText(shortTiers[i],lx+14,y+8);
+    }
+
+    // Divider
+    ctx.strokeStyle= isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(W,H/2); ctx.lineTo(canvas.width,H/2); ctx.stroke();
+
+    // Long legend (bottom)
+    ctx.font='bold 9px ui-sans-serif,sans-serif';
+    ctx.fillStyle= isDark ? 'rgba(80,220,180,0.9)' : 'rgba(0,140,100,0.8)';
+    ctx.fillText('Long', lx, H/2+14);
+    const longTiers = ['>$2M','$750k–$2M','$250k–$750k','$0k–$250k'];
+    const longVals  = [1, 0.65, 0.35, 0.12];
+    for (let i=0;i<4;i++) {
+      const y=H/2+22+i*((lgBarH)/4);
+      ctx.fillStyle=longColor(longVals[i]);
+      ctx.fillRect(lx,y,12,lgBarH/4-2);
+      ctx.fillStyle= isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+      ctx.font='8px ui-monospace,monospace';
+      ctx.fillText(longTiers[i],lx+14,y+8);
+    }
+
+    setStats({ currentPrice:lastPrice, longLiq:totalLong, shortLiq:totalShort });
     setLoading(false);
   }, [isDark]);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError('');
-
+    setLoading(true); setError('');
     const range = TIME_RANGES[rangeIdx];
     const end   = Date.now();
-    const start = end - range.hours * 3600 * 1000;
+    const start = end - range.hours * 3600000;
 
     Promise.all([
-      fetch(`/api/proxy?path=${encodeURIComponent(`kline?symbol=${symbol}&interval=${range.interval}&start_time=${start}&end_time=${end}`)}`).then(r => r.json()),
-      fetch(`/api/proxy?path=${encodeURIComponent(`trades?symbol=${symbol}&limit=1000`)}`).then(r => r.json()),
-    ]).then(([cj, tj]) => {
+      fetch(`/api/proxy?path=${encodeURIComponent(`kline?symbol=${symbol}&interval=${range.interval}&start_time=${start}&end_time=${end}`)}`).then(r=>r.json()),
+      fetch(`/api/proxy?path=${encodeURIComponent(`trades?symbol=${symbol}&limit=1000`)}`).then(r=>r.json()),
+    ]).then(([cj,tj]) => {
       if (cancelled) return;
-      const candles: Candle[] = (cj.success && Array.isArray(cj.data)) ? cj.data : [];
-      const trades: Trade[]   = (tj.success && Array.isArray(tj.data))  ? tj.data  : [];
-      render(candles, trades);
-    }).catch(() => {
-      if (!cancelled) { setError('Failed to load data'); setLoading(false); }
-    });
+      const candles: Candle[] = cj.success&&Array.isArray(cj.data) ? cj.data : [];
+      const trades:  Trade[]  = tj.success&&Array.isArray(tj.data)  ? tj.data  : [];
+      render(candles, trades, sideMode);
+    }).catch(()=>{ if(!cancelled){setError('Failed to load data');setLoading(false);} });
 
-    return () => { cancelled = true; };
-  }, [symbol, rangeIdx, render]);
+    return ()=>{ cancelled=true; };
+  }, [symbol, rangeIdx, sideMode, render]);
 
   // Crosshair + tooltip
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -297,189 +386,213 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     const rect = canvas.getBoundingClientRect();
     const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
     const my = (e.clientY - rect.top)  * (canvas.height / rect.height);
-    const { minP, maxP, minT, maxT, cols, cellW, cellH, W, H, grid, candles } = metaRef.current;
-    if (!cols) return;
+    const { minP, maxP, minT, maxT, COLS, cellW, cellH, W, H, shortGrid, longGrid, colShortTotal, colLongTotal, candles } = metaRef.current;
+    if (!COLS) return;
 
-    const price = maxP - (my / H) * (maxP - minP);
-    const ts    = minT + (mx / W) * (maxT - minT);
-    const col   = Math.floor(mx / cellW);
-    const row   = Math.floor(my / cellH);
-    const v     = (col >= 0 && col < cols && row >= 0 && row < ROWS) ? grid[col]?.[row] ?? 0 : 0;
+    const price = maxP - (my/H)*(maxP-minP);
+    const ts    = minT + (mx/W)*(maxT-minT);
+    const col   = Math.min(Math.floor(mx/cellW), COLS-1);
+    const row   = Math.min(Math.floor(my/cellH), ROWS-1);
 
-    // Draw crosshair on overlay canvas
+    // Crosshair
     const oc = overlayRef.current;
     if (oc) {
       const oc2 = oc.getContext('2d');
       if (oc2) {
-        oc2.clearRect(0, 0, oc.width, oc.height);
-        oc2.strokeStyle = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
-        oc2.setLineDash([4, 4]);
-        oc2.lineWidth = 1;
-        oc2.beginPath(); oc2.moveTo(mx, 0); oc2.lineTo(mx, H); oc2.stroke();
-        oc2.beginPath(); oc2.moveTo(0, my); oc2.lineTo(W, my); oc2.stroke();
+        oc2.clearRect(0,0,oc.width,oc.height);
+        // Vertical dotted line
+        oc2.strokeStyle = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)';
+        oc2.setLineDash([4,4]); oc2.lineWidth=1;
+        oc2.beginPath(); oc2.moveTo(mx,0); oc2.lineTo(mx,H); oc2.stroke();
+        oc2.beginPath(); oc2.moveTo(0,my); oc2.lineTo(W,my); oc2.stroke();
         oc2.setLineDash([]);
       }
     }
 
-    const candle = candles[Math.min(col, candles.length - 1)];
+    const candle = candles[Math.min(col, candles.length-1)];
     const closePrice = candle ? parseFloat(candle.c) : price;
-    const date = new Date(ts);
+    const abovePrice = my < H - ((closePrice-minP)/(maxP-minP))*H;
+    const sv = col>=0&&col<COLS&&row>=0&&row<ROWS ? (shortGrid[col]?.[row]??0) : 0;
+    const lv = col>=0&&col<COLS&&row>=0&&row<ROWS ? (longGrid[col]?.[row]??0)  : 0;
+
+    let liqVol = 0, sideLabel = '';
+    if (abovePrice) { liqVol = colShortTotal[col]||0; sideLabel='Short Liquidation'; }
+    else            { liqVol = colLongTotal[col]||0;  sideLabel='Long Liquidation';  }
+
+    const maxVal = Math.max(sv, lv);
+    const intensity = maxVal > 0 ? Math.pow(maxVal / Math.max(...shortGrid.concat(longGrid).map(col => Math.max(...col))), 0.45) : 0;
+
     setTooltip({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
-      price: '$' + fmtPrice(closePrice),
-      time: date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }),
-      liq: v > 0.05 ? `Density: ${(v * 100).toFixed(0)}%` : '',
+      date: new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).replace(',',''),
+      price: fmtPrice(closePrice),
+      liqVol,
+      side: sideLabel,
+      intensity: intensity>0.05 ? intensityLabel(intensity) : '',
     });
   }, [isDark]);
 
   const handleMouseLeave = useCallback(() => {
     setTooltip(null);
     const oc = overlayRef.current;
-    if (oc) oc.getContext('2d')?.clearRect(0, 0, oc.width, oc.height);
+    if (oc) oc.getContext('2d')?.clearRect(0,0,oc.width,oc.height);
   }, []);
 
-  // Close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const h = (e: KeyboardEvent) => { if(e.key==='Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return ()=>window.removeEventListener('keydown', h);
   }, [onClose]);
 
   const bgModal  = isDark ? '#07091c' : '#ffffff';
-  const bgHeader = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
-  const border   = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.1)';
-  const text1    = isDark ? 'rgba(255,255,255,0.9)'  : 'rgba(0,0,0,0.85)';
-  const text2    = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
-
-  const legendStops = [0, 0.2, 0.4, 0.65, 0.85, 1];
+  const bgBar    = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
+  const border   = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)';
+  const text1    = isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.82)';
+  const text2    = isDark ? 'rgba(255,255,255,0.42)' : 'rgba(0,0,0,0.42)';
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ background:'rgba(0,0,0,0.65)', backdropFilter:'blur(6px)' }}
+      onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}
     >
-      <div
-        className="relative flex flex-col rounded-2xl overflow-hidden shadow-2xl"
-        style={{ width: 900, maxWidth: '96vw', background: bgModal, border: `1px solid ${border}` }}
-      >
+      <div className="relative flex flex-col rounded-2xl overflow-hidden shadow-2xl"
+        style={{ width:940, maxWidth:'97vw', background:bgModal, border:`1px solid ${border}` }}>
+
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-5 py-3" style={{ background: bgHeader, borderBottom: `1px solid ${border}` }}>
-          <div className="flex items-center gap-3">
-            <CoinLogo symbol={symbol} size={22} />
-            <div className="flex items-center gap-2">
-              <span className="text-[14px] font-bold" style={{ color: text1 }}>{symbol.replace('-USD', '')}</span>
-              <span className="text-[11px]" style={{ color: text2 }}>Liquidation Heatmap · {TIME_RANGES[rangeIdx].label} · {TIME_RANGES[rangeIdx].interval} candles</span>
-              {stats.currentPrice > 0 && (
-                <span className="text-[13px] font-mono font-semibold" style={{ color: text1 }}>
-                  ${fmtPrice(stats.currentPrice)}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {(stats.longLiq > 0 || stats.shortLiq > 0) && (
-              <div className="flex gap-3 text-[11px]">
-                <span style={{ color: '#f87171' }}>Long liq: <b>{fmtUSD(stats.longLiq)}</b></span>
-                <span style={{ color: '#4ade80' }}>Short liq: <b>{fmtUSD(stats.shortLiq)}</b></span>
-              </div>
-            )}
-            <button onClick={onClose} className="text-[18px] leading-none transition-opacity hover:opacity-60" style={{ color: text2 }}>✕</button>
-          </div>
-        </div>
-
-        {/* ── Time range filter ── */}
-        <div className="flex items-center gap-2 px-5 py-2" style={{ borderBottom: `1px solid ${border}` }}>
-          <span className="text-[10px] mr-1" style={{ color: text2 }}>Range:</span>
-          {TIME_RANGES.map((r, i) => (
-            <button
-              key={r.label}
-              onClick={() => setRangeIdx(i)}
-              className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full transition-all"
-              style={{
-                background: rangeIdx === i ? (isDark ? 'rgba(0,180,220,0.18)' : 'rgba(0,150,200,0.12)') : 'transparent',
-                color: rangeIdx === i ? (isDark ? '#00d4ff' : '#0077aa') : text2,
-                border: rangeIdx === i ? `1px solid ${isDark ? 'rgba(0,180,220,0.4)' : 'rgba(0,150,200,0.3)'}` : `1px solid transparent`,
-              }}
-            >
-              {r.label}
-            </button>
-          ))}
-
-          {/* Color legend */}
-          <div className="flex items-center gap-1.5 ml-4">
-            <span className="text-[10px]" style={{ color: text2 }}>Intensity:</span>
-            <div className="flex gap-0.5">
-              {legendStops.map((v, i) => (
-                <div key={i} className="w-5 h-3 rounded-sm" style={{ background: heatRgb(v) }} />
-              ))}
-            </div>
-            <span className="text-[10px]" style={{ color: text2 }}>Low → High</span>
-            <span className="text-[10px] ml-3" style={{ color: text2 }}>
-              — <span style={{ color: '#ff4455' }}>Price</span>
+        <div className="flex items-center justify-between px-5 py-3" style={{ background:bgBar, borderBottom:`1px solid ${border}` }}>
+          <div className="flex items-center gap-2.5">
+            <span className="text-[13px]" style={{ color:text2 }}>✕</span>
+            <CoinLogo symbol={symbol} size={20} />
+            <span className="text-[14px] font-bold" style={{ color:text1 }}>
+              {symbol.replace('-USD','')} Dual-Mode Liquidation Heatmap
             </span>
           </div>
+          <div className="flex items-center gap-4">
+            {(stats.longLiq>0||stats.shortLiq>0) && (
+              <div className="flex gap-3 text-[11px]">
+                <span style={{ color:'#f87171' }}>Long liq: <b>{fmtUSD(stats.longLiq)}</b></span>
+                <span style={{ color:'#4ade80' }}>Short liq: <b>{fmtUSD(stats.shortLiq)}</b></span>
+              </div>
+            )}
+            {stats.currentPrice>0 && (
+              <span className="font-mono text-[13px] font-semibold" style={{ color:text1 }}>
+                {fmtPrice(stats.currentPrice)}
+              </span>
+            )}
+            <button onClick={onClose} className="text-[18px] leading-none hover:opacity-60 transition-opacity" style={{ color:text2 }}>✕</button>
+          </div>
         </div>
 
-        {/* ── Canvas area ── */}
-        <div className="relative" style={{ height: 420 }}>
+        {/* ── Controls ── */}
+        <div className="flex items-center gap-4 px-5 py-2" style={{ borderBottom:`1px solid ${border}`, background:bgBar }}>
+          {/* Range */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px]" style={{ color:text2 }}>Range:</span>
+            {TIME_RANGES.map((r,i) => (
+              <button key={r.label} onClick={()=>setRangeIdx(i)}
+                className="text-[10px] font-semibold px-2 py-0.5 rounded transition-all"
+                style={{
+                  background: rangeIdx===i ? (isDark?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.1)') : 'transparent',
+                  color: rangeIdx===i ? text1 : text2,
+                  border: `1px solid ${rangeIdx===i ? (isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)') : 'transparent'}`,
+                }}>{r.label}</button>
+            ))}
+          </div>
+
+          {/* Side filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px]" style={{ color:text2 }}>Side:</span>
+            {(['all','long','short'] as SideMode[]).map(s => (
+              <button key={s} onClick={()=>setSideMode(s)}
+                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded transition-all"
+                style={{
+                  background: sideMode===s
+                    ? s==='long'  ? 'rgba(74,222,128,0.15)'
+                    : s==='short' ? 'rgba(248,113,113,0.15)'
+                    : (isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)')
+                    : 'transparent',
+                  color: sideMode===s
+                    ? s==='long'  ? '#4ade80'
+                    : s==='short' ? '#f87171'
+                    : text1
+                    : text2,
+                  border: `1px solid ${sideMode===s
+                    ? s==='long'  ? 'rgba(74,222,128,0.3)'
+                    : s==='short' ? 'rgba(248,113,113,0.3)'
+                    : (isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.12)')
+                    : 'transparent'}`,
+                }}>
+                {s==='long'?'🟢':s==='short'?'🔴':'⚡'} {s.charAt(0).toUpperCase()+s.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Price legend strip */}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="text-[10px]" style={{ color:text2 }}>Short:</span>
+            {[0.08,0.3,0.6,0.9].map((v,i)=>(
+              <div key={i} className="w-4 h-2.5 rounded-sm" style={{ background:shortColor(v) }} />
+            ))}
+            <span className="text-[10px] ml-2" style={{ color:text2 }}>Long:</span>
+            {[0.08,0.3,0.6,0.9].map((v,i)=>(
+              <div key={i} className="w-4 h-2.5 rounded-sm" style={{ background:longColor(v) }} />
+            ))}
+            <span className="text-[10px] ml-2" style={{ color:text2 }}>— <span style={{ color:'#ff3344' }}>Price</span></span>
+          </div>
+        </div>
+
+        {/* ── Canvas ── */}
+        <div className="relative" style={{ height:420 }}>
           {loading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center z-10" style={{ background: bgModal }}>
-              <div className="w-8 h-8 border-2 border-t-cyan-400 rounded-full animate-spin mb-3" style={{ borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', borderTopColor: '#00d4ff' }} />
-              <span className="text-[12px]" style={{ color: text2 }}>Loading {symbol} data...</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-10" style={{ background:bgModal }}>
+              <div className="w-7 h-7 border-2 rounded-full animate-spin mb-2"
+                style={{ borderColor:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)', borderTopColor:'#00d4ff' }} />
+              <span className="text-[11px]" style={{ color:text2 }}>Loading {symbol.replace('-USD','')} data...</span>
             </div>
           )}
-          {error && !loading && (
+          {error&&!loading && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-[12px] text-red-400">{error}</span>
+              <span className="text-red-400 text-[12px]">{error}</span>
             </div>
           )}
+          <canvas ref={canvasRef}  width={940} height={420} className="absolute inset-0 w-full h-full" />
+          <canvas ref={overlayRef} width={940} height={420} className="absolute inset-0 w-full h-full cursor-crosshair"
+            onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} />
 
-          {/* Main heatmap canvas */}
-          <canvas ref={canvasRef} width={900} height={420} className="absolute inset-0 w-full h-full" />
-          {/* Crosshair overlay canvas */}
-          <canvas
-            ref={overlayRef}
-            width={900}
-            height={420}
-            className="absolute inset-0 w-full h-full cursor-crosshair"
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-          />
-
-          {/* Tooltip */}
           {tooltip && (
-            <div
-              className="absolute pointer-events-none rounded-lg px-3 py-2 text-[11px]"
+            <div className="absolute pointer-events-none rounded-xl px-3 py-2.5 text-[11px]"
               style={{
-                left:  Math.min(tooltip.x + 12, 720),
-                top:   Math.max(tooltip.y - 16, 4),
-                background: isDark ? 'rgba(5,10,30,0.92)' : 'rgba(255,255,255,0.95)',
-                border: `1px solid ${border}`,
-                color: text1,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                minWidth: 140,
-              }}
-            >
-              <div className="font-semibold mb-0.5">{tooltip.time}</div>
-              <div className="font-mono">Price: {tooltip.price}</div>
-              {tooltip.liq && <div style={{ color: '#facc15' }}>{tooltip.liq}</div>}
+                left: Math.min(tooltip.x+14, 720),
+                top:  Math.max(tooltip.y-10, 4),
+                background: isDark?'rgba(4,8,28,0.95)':'rgba(255,255,255,0.97)',
+                border:`1px solid ${border}`,
+                color:text1,
+                boxShadow:'0 8px 30px rgba(0,0,0,0.4)',
+                minWidth:170,
+              }}>
+              <div className="font-semibold mb-1" style={{ color:text2 }}>Date: {tooltip.date}</div>
+              <div className="mb-0.5">Price: <span className="font-mono font-bold">{tooltip.price}</span></div>
+              {tooltip.liqVol>0&&<div>Total Liq Vol: <span className="font-bold">{fmtUSD(tooltip.liqVol)}</span></div>}
+              {tooltip.side&&(
+                <div style={{ color:tooltip.side.includes('Short')?'#f87171':'#4ade80' }}>
+                  Side: {tooltip.side}
+                </div>
+              )}
+              {tooltip.intensity&&<div style={{ color:'#facc15' }}>Intensity: {tooltip.intensity}</div>}
             </div>
           )}
         </div>
 
-        {/* ── X-axis time labels ── */}
-        <div
-          className="flex justify-between px-4 py-1.5"
-          style={{ borderTop: `1px solid ${border}`, background: bgHeader }}
-        >
-          {Array.from({ length: 7 }, (_, i) => {
-            const { minT, maxT } = metaRef.current;
-            const ts = minT && maxT ? minT + (i / 6) * (maxT - minT) : 0;
+        {/* ── X-axis labels ── */}
+        <div className="flex justify-between px-3 py-1.5" style={{ borderTop:`1px solid ${border}`, background:bgBar }}>
+          {Array.from({length:8},(_,i)=>{
+            const {minT,maxT}=metaRef.current;
+            const ts = minT&&maxT ? minT+(i/7)*(maxT-minT) : 0;
             return (
-              <span key={i} className="text-[9px] font-mono" style={{ color: text2 }}>
-                {ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'}
+              <span key={i} className="text-[9px] font-mono" style={{ color:text2 }}>
+                {ts?new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).replace(',',''):'—'}
               </span>
             );
           })}

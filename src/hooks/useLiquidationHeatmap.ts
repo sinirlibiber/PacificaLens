@@ -4,17 +4,42 @@ import { Market } from '@/lib/pacifica';
 
 export interface LiqSymbolData {
   symbol: string;
-  longLiq: number;   // USD notional
+  longLiq: number;
   shortLiq: number;
   total: number;
   count: number;
 }
 
-const REFRESH_MS = 5 * 60 * 1000; // 5 dakika
-const TTL_24H    = 24 * 60 * 60 * 1000;
-// Paralel fetch limiti — 63 coin için aynı anda max 10 istek
-const CONCURRENCY = 10;
+interface CacheEntry {
+  data: LiqSymbolData[];
+  fetchedAt: number;
+}
 
+const REFRESH_MS  = 5 * 60 * 1000;
+const TTL_24H     = 24 * 60 * 60 * 1000;
+const CONCURRENCY = 10;
+const CACHE_KEY   = 'pl_liq_heatmap_cache';
+
+// ── localStorage persistence ───────────────────────────────────────────────────
+function loadCache(): CacheEntry | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const entry: CacheEntry = JSON.parse(raw);
+    // Cache geçerliyse (5 dakikadan eski değilse) kullan
+    if (Date.now() - entry.fetchedAt < REFRESH_MS) return entry;
+    return null;
+  } catch { return null; }
+}
+
+function saveCache(data: LiqSymbolData[]) {
+  try {
+    const entry: CacheEntry = { data, fetchedAt: Date.now() };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+  } catch { /* quota exceeded — ignore */ }
+}
+
+// ── Fetch single symbol ────────────────────────────────────────────────────────
 async function fetchSymbolLiqs(symbol: string): Promise<LiqSymbolData> {
   const result: LiqSymbolData = { symbol, longLiq: 0, shortLiq: 0, total: 0, count: 0 };
   try {
@@ -24,24 +49,17 @@ async function fetchSymbolLiqs(symbol: string): Promise<LiqSymbolData> {
     );
     if (!res.ok) return result;
     const json = await res.json();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[LiqHeatmap] ${symbol}: fetched`);
-    }
     const trades: { cause: string; side: string; price: string; amount: string; created_at: number }[] =
       (json.success && Array.isArray(json.data)) ? json.data : [];
 
     const cutoff = Date.now() - TTL_24H;
 
-    // DEBUG: log unique cause values to find correct liquidation identifier
-    if (process.env.NODE_ENV === 'development' && trades.length > 0) {
-      const causes = trades.map(t => t.cause).filter((v, i, a) => a.indexOf(v) === i);
-      console.log(`[LiqHeatmap] ${symbol} causes:`, causes, `total:${trades.length}`);
-    }
     for (const t of trades) {
-      const isLiq = t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation' || (typeof t.cause === 'string' && t.cause.toLowerCase().includes('liq'));
+      const isLiq = t.cause === 'market_liquidation'
+        || t.cause === 'backstop_liquidation'
+        || (typeof t.cause === 'string' && t.cause.toLowerCase().includes('liq'));
       if (!isLiq) continue;
 
-      // created_at: normalize seconds → ms
       const ts = t.created_at > 1e12 ? t.created_at : t.created_at * 1000;
       if (ts < cutoff) continue;
 
@@ -54,58 +72,73 @@ async function fetchSymbolLiqs(symbol: string): Promise<LiqSymbolData> {
       result.total += notional;
       result.count++;
     }
-  } catch {
-    // timeout veya hata — 0 döner, heatmap'te görünmez
-  }
+  } catch { /* timeout — return zeros */ }
   return result;
 }
 
-// Concurrency-limited parallel fetch
 async function fetchAllSymbols(symbols: string[]): Promise<LiqSymbolData[]> {
   const results: LiqSymbolData[] = [];
   for (let i = 0; i < symbols.length; i += CONCURRENCY) {
     const batch = symbols.slice(i, i + CONCURRENCY);
-    const batchResults = await Promise.all(batch.map(fetchSymbolLiqs));
-    results.push(...batchResults);
+    const res   = await Promise.all(batch.map(fetchSymbolLiqs));
+    results.push(...res);
   }
   return results;
 }
 
+// ── Hook ───────────────────────────────────────────────────────────────────────
 export function useLiquidationHeatmap(markets: Market[]) {
-  const [data, setData]       = useState<LiqSymbolData[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [data,      setData     ] = useState<LiqSymbolData[]>([]);
+  const [loading,   setLoading  ] = useState(false);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
 
-  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!markets.length) return;
 
+    // 1. Immediately show cached data if available (instant load on refresh)
+    const cached = loadCache();
+    if (cached) {
+      setData(cached.data);
+      setLastFetch(new Date(cached.fetchedAt));
+    }
+
     const symbols = markets.map(m => m.symbol);
 
-    const run = async () => {
+    const run = async (force = false) => {
       if (!mountedRef.current) return;
+      // Skip fetch if cache is fresh and not forced
+      if (!force) {
+        const c = loadCache();
+        if (c) { setData(c.data); setLastFetch(new Date(c.fetchedAt)); return; }
+      }
       setLoading(true);
       try {
         const results = await fetchAllSymbols(symbols);
         if (!mountedRef.current) return;
-        // sadece en az 1 liq olan coinleri al, büyükten küçüğe sırala
-        const active = results.filter(r => r.total > 0).sort((a, b) => b.total - a.total);
-        setData(active);
+        // All symbols present (including zeros) — sorted by total desc
+        const sorted = [...results].sort((a, b) => b.total - a.total);
+        saveCache(sorted);
+        setData(sorted);
         setLastFetch(new Date());
       } finally {
         if (mountedRef.current) setLoading(false);
       }
     };
 
-    run();
-    timerRef.current = setInterval(run, REFRESH_MS);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [markets.length]); // markets yüklendiğinde başlat
+    // If no cache, fetch immediately; else schedule next refresh
+    if (!cached) run(true);
+
+    // Refresh every 5 min regardless
+    timerRef.current = setInterval(() => run(true), REFRESH_MS);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [markets.length]);
 
   return { data, loading, lastFetch };
 }
