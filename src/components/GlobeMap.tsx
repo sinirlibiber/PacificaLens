@@ -152,33 +152,57 @@ export default function GlobeMap() {
     camera.position.z = zoomRef.current;
     cameraRef.current = camera;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const sun = new THREE.DirectionalLight(0x88ccff, 1.2);
-    sun.position.set(5, 3, 5);
-    scene.add(sun);
+    // Deep space background
+    scene.background = new THREE.Color(0x020610);
 
-    const geo = new THREE.SphereGeometry(1, 72, 72);
-    const tex = new THREE.TextureLoader().load(
-      'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'
-    );
-    const mat   = new THREE.MeshPhongMaterial({ map: tex, shininess: 15 });
+    // Lighting — sun from upper-right, cool rim from left
+    scene.add(new THREE.AmbientLight(0x1a2a4a, 0.9));
+    const sun = new THREE.DirectionalLight(0xaad4ff, 1.6);
+    sun.position.set(6, 4, 5);
+    scene.add(sun);
+    const rimLight = new THREE.DirectionalLight(0x002244, 0.4);
+    rimLight.position.set(-5, -2, -3);
+    scene.add(rimLight);
+
+    // High-res earth
+    const geo = new THREE.SphereGeometry(1, 96, 96);
+    const loader = new THREE.TextureLoader();
+    const tex = loader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+    tex.anisotropy = 4;
+    const mat = new THREE.MeshPhongMaterial({ map: tex, shininess: 35, specular: new THREE.Color(0x223366) });
     const globe = new THREE.Mesh(geo, mat);
     scene.add(globe);
     globeRef.current = globe;
 
+    // Atmosphere glow — inner
     scene.add(new THREE.Mesh(
-      new THREE.SphereGeometry(1.03, 72, 72),
-      new THREE.MeshPhongMaterial({ color: 0x00b4d8, transparent: true, opacity: 0.07, side: THREE.FrontSide }),
+      new THREE.SphereGeometry(1.02, 72, 72),
+      new THREE.MeshPhongMaterial({ color: 0x0088cc, transparent: true, opacity: 0.12, side: THREE.FrontSide }),
+    ));
+    // Atmosphere glow — outer halo
+    scene.add(new THREE.Mesh(
+      new THREE.SphereGeometry(1.08, 72, 72),
+      new THREE.MeshPhongMaterial({ color: 0x0055aa, transparent: true, opacity: 0.05, side: THREE.BackSide }),
     ));
 
-    const starPos = new Float32Array(6000).map(() => (Math.random() - 0.5) * 120);
-    const starGeo = new THREE.BufferGeometry();
-    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.08 })));
+    // Stars — layered for depth
+    const addStars = (count: number, spread: number, size: number, opacity: number) => {
+      const pos = new Float32Array(count * 3);
+      for (let i = 0; i < count * 3; i++) pos[i] = (Math.random() - 0.5) * spread;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size, transparent: true, opacity })));
+    };
+    addStars(4000, 160, 0.12, 0.9);  // far bright stars
+    addStars(2000, 80,  0.07, 0.6);  // mid stars
+    addStars(800,  40,  0.05, 0.4);  // near dim stars
 
     const pinsGroup = new THREE.Group();
     scene.add(pinsGroup);
     pinsGroupRef.current = pinsGroup;
+
+    // Pin pulse animation ring — rendered as sprite overlay in CSS
+    // (actual pulse done via CSS on HTML overlays, Three.js handles 3D positioning)
 
     /* ── pointer events ──────────────────────────────────── */
     const getXY = (e: MouseEvent | TouchEvent) => {
@@ -325,6 +349,7 @@ export default function GlobeMap() {
       transparent: true,
       depthWrite: false,
       sizeAttenuation: true,
+      color: 0x00e5ff,  // neon cyan
     });
 
     pins.forEach((pin) => {
@@ -366,8 +391,54 @@ export default function GlobeMap() {
 
   /* ── render ─────────────────────────────────────────────── */
   return (
-    <div className="relative w-full h-full select-none overflow-hidden">
-      <div ref={mountRef} className="w-full h-full" />
+    <div className="relative w-full h-full select-none overflow-hidden" style={{ background: '#020610' }}>
+
+      {/* Nebula / deep space background */}
+      <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+        {/* Purple nebula cloud top-left */}
+        <div style={{
+          position: 'absolute', top: '-10%', left: '-5%',
+          width: '55%', height: '60%',
+          background: 'radial-gradient(ellipse at 30% 40%, rgba(80,20,140,0.35) 0%, rgba(40,10,80,0.15) 45%, transparent 70%)',
+          filter: 'blur(40px)',
+        }} />
+        {/* Blue nebula right */}
+        <div style={{
+          position: 'absolute', top: '10%', right: '-10%',
+          width: '50%', height: '55%',
+          background: 'radial-gradient(ellipse at 70% 30%, rgba(0,60,140,0.3) 0%, rgba(0,30,80,0.12) 50%, transparent 70%)',
+          filter: 'blur(50px)',
+        }} />
+        {/* Cyan accent center */}
+        <div style={{
+          position: 'absolute', top: '30%', left: '20%',
+          width: '60%', height: '40%',
+          background: 'radial-gradient(ellipse at 50% 50%, rgba(0,100,180,0.08) 0%, transparent 60%)',
+          filter: 'blur(30px)',
+        }} />
+        {/* Bottom purple */}
+        <div style={{
+          position: 'absolute', bottom: '-5%', right: '10%',
+          width: '45%', height: '50%',
+          background: 'radial-gradient(ellipse at 60% 70%, rgba(100,20,160,0.2) 0%, transparent 65%)',
+          filter: 'blur(45px)',
+        }} />
+      </div>
+
+      <style>{`
+        @keyframes pinPulse {
+          0%   { transform: translate(-50%,-50%) scale(1);   opacity: 0.8; }
+          50%  { transform: translate(-50%,-50%) scale(1.6); opacity: 0.3; }
+          100% { transform: translate(-50%,-50%) scale(1);   opacity: 0.8; }
+        }
+        @keyframes pinPulseOuter {
+          0%   { transform: translate(-50%,-50%) scale(1);   opacity: 0.4; }
+          50%  { transform: translate(-50%,-50%) scale(2.2); opacity: 0;   }
+          100% { transform: translate(-50%,-50%) scale(1);   opacity: 0.4; }
+        }
+      `}</style>
+
+      <div ref={mountRef} className="w-full h-full" style={{ position: 'relative', zIndex: 1 }} />
 
       {/* ── Info panel ──────────────────────────────────── */}
       {showInfo && (

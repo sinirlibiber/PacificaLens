@@ -16,6 +16,15 @@ const GlobeMap = dynamic(() => import('@/components/GlobeMap'), {
   ),
 });
 
+const FEATURES = [
+  { icon: '📊', label: 'Analytics & AI' },
+  { icon: '🐋', label: 'Whale Tracker' },
+  { icon: '🔁', label: 'Copy Trading' },
+  { icon: '⚡', label: 'Arbitrage' },
+  { icon: '🛡️', label: 'Risk Manager' },
+  { icon: '🤖', label: 'AI Assistant' },
+];
+
 export default function Home() {
   return (
     <div className="relative w-screen h-screen overflow-hidden" style={{ background: '#060c12' }}>
@@ -25,46 +34,65 @@ export default function Home() {
         <GlobeMap />
       </div>
 
-      {/* Top bar */}
+      {/* Top bar — logo only */}
       <div
-        className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-3"
-        style={{ background: 'linear-gradient(to bottom, rgba(6,12,18,0.88) 0%, transparent 100%)' }}
+        className="absolute top-0 left-0 right-0 z-20 flex items-center px-6 py-4"
+        style={{ background: 'linear-gradient(to bottom, rgba(4,8,16,0.9) 0%, transparent 100%)' }}
       >
         <div className="flex items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="PacificaLens" className="w-8 h-8 object-contain" />
-          <span className="font-bold text-base tracking-widest" style={{ color: '#e6edf3' }}>
+          <img src="/logo.png" alt="PacificaLens" className="w-8 h-8 object-contain" style={{ filter: 'drop-shadow(0 0 8px rgba(0,212,255,0.6))' }} />
+          <span className="font-bold text-base tracking-widest" style={{ color: '#e6edf3', letterSpacing: '0.12em' }}>
             PACIFICALENS
           </span>
         </div>
-        <a
-          href="/overview"
-          className="text-sm font-semibold px-5 py-2 rounded-xl transition-all
-                     hover:scale-[1.03] active:scale-100"
-          style={{ background: '#00b4d8', color: '#fff', boxShadow: '0 0 18px rgba(0,180,216,0.35)' }}
-        >
-          Enter Dashboard →
-        </a>
       </div>
 
       {/* Bottom CTA */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-8 pt-20"
-        style={{ background: 'linear-gradient(to top, rgba(6,12,18,0.92) 0%, transparent 100%)' }}
+        className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-6 pt-24"
+        style={{ background: 'linear-gradient(to top, rgba(4,8,16,0.97) 0%, rgba(4,8,16,0.6) 60%, transparent 100%)' }}
       >
-        <p className="text-sm mb-1" style={{ color: '#8b949e' }}>
-          The all-in-one analytics &amp; trading assistant for{' '}
-          <span style={{ color: '#e6edf3', fontWeight: 600 }}>Pacifica.fi</span>
-        </p>
-        <p className="text-xs mb-5" style={{ color: '#656d76' }}>
-          Copy top traders · Scan arbitrage · Track whales · Manage risk
+        {/* Tagline */}
+        <p className="text-sm mb-1 font-medium" style={{ color: '#8b949e' }}>
+          The all-in-one analytics &amp; trading intelligence for{' '}
+          <span style={{ color: '#00d4ff', fontWeight: 700 }}>Pacifica.fi</span>
         </p>
 
+        {/* Feature strip */}
+        <div className="flex items-center gap-1 mb-5 mt-2 flex-wrap justify-center px-4">
+          {FEATURES.map((f, i) => (
+            <div key={f.label} className="flex items-center gap-1">
+              <span
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold"
+                style={{
+                  background: 'rgba(0,180,216,0.08)',
+                  border: '1px solid rgba(0,180,216,0.18)',
+                  color: 'rgba(160,200,220,0.9)',
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <span style={{ fontSize: '12px' }}>{f.icon}</span>
+                {f.label}
+              </span>
+              {i < FEATURES.length - 1 && (
+                <span style={{ color: 'rgba(255,255,255,0.1)', fontSize: '10px' }}>·</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* CTA Button */}
         <ConnectWalletButton />
 
-        <p className="text-[11px] mt-4" style={{ color: '#3d444d' }}>
-          Supports Phantom, Solflare, Backpack and all Solana wallets via Privy
-        </p>
+        {/* Hackathon badge */}
+        <div className="flex items-center gap-1.5 mt-4 px-3 py-1.5 rounded-full"
+          style={{ background: 'rgba(255,171,0,0.08)', border: '1px solid rgba(255,171,0,0.2)' }}>
+          <span style={{ fontSize: '12px' }}>🏆</span>
+          <span style={{ color: 'rgba(255,171,0,0.8)', fontSize: '10px', fontWeight: 600 }}>
+            Pacifica Hackathon 2026
+          </span>
+        </div>
       </div>
 
     </div>
