@@ -27,6 +27,19 @@ jobs:
             return (json.success && Array.isArray(json.data)) ? json.data.map(m => m.symbol) : [];
           }
 
+          async function debugSymbol(symbol) {
+            try {
+              const res = await fetch(`${PACIFICA_API}/trades?symbol=${symbol}&limit=5`, {
+                signal: AbortSignal.timeout(8000),
+              });
+              console.log(`[DEBUG] ${symbol} status: ${res.status}`);
+              const text = await res.text();
+              console.log(`[DEBUG] ${symbol} raw response: ${text.slice(0, 500)}`);
+            } catch (e) {
+              console.log(`[DEBUG] ${symbol} error: ${e.message}`);
+            }
+          }
+
           async function getLiqs(symbol) {
             try {
               const res = await fetch(`${PACIFICA_API}/trades?symbol=${symbol}&limit=200`, {
@@ -34,16 +47,6 @@ jobs:
               });
               const json = await res.json();
               const trades = (json.success && Array.isArray(json.data)) ? json.data : [];
-
-              // DEBUG: log unique cause values for first symbol
-              if (symbol === 'BTC-USD' && trades.length > 0) {
-                const causes = trades.map(t => t.cause).filter((v, i, a) => a.indexOf(v) === i);
-                const sample = trades[0];
-                console.log(`[DEBUG] BTC-USD sample trade:`, JSON.stringify(sample));
-                console.log(`[DEBUG] Unique cause values:`, causes);
-                console.log(`[DEBUG] Total trades returned: ${trades.length}`);
-              }
-
               const cutoff = Date.now() - 20 * 60 * 1000;
 
               return trades
@@ -62,13 +65,8 @@ jobs:
                   const notional = price * amount;
                   return {
                     trade_id: `${symbol}-${t.created_at}-${Math.round(price*1000)}`,
-                    symbol,
-                    side:     t.side    || 'unknown',
-                    cause:    t.cause   || 'unknown',
-                    price,
-                    amount,
-                    notional,
-                    ts: new Date(ts).toISOString(),
+                    symbol, side: t.side || 'unknown', cause: t.cause || 'unknown',
+                    price, amount, notional, ts: new Date(ts).toISOString(),
                   };
                 })
                 .filter(t => t.notional > 0);
@@ -90,10 +88,7 @@ jobs:
               },
               body: JSON.stringify(rows),
             });
-            if (!res.ok) {
-              const txt = await res.text();
-              console.log(`[UPSERT ERROR] ${res.status}: ${txt}`);
-            }
+            if (!res.ok) console.log(`[UPSERT ERROR] ${res.status}: ${await res.text()}`);
             return res.ok ? rows.length : 0;
           }
 
@@ -109,14 +104,18 @@ jobs:
           }
 
           (async () => {
-            if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-              console.error('Missing secrets');
-              process.exit(1);
-            }
+            if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { console.error('Missing secrets'); process.exit(1); }
 
             console.log('Fetching markets...');
             const symbols = await getMarkets();
             console.log(`Found ${symbols.length} markets`);
+
+            // Debug first 3 symbols raw response
+            console.log('--- RAW API DEBUG ---');
+            for (const sym of symbols.slice(0, 3)) {
+              await debugSymbol(sym);
+            }
+            console.log('--- END DEBUG ---');
 
             const BATCH = 10;
             let allRows = [];
@@ -128,14 +127,10 @@ jobs:
             }
 
             console.log(`Found ${allRows.length} liquidation events`);
-
             let total = 0;
-            for (let i = 0; i < allRows.length; i += 100) {
-              total += await upsert(allRows.slice(i, i + 100));
-            }
+            for (let i = 0; i < allRows.length; i += 100) total += await upsert(allRows.slice(i, i + 100));
             console.log(`Inserted ${total} rows`);
-
             await cleanup();
-            console.log('Cleanup done — rows older than 24h deleted');
+            console.log('Cleanup done');
           })();
           SCRIPT
