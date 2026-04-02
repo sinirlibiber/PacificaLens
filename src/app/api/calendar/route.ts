@@ -1,41 +1,57 @@
 import { NextResponse } from 'next/server';
 
-// ForexFactory public JSON — proxied through allorigins to avoid CORS
-const SOURCES = [
+// ForexFactory JSON — server-side fetch, no CORS issue
+const FF_SOURCES = [
   'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
   'https://nfs.faireconomy.media/ff_calendar_nextweek.json',
 ];
 
-// Multiple CORS proxies to try in order
-const PROXIES = [
-  (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-];
-
-async function fetchWithProxy(src: string): Promise<object[]> {
-  for (const proxy of PROXIES) {
-    try {
-      const res = await fetch(proxy(src), {
-        next: { revalidate: 300 },
-        signal: AbortSignal.timeout(6000),
-      });
-      if (!res.ok) continue;
-      const wrapper = await res.json();
-      // allorigins wraps in { contents }, corsproxy returns raw
-      const raw = wrapper.contents ?? wrapper;
-      const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
-      const events = JSON.parse(text);
-      if (Array.isArray(events) && events.length > 0) return events;
-    } catch { continue; }
+async function fetchFF(url: string): Promise<object[]> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        // Some hosts block default fetch UA — spoof a browser
+        'User-Agent': 'Mozilla/5.0 (compatible; PacificaLens/1.0)',
+        'Accept': 'application/json, */*',
+      },
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
   }
-  return [];
+}
+
+// Fallback: fetch via allorigins proxy (when direct is blocked)
+async function fetchViaProxy(url: string): Promise<object[]> {
+  try {
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl, {
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const wrapper = await res.json();
+    const text = typeof wrapper.contents === 'string' ? wrapper.contents : JSON.stringify(wrapper.contents ?? []);
+    const data = JSON.parse(text);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function GET() {
   const allEvents: object[] = [];
 
-  for (const src of SOURCES) {
-    const events = await fetchWithProxy(src);
+  for (const url of FF_SOURCES) {
+    // Try direct first (no proxy overhead), then fall back to proxy
+    let events = await fetchFF(url);
+    if (!events.length) {
+      events = await fetchViaProxy(url);
+    }
     allEvents.push(...events);
   }
 
@@ -43,8 +59,6 @@ export async function GET() {
     return NextResponse.json(allEvents);
   }
 
-  // All sources failed — return empty array with a flag so the UI can show
-  // "Calendar unavailable" instead of displaying stale/fake data
   return NextResponse.json([], {
     headers: { 'X-Calendar-Source': 'unavailable' },
   });
