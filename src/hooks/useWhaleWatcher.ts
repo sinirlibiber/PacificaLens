@@ -150,7 +150,7 @@ export function useWhaleWatcher(
         const price    = parseFloat(raw.p) || 0;
         const amount   = parseFloat(raw.a) || 0;
         const notional = price * amount;
-        const isLiq    = raw.tc === 'market_liquidation' || raw.tc === 'backstop_liquidation';
+        const isLiq    = raw.tc === 'market_liquidation' || raw.tc === 'backstop_liquidation' || (typeof raw.tc === 'string' && raw.tc.toLowerCase().includes('liq'));
         const isLong   = raw.d?.includes('long');
         const isOpen   = raw.d?.startsWith('open');
 
@@ -183,7 +183,7 @@ export function useWhaleWatcher(
               price,
               amount,
               notional,
-              ts: raw.t,
+              ts: raw.t > 1e12 ? raw.t : raw.t * 1000, // normalize to ms
               isLiquidation: isLiq,
             });
           }
