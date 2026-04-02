@@ -19,18 +19,26 @@ async function fetchSymbolLiqs(symbol: string): Promise<LiqSymbolData> {
   const result: LiqSymbolData = { symbol, longLiq: 0, shortLiq: 0, total: 0, count: 0 };
   try {
     const res = await fetch(
-      `/api/proxy?path=${encodeURIComponent(`trades?symbol=${symbol}`)}`,
+      `/api/proxy?path=${encodeURIComponent(`trades?symbol=${symbol}&limit=500`)}`,
       { cache: 'no-store', signal: AbortSignal.timeout(8000) }
     );
     if (!res.ok) return result;
     const json = await res.json();
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[LiqHeatmap] ${symbol}: fetched`);
+    }
     const trades: { cause: string; side: string; price: string; amount: string; created_at: number }[] =
       (json.success && Array.isArray(json.data)) ? json.data : [];
 
     const cutoff = Date.now() - TTL_24H;
 
+    // DEBUG: log unique cause values to find correct liquidation identifier
+    if (process.env.NODE_ENV === 'development' && trades.length > 0) {
+      const causes = [...new Set(trades.map(t => t.cause))];
+      console.log(`[LiqHeatmap] ${symbol} causes:`, causes, `total:${trades.length}`);
+    }
     for (const t of trades) {
-      const isLiq = t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation';
+      const isLiq = t.cause === 'market_liquidation' || t.cause === 'backstop_liquidation' || (typeof t.cause === 'string' && t.cause.toLowerCase().includes('liq'));
       if (!isLiq) continue;
 
       // created_at: normalize seconds → ms
