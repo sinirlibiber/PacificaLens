@@ -379,9 +379,9 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={topByVolume} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
-                <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false}
+                <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text2)' }} tickLine={false} axisLine={false}
                   tickFormatter={v => fmtLarge(v)} />
-                <YAxis type="category" dataKey="symbol" tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} tickLine={false} axisLine={false} width={52} />
+                <YAxis type="category" dataKey="symbol" tick={{ fontSize: 11, fill: 'var(--text1)', fontWeight: 600 }} tickLine={false} axisLine={false} width={52} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [fmtLarge(v), 'Volume']} />
                 <Bar dataKey="volume" radius={[0, 4, 4, 0]}>
                   {topByVolume.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} fillOpacity={0.85} />)}
@@ -445,8 +445,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={fundingData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
-                <XAxis dataKey="symbol" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false}
+                <XAxis dataKey="symbol" tick={{ fontSize: 9, fill: 'var(--text2)' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 9, fill: 'var(--text2)' }} tickLine={false} axisLine={false}
                   tickFormatter={v => v.toFixed(3) + '%'} width={56} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v.toFixed(4) + '%', 'Funding/hr']} />
                 <Bar dataKey="funding" radius={[3, 3, 0, 0]}>
