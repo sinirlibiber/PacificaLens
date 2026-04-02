@@ -37,14 +37,21 @@ async function fetchFromDB(markets: Market[]): Promise<LiqSymbolData[]> {
     if (!res.ok) throw new Error(`${res.status}`);
     const dbData: LiqSymbolData[] = await res.json();
 
-    // Build lookup map
+    // Build lookup map — normalize symbols (DB has BTC-USD, markets may have BTC)
     const map = new Map<string, LiqSymbolData>();
-    for (const d of dbData) map.set(d.symbol, d);
+    for (const d of dbData) {
+      map.set(d.symbol, d);                          // BTC-USD → data
+      map.set(d.symbol.replace(/-USD$/i, ''), d);    // BTC → data
+    }
 
     // Return ALL markets — with liq data where available, zeros otherwise
-    const result: LiqSymbolData[] = markets.map(m =>
-      map.get(m.symbol) ?? { symbol: m.symbol, longLiq: 0, shortLiq: 0, total: 0, count: 0 }
-    );
+    const result: LiqSymbolData[] = markets.map(m => {
+      const sym = m.symbol;
+      const found = map.get(sym) ?? map.get(sym.replace(/-USD$/i, ''));
+      return found
+        ? { ...found, symbol: sym }
+        : { symbol: sym, longLiq: 0, shortLiq: 0, total: 0, count: 0 };
+    });
 
     // Sort: liq coins first, then alphabetical
     result.sort((a, b) => b.total - a.total || a.symbol.localeCompare(b.symbol));
