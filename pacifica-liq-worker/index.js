@@ -48,22 +48,23 @@ async function flushToSupabase() {
   pendingLiqs = [];
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/liquidations`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/liquidations?on_conflict=trade_id`, {
       method: 'POST',
       headers: {
         'apikey':        SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type':  'application/json',
-        'Prefer':        'return=minimal,resolution=ignore-duplicates',
+        'Prefer':        'resolution=ignore-duplicates,return=minimal',
       },
       body: JSON.stringify(rows),
     });
     if (res.ok) {
-      console.log(`[supabase] Inserted ${rows.length} liquidations`);
+      console.log(`[supabase] Inserted ${rows.length} rows`);
+    } else if (res.status === 409) {
+      // duplicate — silently ignore
     } else {
       const txt = await res.text();
       console.error(`[supabase] Error ${res.status}: ${txt}`);
-      // Put back on failure
       pendingLiqs.push(...rows);
     }
   } catch (e) {
