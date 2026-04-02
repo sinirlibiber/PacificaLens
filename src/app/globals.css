@@ -241,3 +241,14 @@ body, .bg-bg, .bg-surface, .bg-surface2,
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 iframe, img, svg, canvas { transition: none !important; }
+
+/* ── Recharts tooltip dark mode ── */
+html.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: rgba(8,16,40,0.96) !important;
+  border-color: rgba(0,180,220,0.3) !important;
+  color: #e8f4ff !important;
+}
+html.dark .recharts-tooltip-label { color: #9ecde0 !important; }
+html.dark .recharts-tooltip-item { color: #e8f4ff !important; }
+html.dark .recharts-cartesian-axis-tick text { fill: var(--text2) !important; }
+html.dark .recharts-legend-item-text { color: var(--text2) !important; }

@@ -46,9 +46,10 @@ function fmtLarge(v: number) {
 
 const TOOLTIP_STYLE = {
   background: 'var(--surface)',
-  border: '1px solid var(--border1)',
+  border: '1px solid var(--border2)',
   borderRadius: 8, fontSize: 11,
   color: 'var(--text1)',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
 };
 
 /* ─── AI Assistant collapsible section ─── */
@@ -396,13 +397,21 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
               <div className="text-[12px] font-bold text-text1 mb-3">OI Distribution</div>
               <div className="flex items-center gap-4">
-                <PieChart width={140} height={140}>
-                  <Pie data={topByOI.slice(0, 8)} cx={65} cy={65} innerRadius={40} outerRadius={65}
-                    dataKey="oi" stroke="none">
-                    {topByOI.slice(0, 8).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [fmtLarge(v), 'OI']} />
-                </PieChart>
+                <div className="relative">
+                  <PieChart width={140} height={140}>
+                    <Pie data={topByOI.slice(0, 8)} cx={65} cy={65} innerRadius={40} outerRadius={65}
+                      dataKey="oi" stroke="none">
+                      {topByOI.slice(0, 8).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [fmtLarge(v), 'OI']} />
+                  </PieChart>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="text-center">
+                      <div className="text-[9px] text-text3 leading-none">OI</div>
+                      <div className="text-[10px] font-bold text-text1 leading-tight">{fmtLarge(totalOI)}</div>
+                    </div>
+                  </div>
+                </div>
                 <div className="flex-1 space-y-1">
                   {topByOI.slice(0, 6).map((m, i) => (
                     <div key={m.symbol} className="flex items-center gap-2 text-[11px]">

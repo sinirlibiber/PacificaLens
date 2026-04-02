@@ -418,8 +418,8 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
 
             </div>{/* end flex-1 */}
 
-            {/* RIGHT: How it works card - sticky */}
-            <div className="w-64 shrink-0 sticky top-4">
+            {/* RIGHT: How it works card - scrollable */}
+            <div className="w-64 shrink-0 overflow-y-auto" style={{ maxHeight: "calc(100vh - 120px)" }}>
               <div className="bg-surface rounded-xl border border-border1 shadow-card p-4">
                 <h3 className="text-[12px] font-bold text-text1 mb-3">📖 How It Works</h3>
                 <div className="space-y-3">
