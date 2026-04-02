@@ -322,7 +322,7 @@ export function RiskManager({
             </div>
 
             {activeTab === 'results' && (
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto">
                 <Results
                   result={result}
                   accountInfo={accountInfo}
