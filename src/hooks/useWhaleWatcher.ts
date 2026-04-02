@@ -217,6 +217,27 @@ export function useWhaleWatcher(
         setLastScan(new Date());
         setIsScanning(false);
         setPressureMap({ ...pressureRef.current });
+
+        // Persist liquidations to Supabase for 24h heatmap
+        const liqEvents = newTrades
+          .filter(t => t.isLiquidation)
+          .map(t => ({
+            trade_id: t.id,
+            symbol:   t.symbol,
+            side:     t.side,
+            price:    t.price,
+            amount:   t.amount,
+            notional: t.notional,
+            cause:    t.cause,
+            ts:       t.ts,
+          }));
+        if (liqEvents.length > 0) {
+          fetch('/api/liquidations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ events: liqEvents }),
+          }).catch(() => {}); // fire-and-forget
+        }
       }
     };
 
