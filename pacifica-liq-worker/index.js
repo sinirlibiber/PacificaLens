@@ -54,7 +54,7 @@ async function flushToSupabase() {
         'apikey':        SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type':  'application/json',
-        'Prefer':        'resolution=ignore-duplicates',
+        'Prefer':        'return=minimal,resolution=ignore-duplicates',
       },
       body: JSON.stringify(rows),
     });
