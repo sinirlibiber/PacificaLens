@@ -312,7 +312,7 @@ export async function GET(req: NextRequest) {
     exchanges.has('binance')     ? fetchBinance(sinceMs, filterSymbols)     : Promise.resolve([]),
   ]);
 
-  const all = [...hlEvents, ...asterEvents, ...dydxEvents, ...bnbEvents]
+  const all = (hlEvents as LiqEvent[]).concat(asterEvents, dydxEvents, bnbEvents)
     .sort((a, b) => b.ts - a.ts);
 
   const summary = aggregate(all);
@@ -324,7 +324,7 @@ export async function GET(req: NextRequest) {
       meta: {
         fetchedAt:  Date.now(),
         hours,
-        exchanges:  [...exchanges],
+        exchanges:  Array.from(exchanges),
         sources: {
           hyperliquid: hlEvents.length,
           aster:       asterEvents.length,
