@@ -212,7 +212,7 @@ export function calculateScores(entries: LeaderboardEntry[]): Map<string, Trader
 
   // ── Dynamic tier thresholds (percentile-based) ───────────────────
   // Only active traders are ranked
-  const activeScores = [...result.values()]
+  const activeScores = Array.from(result.values())
     .filter(v => v.score > 0)
     .map(v => v.score)
     .sort((a, b) => a - b);
@@ -227,7 +227,7 @@ export function calculateScores(entries: LeaderboardEntry[]): Map<string, Trader
   const aThreshold = pct(80);
   const bThreshold = pct(55);
 
-  for (const [account, ts] of result.entries()) {
+  for (const [account, ts] of Array.from(result.entries())) {
     if (ts.score === 0) { (ts as any).tier = 'C'; continue; }
     if (ts.score >= sThreshold && sThreshold > 0) (ts as any).tier = 'S';
     else if (ts.score >= aThreshold)              (ts as any).tier = 'A';
