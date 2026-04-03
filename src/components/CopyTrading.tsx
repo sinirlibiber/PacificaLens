@@ -1270,7 +1270,16 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                     <tr>
                       <th className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-left w-8">#</th>
                       <th className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-left">Trader</th>
-                      {sortCols.map(c => (
+                      {sortCols.map(c => c.field === 'style' ? (
+                        <th key={c.field}
+                          onClick={() => toggleSort(c.field)}
+                          className="px-3 py-2.5 text-[10px] font-semibold text-text3 uppercase tracking-wide text-center cursor-pointer hover:text-accent select-none whitespace-nowrap transition-colors">
+                          Style
+                          <span className={'ml-1 ' + (sortField === 'style' ? 'text-accent' : 'text-border2')}>
+                            {sortField === 'style' ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
+                          </span>
+                        </th>
+                      ) : (
                         <Th key={c.field} label={c.label} field={c.field}
                           cur={sortField} dir={sortDir} onClick={() => toggleSort(c.field)} />
                       ))}
