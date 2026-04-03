@@ -79,7 +79,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 
 /* ── constants ───────────────────────────────────────────────── */
 const AUTO_SPEED   = 0.0005;
-const PAUSE_MS     = 15000;
+const PAUSE_MS     = 5000;
 const FRICTION     = 0.88;
 const THROW_SCALE  = 0.004;
 const DRAG_SPEED   = 0.0018;
