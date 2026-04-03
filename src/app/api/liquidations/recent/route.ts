@@ -14,16 +14,25 @@ export async function GET(req: NextRequest) {
   const supabase = getClient();
   if (!supabase) return NextResponse.json([]);
 
-  const hours = Math.min(parseInt(req.nextUrl.searchParams.get('hours') || '1'), 24);
-  const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+  const hours  = Math.min(parseInt(req.nextUrl.searchParams.get('hours') || '1'), 168);
+  const symbol = req.nextUrl.searchParams.get('symbol') || '';
+  const since  = new Date(Date.now() - hours * 3600 * 1000).toISOString();
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('liquidations')
       .select('symbol, side, notional, ts, cause')
       .gte('ts', since)
       .order('ts', { ascending: false })
-      .limit(50);
+      .limit(500);
+
+    if (symbol) {
+      // Match both "BTC" and "BTC-USD" formats
+      const symUpper = symbol.toUpperCase().replace(/-USD$/i, '');
+      query = query.or(`symbol.eq.${symUpper},symbol.eq.${symUpper}-USD`);
+    }
+
+    const { data, error } = await query;
 
     if (error) return NextResponse.json([]);
     return NextResponse.json(data ?? []);

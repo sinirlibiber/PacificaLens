@@ -685,27 +685,35 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                       const hasLiq = liq && liq.total > 0;
                       const maxVal = liqHeatmap24h[0]?.total || 1;
                       const intensity = hasLiq ? Math.min(liq.total / maxVal, 1) : 0;
+
+                      // OI-based background for coins with no liquidation
+                      const tk = tickers[m.symbol];
+                      const oi = Number(tk?.open_interest || 0);
+                      const maxOI = Math.max(...markets.map(mk => Number(tickers[mk.symbol]?.open_interest || 0)));
+                      const oiIntensity = maxOI > 0 ? Math.min(oi / maxOI, 1) : 0;
+
                       const longDom = liq ? liq.longLiq >= liq.shortLiq : true;
+                      // Liq colors: red=long liq, green=short liq
                       const r = longDom ? 239 : 34;
                       const g = longDom ? 68  : 197;
                       const b = longDom ? 68  : 94;
+
+                      // No-liq coins: OI size shown as blue/indigo tint
+                      const bgStyle = hasLiq
+                        ? { background: `rgba(${r},${g},${b},${0.10 + intensity * 0.65})`, border: `1px solid rgba(${r},${g},${b},${0.18 + intensity * 0.5})` }
+                        : oiIntensity > 0.05
+                        ? { background: `rgba(80,120,220,${0.04 + oiIntensity * 0.12})`, border: `1px solid rgba(80,120,220,${0.08 + oiIntensity * 0.15})` }
+                        : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' };
+
                       return (
                         <button
                           key={m.symbol}
                           onClick={() => setSelectedHeatmapSymbol(m.symbol)}
                           title={hasLiq
-                            ? `${m.symbol} · ${liq.count} liqs · ${fmtLarge(liq.total)}\nLong: ${fmtLarge(liq.longLiq)} · Short: ${fmtLarge(liq.shortLiq)}\nClick for detail heatmap`
-                            : `${m.symbol} · No liquidations in 24h\nClick for detail heatmap`}
+                            ? `${m.symbol} · ${liq.count} liqs · ${fmtLarge(liq.total)}\nLong liq: ${fmtLarge(liq.longLiq)} · Short liq: ${fmtLarge(liq.shortLiq)}\nOI: ${fmtLarge(oi)}\nClick for detail heatmap`
+                            : `${m.symbol} · No liquidations in 24h\nOI: ${fmtLarge(oi)}\nClick for detail heatmap`}
                           className="flex flex-col items-center justify-center rounded-lg transition-all hover:scale-110 hover:z-10 relative shrink-0"
-                          style={{
-                            width: 52, height: 52,
-                            background: hasLiq
-                              ? `rgba(${r},${g},${b},${0.12 + intensity * 0.6})`
-                              : 'rgba(255,255,255,0.04)',
-                            border: hasLiq
-                              ? `1px solid rgba(${r},${g},${b},${0.2 + intensity * 0.5})`
-                              : '1px solid rgba(255,255,255,0.07)',
-                          }}
+                          style={{ width: 52, height: 52, ...bgStyle }}
                         >
                           <CoinLogo symbol={m.symbol} size={16} />
                           <span className="text-[8px] font-bold text-text1 mt-0.5 leading-none">
@@ -715,8 +723,12 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                             <span className="text-[7px] font-mono leading-none mt-0.5" style={{ color: `rgb(${r},${g},${b})` }}>
                               {fmtLarge(liq.total)}
                             </span>
+                          ) : oiIntensity > 0.1 ? (
+                            <span className="text-[7px] font-mono leading-none mt-0.5" style={{ color: 'rgba(100,140,220,0.7)' }}>
+                              {fmtLarge(oi)}
+                            </span>
                           ) : (
-                            <span className="text-[7px] text-text3/50 leading-none mt-0.5">—</span>
+                            <span className="text-[7px] text-text3/40 leading-none mt-0.5">—</span>
                           )}
                         </button>
                       );

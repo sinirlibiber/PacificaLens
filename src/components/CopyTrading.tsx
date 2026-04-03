@@ -1348,13 +1348,13 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                           </td>
 
                           {/* Trader Style */}
-                          <td className={`px-3 py-2 hidden md:table-cell ${sortField === 'style' ? 'bg-accent/3' : ''}`}>
+                          <td className={`px-3 py-2 hidden md:table-cell text-center ${sortField === 'style' ? 'bg-accent/3' : ''}`}>
                             {(() => {
                               const traderScore = getScore(entry.account);
                               if (!traderScore) return <span className="text-[10px] text-text3">—</span>;
                               const meta = STYLE_META[traderScore.style];
                               return (
-                                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${meta.color}`} title={meta.desc}>
+                                <span className={`inline-flex items-center justify-center gap-1 text-[10px] font-semibold ${meta.color}`} title={meta.desc}>
                                   {meta.icon} {traderScore.style}
                                 </span>
                               );

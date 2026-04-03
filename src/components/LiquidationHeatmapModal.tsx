@@ -23,6 +23,7 @@ import { CoinLogo } from './CoinLogo';
 interface Candle { t: number; o: string; h: string; l: string; c: string; v: string; }
 interface Trade  { cause: string; side: string; price: string; amount: string; created_at: number; }
 
+interface DbLiq { symbol: string; side: string; notional: number; ts: string; cause: string; }
 interface Props { symbol: string; onClose: () => void; }
 
 // ── Color scales ───────────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ const TIME_RANGES = [
 ];
 type SideMode = 'all' | 'long' | 'short';
 
-const ROWS = 80;
+const ROWS = 120;
 const LEGEND_W = 90;
 
 function fmtPrice(p: number) {
@@ -102,6 +103,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
   const [loading,  setLoading ] = useState(true);
   const [error,    setError   ] = useState('');
   const [stats,    setStats   ] = useState({ currentPrice:0, longLiq:0, shortLiq:0 });
+  const [dbLiqs,   setDbLiqs  ] = useState<DbLiq[]>([]);
   const [tooltip,  setTooltip ] = useState<{
     x:number; y:number;
     date:string; price:string;
@@ -122,7 +124,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     candles: [] as Candle[],
   });
 
-  const render = useCallback((candles: Candle[], trades: Trade[], side: SideMode) => {
+  const render = useCallback((candles: Candle[], trades: Trade[], side: SideMode, dbLiqs: DbLiq[] = []) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -272,6 +274,33 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       }
     }
 
+    // ── Real liquidation dots from Supabase ──────────────────────────
+    if (dbLiqs.length > 0) {
+      for (const liq of dbLiqs) {
+        const ts = new Date(liq.ts).getTime();
+        if (ts < minT - 3600000 || ts > maxT + 3600000) continue;
+        const ci = Math.min(Math.max(Math.floor(((ts - minT) / (maxT - minT + 1)) * COLS), 0), COLS - 1);
+        const candle = candles[ci];
+        if (!candle) continue;
+        const price = parseFloat(candle.c);
+        const x = (ci + 0.5) * cellW;
+        const y = H - ((price - minP) / (maxP - minP)) * H;
+        const isLong = liq.side?.includes('long');
+        const notional = Number(liq.notional) || 0;
+        const dotR = Math.max(3, Math.min(9, 3 + Math.log10(Math.max(notional, 100))));
+        // Glow
+        ctx.beginPath();
+        ctx.arc(x, y, dotR + 4, 0, Math.PI * 2);
+        ctx.fillStyle = isLong ? 'rgba(255,60,60,0.12)' : 'rgba(0,220,120,0.12)';
+        ctx.fill();
+        // Dot
+        ctx.beginPath();
+        ctx.arc(x, y, dotR, 0, Math.PI * 2);
+        ctx.fillStyle = isLong ? 'rgba(255,80,80,0.9)' : 'rgba(0,230,130,0.9)';
+        ctx.fill();
+      }
+    }
+
     // ── Price line ────────────────────────────────────────────────────
     ctx.beginPath();
     ctx.strokeStyle='#ff3344';
@@ -369,11 +398,14 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     Promise.all([
       fetch(`/api/proxy?path=${encodeURIComponent(`kline?symbol=${symbol}&interval=${range.interval}&start_time=${start}&end_time=${end}`)}`).then(r=>r.json()),
       fetch(`/api/proxy?path=${encodeURIComponent(`trades?symbol=${symbol}&limit=1000`)}`).then(r=>r.json()),
-    ]).then(([cj,tj]) => {
+      fetch(`/api/liquidations/recent?hours=${range.hours}&symbol=${encodeURIComponent(symbol)}`).then(r=>r.ok?r.json():[]).catch(()=>[]),
+    ]).then(([cj,tj,dbData]) => {
       if (cancelled) return;
       const candles: Candle[] = cj.success&&Array.isArray(cj.data) ? cj.data : [];
       const trades:  Trade[]  = tj.success&&Array.isArray(tj.data)  ? tj.data  : [];
-      render(candles, trades, sideMode);
+      const liqs: DbLiq[]     = Array.isArray(dbData) ? dbData : [];
+      setDbLiqs(liqs);
+      render(candles, trades, sideMode, liqs);
     }).catch(()=>{ if(!cancelled){setError('Failed to load data');setLoading(false);} });
 
     return ()=>{ cancelled=true; };
