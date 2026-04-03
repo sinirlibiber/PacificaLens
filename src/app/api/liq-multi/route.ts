@@ -282,7 +282,7 @@ function aggregate(events: LiqEvent[]): LiqSummary[] {
     s.count++;
     s.byExchange[e.exchange] += e.notional;
   }
-  return [...map.values()].sort((a, b) => b.total - a.total);
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────
