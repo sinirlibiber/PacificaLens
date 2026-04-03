@@ -100,8 +100,15 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
 
   // Market Signals — reuse WhaleWatcher hook for OI/Funding alerts + liquidations
   const { whaleTrades, oiAlerts, fundingAlerts, isScanning, lastScan } = useWhaleWatcher(markets, tickers, liqFilter);
-  // 24h liquidation heatmap — polls Pacifica trades API for all 63 coins
-  const { data: liqHeatmap24h, loading: heatmapLoading, lastFetch: heatmapFetched } = useLiquidationHeatmap(markets);
+  // 24h liquidation heatmap — multi-exchange, Supabase-free
+  const {
+    data: liqHeatmap24h,
+    loading: heatmapLoading,
+    lastFetch: heatmapFetched,
+    exchange: heatmapExchange,
+    setExchange: setHeatmapExchange,
+    sources: heatmapSources,
+  } = useLiquidationHeatmap(markets);
 
   // Recent liquidations from Supabase (last 1h) — persists across page refreshes
   const [dbLiqs, setDbLiqs] = useState<Array<{
@@ -653,9 +660,9 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             {/* Liquidation Heatmap — 63 coins grid + click → detail modal */}
             <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
               {/* Header */}
-              <div className="flex justify-between items-center mb-3">
+              <div className="flex justify-between items-center mb-2">
                 <div className="text-[12px] font-bold text-text1">
-                  Liquidation Heatmap <span className="text-text3 font-normal">24h</span>
+                  Liquidation Heatmap
                   <span className="text-text3 font-normal text-[10px] ml-2">· click any coin for detail</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -671,6 +678,45 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                     </span>
                   )}
                 </div>
+              </div>
+
+              {/* Exchange filter */}
+              <div className="flex items-center gap-1 mb-3 flex-wrap">
+                {([
+                  { key: 'all',          label: 'All',         color: '#a78bfa' },
+                  { key: 'hyperliquid',  label: 'Hyperliquid', color: '#60a5fa' },
+                  { key: 'aster',        label: 'Aster',       color: '#34d399' },
+                  { key: 'dydx',        label: 'dYdX',        color: '#f472b6' },
+                  { key: 'binance',      label: 'Binance',     color: '#fbbf24' },
+                ] as const).map(({ key, label, color }) => {
+                  const isActive = heatmapExchange === key;
+                  const cnt = key === 'all'
+                    ? Object.values(heatmapSources).reduce((a, b) => a + b, 0)
+                    : heatmapSources[key as keyof typeof heatmapSources];
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setHeatmapExchange(key)}
+                      className="flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full transition-all"
+                      style={{
+                        background:  isActive ? `${color}22` : 'rgba(255,255,255,0.03)',
+                        border:      `1px solid ${isActive ? color + '55' : 'rgba(255,255,255,0.08)'}`,
+                        color:       isActive ? color : 'rgba(255,255,255,0.4)',
+                      }}
+                    >
+                      {label}
+                      {cnt > 0 && (
+                        <span className="text-[8px] opacity-70">{cnt}</span>
+                      )}
+                    </button>
+                  );
+                })}
+                {/* Source event counts legend */}
+                {Object.values(heatmapSources).some(v => v > 0) && (
+                  <span className="text-[8px] text-text3 ml-auto">
+                    HL:{heatmapSources.hyperliquid} · Aster:{heatmapSources.aster} · dYdX:{heatmapSources.dydx} · BNB:{heatmapSources.binance}
+                  </span>
+                )}
               </div>
 
               {/* All 63 coins grid — every market shown, liq data fills in */}
@@ -710,8 +756,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                           key={m.symbol}
                           onClick={() => setSelectedHeatmapSymbol(m.symbol)}
                           title={hasLiq
-                            ? `${m.symbol} · ${liq.count} liqs · ${fmtLarge(liq.total)}\nLong liq: ${fmtLarge(liq.longLiq)} · Short liq: ${fmtLarge(liq.shortLiq)}\nOI: ${fmtLarge(oi)}\nClick for detail heatmap`
-                            : `${m.symbol} · No liquidations in 24h\nOI: ${fmtLarge(oi)}\nClick for detail heatmap`}
+                            ? `${m.symbol} · ${liq.count} liqs · ${fmtLarge(liq.total)}\nLong liq: ${fmtLarge(liq.longLiq)} · Short liq: ${fmtLarge(liq.shortLiq)}\nHL:${fmtLarge(liq.byExchange?.hyperliquid||0)} · Aster:${fmtLarge(liq.byExchange?.aster||0)} · dYdX:${fmtLarge(liq.byExchange?.dydx||0)} · BNB:${fmtLarge(liq.byExchange?.binance||0)}\nOI: ${fmtLarge(oi)}\nClick for detail heatmap`
+                            : `${m.symbol} · No liquidations\nOI: ${fmtLarge(oi)}\nClick for detail heatmap`}
                           className="flex flex-col items-center justify-center rounded-lg transition-all hover:scale-110 hover:z-10 relative shrink-0"
                           style={{ width: 52, height: 52, ...bgStyle }}
                         >
