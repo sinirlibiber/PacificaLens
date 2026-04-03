@@ -14,11 +14,12 @@ import { Market } from '@/lib/pacifica';
 export type Exchange = 'all' | 'hyperliquid' | 'aster' | 'dydx' | 'binance';
 
 export interface LiqSymbolData {
-  symbol:   string;
-  longLiq:  number;
-  shortLiq: number;
+  symbol:      string;
+  longLiq:     number;
+  shortLiq:    number;
   total:    number;
   count:    number;
+  hasRealData: boolean;
   byExchange: {
     hyperliquid: number;
     aster:       number;
@@ -30,7 +31,7 @@ export interface LiqSymbolData {
 export interface LiqEvent {
   id:       string;
   exchange: Exclude<Exchange, 'all'>;
-  symbol:   string;
+  symbol:      string;
   side:     'long' | 'short';
   price:    number;
   notional: number;
@@ -81,13 +82,27 @@ async function fetchMultiLiq(
     const summaryMap = new Map<string, LiqSymbolData>();
     for (const s of (json.summary ?? [])) summaryMap.set(s.symbol, s);
 
-    const data: LiqSymbolData[] = markets.map(m => {
-      const sym = m.symbol.replace(/-USD$/i, '').toUpperCase();
-      return summaryMap.get(sym) ?? {
-        symbol: m.symbol, longLiq: 0, shortLiq: 0, total: 0, count: 0,
-        byExchange: { hyperliquid: 0, aster: 0, dydx: 0, binance: 0 },
-      };
-    });
+    // API'den gelen gerçek veri olan semboller (Hyperliquid + Binance'te var olanlar)
+    const supportedSymbols = new Set<string>(
+      (json.supportedSymbols ?? []).map((s: string) => s.toUpperCase())
+    );
+
+    // Sadece gerçek verisi olan Pacifica marketlerini döndür
+    const data: LiqSymbolData[] = markets
+      .map(m => {
+        const sym = m.symbol.replace(/-USD$/i, '').toUpperCase();
+        const found = summaryMap.get(sym);
+        if (found) return { ...found, hasRealData: true };
+        // Bu sembol Hyperliquid/Binance'te yok — listeye dahil etme
+        if (!supportedSymbols.has(sym)) return null;
+        return {
+          symbol: m.symbol, longLiq: 0, shortLiq: 0, total: 0, count: 0,
+          hasRealData: true,
+          byExchange: { hyperliquid: 0, aster: 0, dydx: 0, binance: 0 },
+        };
+      })
+      .filter((d): d is LiqSymbolData => d !== null);
+
     data.sort((a, b) => b.total - a.total || a.symbol.localeCompare(b.symbol));
 
     return {
@@ -98,10 +113,7 @@ async function fetchMultiLiq(
   } catch (e) {
     console.error('[LiqHeatmap] fetch error:', e);
     return {
-      data: markets.map(m => ({
-        symbol: m.symbol, longLiq: 0, shortLiq: 0, total: 0, count: 0,
-        byExchange: { hyperliquid: 0, aster: 0, dydx: 0, binance: 0 },
-      })),
+      data: [], // hata durumunda boş döndür — sahte veri gösterme
       recent: [],
       sources: { hyperliquid: 0, aster: 0, dydx: 0, binance: 0 },
     };

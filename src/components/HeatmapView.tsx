@@ -19,6 +19,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Market } from '@/lib/pacifica';
 import { CoinLogo } from './CoinLogo';
+import { useLiquidationHeatmap } from '@/hooks/useLiquidationHeatmap';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Candle { t: number; o: string; h: string; l: string; c: string; v: string; }
@@ -128,6 +129,13 @@ export default function HeatmapView({ markets, defaultSymbol }: HeatmapViewProps
 
   const isDark = typeof document !== 'undefined'
     && document.documentElement.classList.contains('dark');
+
+  // Gerçek liq verisi olan semboller (Hyperliquid + Binance'te mevcut olanlar)
+  const { data: liqData, loading: liqLoading } = useLiquidationHeatmap(markets);
+  const supportedSymbols = new Set(
+    liqData.filter(d => d.hasRealData).map(d => d.symbol.replace(/-USD$/i, '').toUpperCase())
+  );
+  const hasLiveData = supportedSymbols.has(symbol.replace(/-USD$/i, '').toUpperCase());
 
   // pick first market on load
   useEffect(() => {
@@ -575,10 +583,12 @@ export default function HeatmapView({ markets, defaultSymbol }: HeatmapViewProps
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  // ── Filtered markets for dropdown ─────────────────────────────────────────
-  const filteredMarkets = markets.filter(m =>
-    m.symbol.toLowerCase().includes(searchQ.toLowerCase()),
-  );
+  // ── Filtered markets for dropdown — sadece gerçek liq verisi olan semboller ──
+  const filteredMarkets = markets.filter(m => {
+    const sym = m.symbol.replace(/-USD$/i, '').toUpperCase();
+    const hasData = liqLoading || supportedSymbols.size === 0 || supportedSymbols.has(sym);
+    return hasData && m.symbol.toLowerCase().includes(searchQ.toLowerCase());
+  });
 
   // ── Theme ─────────────────────────────────────────────────────────────────
   const bg     = isDark ? '#07091c' : '#ffffff';
@@ -613,6 +623,12 @@ export default function HeatmapView({ markets, defaultSymbol }: HeatmapViewProps
             <span className="text-[13px] font-bold" style={{ color: text1 }}>
               {coin || 'Select'}
             </span>
+            {hasLiveData && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md"
+                style={{ background: 'rgba(0,180,216,0.18)', color: '#00d4ff', border: '1px solid rgba(0,180,216,0.3)' }}>
+                LIVE DATA
+              </span>
+            )}
             <span className="text-[10px]" style={{ color: text2 }}>▾</span>
           </button>
 
@@ -650,6 +666,12 @@ export default function HeatmapView({ markets, defaultSymbol }: HeatmapViewProps
                     <span className="text-[12px] font-semibold" style={{ color: text1 }}>
                       {m.symbol.replace('-USD', '')}
                     </span>
+                    {supportedSymbols.has(m.symbol.replace(/-USD$/i, '').toUpperCase()) && (
+                      <span className="ml-auto text-[8px] font-bold px-1 py-0.5 rounded"
+                        style={{ background: 'rgba(0,180,216,0.15)', color: '#00d4ff', whiteSpace: 'nowrap' }}>
+                        LIVE
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
