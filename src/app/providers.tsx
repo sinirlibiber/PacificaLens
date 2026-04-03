@@ -20,7 +20,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         appearance: {
           theme: 'dark',
           accentColor: '#00b4d8',
-          logo: 'https://raw.githubusercontent.com/sinirlibiber/pacifica-risk-manager/refs/heads/main/public/pacificalens.ico',
+          logo: 'https://raw.githubusercontent.com/sinirlibiber/PacificaLens/refs/heads/main/public/logo.png',
         },
         loginMethods: ['wallet'],
         externalWallets: {
