@@ -31,17 +31,18 @@ export async function cacheGet(key: string): Promise<string | null> {
   }
 }
 
-/** Upstash Redis REST API — SET with EX */
+/** Upstash Redis REST API — SET with EX (POST body — uzun value'lar için güvenli) */
 export async function cacheSet(key: string, value: string, ttlSeconds: number): Promise<void> {
   if (!REDIS_URL || !REDIS_TOKEN) return;
   try {
-    await fetch(
-      `${REDIS_URL}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?EX=${ttlSeconds}`,
-      {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
-      }
-    );
+    await fetch(`${REDIS_URL}/set/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${REDIS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify([value, 'EX', ttlSeconds]),
+    });
   } catch {
     // Cache yazma hatası kritik değil, sessizce geç
   }
