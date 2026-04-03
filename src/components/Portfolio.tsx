@@ -10,6 +10,9 @@ import { fmt, fmtShortAddr, fmtPrice, getMarkPrice } from '@/lib/utils';
 import { useOrderLog, OrderLogEntry, getCopyPerformance } from '@/hooks/useOrderLog';
 import { PriceAlerts } from './PriceAlerts';
 import { CoinLogo } from './CoinLogo';
+import { useShell } from './AppShell';
+import { cancelOrder, closePosition } from '@/lib/pacificaSigning';
+import { getOpenOrders } from '@/lib/pacifica';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -141,9 +144,11 @@ function SortTh({ label, sortKey, cur, dir, onClick, className }: {
 }
 
 export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
+  const { walletSignFn, ensureBuilderApproved, setToast } = useShell() as any;
   const [tab, setTab] = useState<PortfolioTab>('positions');
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(0);
+  const [actionLoading, setActionLoading] = useState<string | null>(null); // track which row is loading
 
   // Journal state
   const JOURNAL_KEY = `pacificalens_journal_${wallet || 'anon'}`;
@@ -183,6 +188,62 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
       const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb));
       return sort.dir === 'asc' ? cmp : -cmp;
     });
+  }
+
+  // ── Close Position ───────────────────────────────────────────────────────────
+  async function handleClosePosition(pos: Position) {
+    if (!wallet) return;
+    const key = `close-${pos.symbol}`;
+    setActionLoading(key);
+    try {
+      const approved = await ensureBuilderApproved();
+      if (!approved) { setActionLoading(null); return; }
+      const amt = Number(pos.amount || 0);
+      const lotDecimals = markets.find(m => m.symbol === pos.symbol)?.lot_size
+        ? Math.ceil(-Math.log10(Number(markets.find(m => m.symbol === pos.symbol)?.lot_size)))
+        : 4;
+      const result = await closePosition(
+        wallet,
+        pos.symbol,
+        amt.toFixed(lotDecimals),
+        pos.side as 'bid' | 'ask',
+        walletSignFn
+      );
+      if (result.success) {
+        setToast?.({ message: `✓ ${pos.symbol} position closed`, type: 'success' });
+        setTimeout(() => refresh(), 2000);
+      } else {
+        setToast?.({ message: `Close failed: ${result.error}`, type: 'error' });
+      }
+    } catch (e) {
+      setToast?.({ message: `Error: ${String(e)}`, type: 'error' });
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  // ── Cancel Order ──────────────────────────────────────────────────────────────
+  async function handleCancelOrder(order: OpenOrder) {
+    if (!wallet) return;
+    const orderId = (order as any).order_id ?? (order as any).id;
+    if (!orderId) { setToast?.({ message: 'No order ID found', type: 'error' }); return; }
+    const key = `cancel-${orderId}`;
+    setActionLoading(key);
+    try {
+      const approved = await ensureBuilderApproved();
+      if (!approved) { setActionLoading(null); return; }
+      const result = await cancelOrder(wallet, orderId, walletSignFn);
+      if (result.success) {
+        setToast?.({ message: `✓ Order cancelled`, type: 'success' });
+        setTimeout(() => refresh(), 2000);
+      } else {
+        setToast?.({ message: `Cancel failed: ${result.error}`, type: 'error' });
+      }
+    } catch (e) {
+      setToast?.({ message: `Error: ${String(e)}`, type: 'error' });
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   const [accountInfo, setAccountInfo]   = useState<AccountInfo | null>(null);
@@ -367,9 +428,9 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                   <div className="py-16 text-center text-[12px] text-text3">No open positions</div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-7 gap-3 px-4 py-2 text-[10px] text-text3 uppercase tracking-wide font-semibold border-b border-border1 bg-surface2">
+                    <div className="grid gap-3 px-4 py-2 text-[10px] text-text3 uppercase tracking-wide font-semibold border-b border-border1 bg-surface2" style={{ gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr 1fr 1fr auto' }}>
                       <span>Token</span><span>Size</span><span>Position Value</span>
-                      <span>Entry / Breakeven</span><span>Mark Price</span><span>PnL (ROI%)</span><span>Liq Price</span>
+                      <span>Entry Price</span><span>Mark Price</span><span>PnL (ROI%)</span><span>Liq Price</span><span>Action</span>
                     </div>
                     {positions.map((pos, i) => {
                       const isLong = pos.side === 'bid';
@@ -384,7 +445,7 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                       const posVal = (markPx || entryPx) * amt;
                       const pnlPct = posVal > 0 ? (pnl / posVal * 100) : 0;
                       return (
-                        <div key={i} className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-border1 last:border-0 hover:bg-surface2/40 transition-colors items-center">
+                        <div key={i} className="grid gap-3 px-4 py-3 border-b border-border1 last:border-0 hover:bg-surface2/40 transition-colors items-center" style={{ gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr 1fr 1fr auto' }}>
                           <div className="flex items-center gap-2">
                             <CoinLogo symbol={pos.symbol} size={20} />
                             <div>
@@ -409,6 +470,21 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                           <div className={`font-mono text-[12px] ${pos.liquidation_price ? 'text-danger' : 'text-text3'}`}>
                             {pos.liquidation_price ? `$${fmtPrice(Number(pos.liquidation_price))}` : 'N/A'}
                           </div>
+                          <div>
+                            <button
+                              onClick={() => handleClosePosition(pos)}
+                              disabled={actionLoading === `close-${pos.symbol}`}
+                              className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50"
+                              style={{
+                                background: 'rgba(255,61,61,0.12)',
+                                color: '#ff3d3d',
+                                border: '1px solid rgba(255,61,61,0.25)',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {actionLoading === `close-${pos.symbol}` ? '...' : 'Close'}
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -424,12 +500,13 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                   <div className="py-16 text-center text-[12px] text-text3">No open orders</div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-5 gap-3 px-4 py-2 border-b border-border1 bg-surface2">
+                    <div className="grid gap-3 px-4 py-2 border-b border-border1 bg-surface2" style={{ gridTemplateColumns: '1fr 1fr 80px 1fr 1fr auto' }}>
                       <SortTh label="Symbol" sortKey="oo_symbol" cur={sort.key} dir={sort.dir} onClick={() => toggleSort('oo_symbol')} />
                       <SortTh label="Side" sortKey="oo_side" cur={sort.key} dir={sort.dir} onClick={() => toggleSort('oo_side')} />
                       <span className="text-[10px] text-text3 uppercase tracking-wide font-semibold">Type</span>
                       <SortTh label="Price" sortKey="oo_price" cur={sort.key} dir={sort.dir} onClick={() => toggleSort('oo_price')} />
                       <SortTh label="Amount" sortKey="oo_amount" cur={sort.key} dir={sort.dir} onClick={() => toggleSort('oo_amount')} />
+                      <span className="text-[10px] text-text3 uppercase tracking-wide font-semibold">Action</span>
                     </div>
                     {sortData(openOrders, sort.key.startsWith('oo_') ? sort.key.replace('oo_', '') : '', (o) => {
                       const p = (o as OpenOrder & { initial_price?: string }).initial_price ?? o.price ?? '0';
@@ -442,12 +519,27 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
                       const { label, isLong } = sideLabel(o.side);
                       const price = (o as OpenOrder & { initial_price?: string }).initial_price ?? o.price ?? '0';
                       return (
-                        <div key={i} className="grid grid-cols-5 gap-3 px-4 py-3 border-b border-border1 last:border-0 hover:bg-surface2/40 transition-colors text-[12px]">
+                        <div key={i} className="grid gap-3 px-4 py-3 border-b border-border1 last:border-0 hover:bg-surface2/40 transition-colors text-[12px] items-center" style={{ gridTemplateColumns: '1fr 1fr 80px 1fr 1fr auto' }}>
                           <div className="font-bold text-text1">{o.symbol}</div>
                           <div className={`font-semibold ${isLong ? 'text-success' : 'text-danger'}`}>{label}</div>
                           <div className="text-text3 uppercase text-[11px]">{o.order_type ?? 'limit'}</div>
                           <div className="font-mono text-text2">${fmtPrice(Number(price))}</div>
                           <div className="font-mono text-text2">{Number(o.amount).toFixed(4)}</div>
+                          <div>
+                            <button
+                              onClick={() => handleCancelOrder(o)}
+                              disabled={actionLoading === `cancel-${(o as any).order_id ?? (o as any).id}`}
+                              className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50"
+                              style={{
+                                background: 'rgba(255,171,0,0.1)',
+                                color: '#ffc107',
+                                border: '1px solid rgba(255,171,0,0.25)',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {actionLoading === `cancel-${(o as any).order_id ?? (o as any).id}` ? '...' : 'Cancel'}
+                            </button>
+                          </div>
                         </div>
                       );
                     })}

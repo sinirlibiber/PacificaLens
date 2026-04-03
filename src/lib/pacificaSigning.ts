@@ -288,6 +288,58 @@ export async function submitMarketOrder(
   }
 }
 
+
+// ── Cancel Order ──────────────────────────────────────────────────────────────
+// POST /api/v1/orders/cancel
+// Signs cancel_order type with order_id
+export async function cancelOrder(
+  account: string,
+  orderId: string | number,
+  signMessage: SignFn
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const orderData = { order_id: String(orderId) };
+    const { payload, timestamp } = buildSigningPayload('cancel_order', orderData);
+    const msgBytes = new TextEncoder().encode(payload);
+    const sigResult = await signMessage(msgBytes);
+    const sig = typeof sigResult === 'string' ? sigResult : toBase58(sigResult as Uint8Array);
+    const body = buildRequestBody(account, sig, timestamp, orderData);
+
+    const res = await fetch('https://api.pacifica.fi/api/v1/orders/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const rawText = await res.text();
+    console.log('[cancelOrder] status:', res.status, '| response:', rawText);
+    let json: any;
+    try { json = JSON.parse(rawText); } catch { return { success: false, error: rawText }; }
+    if (json.success) return { success: true };
+    return { success: false, error: json.error || JSON.stringify(json) };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
+// ── Close Position (market order with reduce_only: true) ──────────────────────
+export async function closePosition(
+  account: string,
+  symbol: string,
+  amount: string,
+  side: 'bid' | 'ask',   // current position side — we send opposite
+  signMessage: SignFn
+): Promise<{ success: boolean; orderId?: string; error?: string }> {
+  // To close: flip the side (long pos = bid → send ask to close)
+  const closeSide = side === 'bid' ? 'ask' : 'bid';
+  return submitMarketOrder(account, {
+    symbol,
+    amount,
+    side: closeSide,
+    reduce_only: true,
+    slippage_percent: '1',
+  }, signMessage);
+}
+
 // ── Update Builder Fee Rate ───────────────────────────────────────────────────
 // Admin function: called by the builder account owner (YOU) to update fee_rate.
 // This is NOT a user-facing function — only your wallet (BUILDER_WALLET) should call this.

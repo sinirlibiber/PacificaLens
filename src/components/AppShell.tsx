@@ -274,7 +274,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Pass shared state via context-like props — children use these via context
   return (
-    <AppShellContext.Provider value={{ markets, tickers, fundingRates, positions, accountInfo, accountSize, setAccountSize, wallet, error, handleExecute, loading, ensureBuilderApproved, builderApproved, walletSignFn }}>
+    <AppShellContext.Provider value={{ markets, tickers, fundingRates, positions, accountInfo, accountSize, setAccountSize, wallet, error, handleExecute, loading, ensureBuilderApproved, builderApproved, walletSignFn, setToast }}>
       <div className="flex flex-col h-screen overflow-hidden bg-bg">
         <Header tab={currentTab} onTabChange={handleTabChange} accountInfo={accountInfo} />
         {!authenticated ? (
@@ -317,6 +317,7 @@ interface ShellCtx {
   ensureBuilderApproved: () => Promise<boolean>;
   builderApproved: boolean;
   walletSignFn: (msgBytes: Uint8Array) => Promise<string>;
+  setToast: (t: { message: string; type: 'success' | 'error' | 'info' | 'loading'; duration?: number } | null) => void;
 }
 
 export const AppShellContext = createContext<ShellCtx>({
@@ -324,6 +325,7 @@ export const AppShellContext = createContext<ShellCtx>({
   accountSize: 0, setAccountSize: () => {}, wallet: null, error: null,
   handleExecute: () => {}, loading: false, ensureBuilderApproved: async () => false, builderApproved: false,
   walletSignFn: async () => { throw new Error('No wallet'); },
+  setToast: () => {},
 });
 
 export function useShell() { return useContext(AppShellContext); }
