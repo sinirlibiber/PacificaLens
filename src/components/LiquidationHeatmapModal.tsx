@@ -490,93 +490,120 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}
     >
       <div className="relative flex flex-col rounded-2xl overflow-hidden shadow-2xl"
-        style={{ width:940, maxWidth:'97vw', background:bgModal, border:`1px solid ${border}` }}>
+        style={{ width:1020, maxWidth:'97vw', background:bgModal, border:`1px solid ${border}`, boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-5 py-3" style={{ background:bgBar, borderBottom:`1px solid ${border}` }}>
+        <div className="flex items-center justify-between px-5 py-3.5" style={{ background:bgBar, borderBottom:`1px solid ${border}` }}>
           <div className="flex items-center gap-2.5">
-            <span className="text-[13px]" style={{ color:text2 }}>✕</span>
-            <CoinLogo symbol={symbol} size={20} />
-            <span className="text-[14px] font-bold" style={{ color:text1 }}>
-              {symbol.replace('-USD','')} Dual-Mode Liquidation Heatmap
-            </span>
+            <CoinLogo symbol={symbol} size={22} />
+            <div>
+              <span className="text-[15px] font-bold tracking-tight" style={{ color:text1 }}>
+                LiquidationHeatmap
+              </span>
+              <span className="ml-2 text-[11px] font-semibold px-1.5 py-0.5 rounded" style={{ background:'rgba(0,180,216,0.12)', color:'#00d4ff' }}>
+                {symbol.replace('-USD','')}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {(stats.longLiq>0||stats.shortLiq>0) && (
-              <div className="flex gap-3 text-[11px]">
-                <span style={{ color:'#f87171' }}>Long liq: <b>{fmtUSD(stats.longLiq)}</b></span>
-                <span style={{ color:'#4ade80' }}>Short liq: <b>{fmtUSD(stats.shortLiq)}</b></span>
+              <div className="flex gap-2 text-[11px]">
+                <span className="px-2 py-0.5 rounded-md font-semibold" style={{ background:'rgba(248,113,113,0.12)', color:'#f87171', border:'1px solid rgba(248,113,113,0.2)' }}>
+                  Long liq: <b>{fmtUSD(stats.longLiq)}</b>
+                </span>
+                <span className="px-2 py-0.5 rounded-md font-semibold" style={{ background:'rgba(74,222,128,0.12)', color:'#4ade80', border:'1px solid rgba(74,222,128,0.2)' }}>
+                  Short liq: <b>{fmtUSD(stats.shortLiq)}</b>
+                </span>
               </div>
             )}
             {stats.currentPrice>0 && (
-              <span className="font-mono text-[13px] font-semibold" style={{ color:text1 }}>
+              <span className="font-mono text-[13px] font-bold px-2.5 py-1 rounded-lg" style={{ background:'rgba(0,180,216,0.08)', color:'#00d4ff', border:'1px solid rgba(0,180,216,0.2)' }}>
                 {fmtPrice(stats.currentPrice)}
               </span>
             )}
-            <button onClick={onClose} className="text-[18px] leading-none hover:opacity-60 transition-opacity" style={{ color:text2 }}>✕</button>
+            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-[14px] leading-none hover:opacity-70 transition-opacity" style={{ color:text2, background:'rgba(255,255,255,0.06)' }}>✕</button>
           </div>
         </div>
 
         {/* ── Controls ── */}
-        <div className="flex items-center gap-4 px-5 py-2" style={{ borderBottom:`1px solid ${border}`, background:bgBar }}>
+        <div className="flex items-center gap-5 px-5 py-2.5" style={{ borderBottom:`1px solid ${border}`, background:bgBar }}>
           {/* Range */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px]" style={{ color:text2 }}>Range:</span>
-            {TIME_RANGES.map((r,i) => (
-              <button key={r.label} onClick={()=>setRangeIdx(i)}
-                className="text-[10px] font-semibold px-2 py-0.5 rounded transition-all"
-                style={{
-                  background: rangeIdx===i ? (isDark?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.1)') : 'transparent',
-                  color: rangeIdx===i ? text1 : text2,
-                  border: `1px solid ${rangeIdx===i ? (isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)') : 'transparent'}`,
-                }}>{r.label}</button>
-            ))}
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color:text2 }}>Range</span>
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background:'rgba(255,255,255,0.04)', border:`1px solid ${border}` }}>
+              {TIME_RANGES.map((r,i) => (
+                <button key={r.label} onClick={()=>setRangeIdx(i)}
+                  className="text-[10px] font-bold px-2.5 py-1 rounded-md transition-all"
+                  style={{
+                    background: rangeIdx===i ? (isDark?'rgba(0,180,216,0.2)':'rgba(0,0,0,0.1)') : 'transparent',
+                    color: rangeIdx===i ? '#00d4ff' : text2,
+                    boxShadow: rangeIdx===i ? '0 0 0 1px rgba(0,180,216,0.3)' : 'none',
+                  }}>{r.label}</button>
+              ))}
+            </div>
           </div>
+
+          <div className="w-px h-4" style={{ background:border }} />
 
           {/* Side filter */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px]" style={{ color:text2 }}>Side:</span>
-            {(['all','long','short'] as SideMode[]).map(s => (
-              <button key={s} onClick={()=>setSideMode(s)}
-                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded transition-all"
-                style={{
-                  background: sideMode===s
-                    ? s==='long'  ? 'rgba(74,222,128,0.15)'
-                    : s==='short' ? 'rgba(248,113,113,0.15)'
-                    : (isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)')
-                    : 'transparent',
-                  color: sideMode===s
-                    ? s==='long'  ? '#4ade80'
-                    : s==='short' ? '#f87171'
-                    : text1
-                    : text2,
-                  border: `1px solid ${sideMode===s
-                    ? s==='long'  ? 'rgba(74,222,128,0.3)'
-                    : s==='short' ? 'rgba(248,113,113,0.3)'
-                    : (isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.12)')
-                    : 'transparent'}`,
-                }}>
-                {s==='long'?'🟢':s==='short'?'🔴':'⚡'} {s.charAt(0).toUpperCase()+s.slice(1)}
-              </button>
-            ))}
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color:text2 }}>Side</span>
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background:'rgba(255,255,255,0.04)', border:`1px solid ${border}` }}>
+              {(['all','long','short'] as SideMode[]).map(s => (
+                <button key={s} onClick={()=>setSideMode(s)}
+                  className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-md transition-all"
+                  style={{
+                    background: sideMode===s
+                      ? s==='long'  ? 'rgba(74,222,128,0.18)'
+                      : s==='short' ? 'rgba(248,113,113,0.18)'
+                      : (isDark?'rgba(0,180,216,0.15)':'rgba(0,0,0,0.07)')
+                      : 'transparent',
+                    color: sideMode===s
+                      ? s==='long'  ? '#4ade80'
+                      : s==='short' ? '#f87171'
+                      : '#00d4ff'
+                      : text2,
+                    boxShadow: sideMode===s
+                      ? s==='long'  ? '0 0 0 1px rgba(74,222,128,0.3)'
+                      : s==='short' ? '0 0 0 1px rgba(248,113,113,0.3)'
+                      : '0 0 0 1px rgba(0,180,216,0.3)'
+                      : 'none',
+                  }}>
+                  {s.charAt(0).toUpperCase()+s.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Price legend strip */}
-          <div className="flex items-center gap-1.5 ml-auto">
-            <span className="text-[10px]" style={{ color:text2 }}>Short:</span>
-            {[0.08,0.3,0.6,0.9].map((v,i)=>(
-              <div key={i} className="w-4 h-2.5 rounded-sm" style={{ background:shortColor(v) }} />
-            ))}
-            <span className="text-[10px] ml-2" style={{ color:text2 }}>Long:</span>
-            {[0.08,0.3,0.6,0.9].map((v,i)=>(
-              <div key={i} className="w-4 h-2.5 rounded-sm" style={{ background:longColor(v) }} />
-            ))}
-            <span className="text-[10px] ml-2" style={{ color:text2 }}>— <span style={{ color:'#ff3344' }}>Price</span></span>
+          <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color:'#f87171' }}>Short</span>
+              <div className="flex gap-0.5">
+                {[0.08,0.3,0.6,0.9].map((v,i)=>(
+                  <div key={i} className="w-5 h-2.5 rounded-sm" style={{ background:shortColor(v) }} />
+                ))}
+              </div>
+            </div>
+            <div className="w-px h-3" style={{ background:border }} />
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color:'#4ade80' }}>Long</span>
+              <div className="flex gap-0.5">
+                {[0.08,0.3,0.6,0.9].map((v,i)=>(
+                  <div key={i} className="w-5 h-2.5 rounded-sm" style={{ background:longColor(v) }} />
+                ))}
+              </div>
+            </div>
+            <div className="w-px h-3" style={{ background:border }} />
+            <div className="flex items-center gap-1">
+              <div className="w-5 h-0.5" style={{ background:'#ff3344' }} />
+              <span className="text-[10px] font-semibold" style={{ color:'#ff3344' }}>Price</span>
+            </div>
           </div>
         </div>
 
         {/* ── Canvas ── */}
-        <div className="relative" style={{ height:420 }}>
+        <div className="relative" style={{ height:440 }}>
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10" style={{ background:bgModal }}>
               <div className="w-7 h-7 border-2 rounded-full animate-spin mb-2"
@@ -589,8 +616,8 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
               <span className="text-red-400 text-[12px]">{error}</span>
             </div>
           )}
-          <canvas ref={canvasRef}  width={940} height={420} className="absolute inset-0 w-full h-full" />
-          <canvas ref={overlayRef} width={940} height={420} className="absolute inset-0 w-full h-full cursor-crosshair"
+          <canvas ref={canvasRef}  width={1020} height={440} className="absolute inset-0 w-full h-full" />
+          <canvas ref={overlayRef} width={1020} height={440} className="absolute inset-0 w-full h-full cursor-crosshair"
             onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} />
 
           {tooltip && (

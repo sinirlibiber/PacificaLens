@@ -17,12 +17,12 @@ const GlobeMap = dynamic(() => import('@/components/GlobeMap'), {
 });
 
 const FEATURES = [
-  { icon: '📊', label: 'Analytics & AI' },
-  { icon: '🐋', label: 'Whale Tracker' },
-  { icon: '🔁', label: 'Copy Trading' },
-  { icon: '⚡', label: 'Arbitrage' },
-  { icon: '🛡️', label: 'Risk Manager' },
-  { icon: '🤖', label: 'AI Assistant' },
+  { label: 'Analytics & AI' },
+  { label: 'Whale Tracker' },
+  { label: 'Copy Trading' },
+  { label: 'Arbitrage' },
+  { label: 'Risk Manager' },
+  { label: 'AI Assistant' },
 ];
 
 export default function Home() {
@@ -72,7 +72,6 @@ export default function Home() {
                   backdropFilter: 'blur(8px)',
                 }}
               >
-                <span style={{ fontSize: '12px' }}>{f.icon}</span>
                 {f.label}
               </span>
               {i < FEATURES.length - 1 && (
@@ -85,14 +84,6 @@ export default function Home() {
         {/* CTA Button */}
         <ConnectWalletButton />
 
-        {/* Hackathon badge */}
-        <div className="flex items-center gap-1.5 mt-4 px-3 py-1.5 rounded-full"
-          style={{ background: 'rgba(255,171,0,0.08)', border: '1px solid rgba(255,171,0,0.2)' }}>
-          <span style={{ fontSize: '12px' }}>🏆</span>
-          <span style={{ color: 'rgba(255,171,0,0.8)', fontSize: '10px', fontWeight: 600 }}>
-            Pacifica Hackathon 2026
-          </span>
-        </div>
       </div>
 
     </div>

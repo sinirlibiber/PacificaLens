@@ -105,7 +105,7 @@ export default function GlobeMap() {
   const prevMouse   = useRef({ x: 0, y: 0 });
   const pauseTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pausedRef   = useRef(false);
-  const zoomRef     = useRef(2.6);
+  const zoomRef     = useRef(1.85);
   const tiltRef     = useRef(0);
 
   const [pins,      setPins    ] = useState<Pin[]>([]);
