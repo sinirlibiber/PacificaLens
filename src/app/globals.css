@@ -124,42 +124,16 @@ html.dark nav a, html.dark nav button {
   transition: color 0.15s ease;
 }
 
-/* Tables */
+/* Tables — minimal overrides, let components handle their own styles */
 html.dark thead tr {
-  background: rgba(4,12,28,0.98) !important;
-}
-html.dark thead th {
-  color: rgba(0,180,220,0.65) !important;
-  border-bottom: 1px solid rgba(0,160,220,0.12) !important;
-  font-size: 10px !important;
-  letter-spacing: 0.08em !important;
-  text-transform: uppercase !important;
-  font-weight: 600 !important;
+  background: rgba(4,12,28,0.95);
 }
 html.dark tbody tr {
-  border-bottom: 1px solid rgba(0,100,160,0.07) !important;
+  border-bottom: 1px solid rgba(0,100,160,0.07);
   transition: background 0.12s ease;
-  position: relative;
 }
 html.dark tbody tr:hover {
-  background: rgba(0,140,210,0.06) !important;
-}
-/* Hover left accent line effect */
-html.dark tbody tr::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 2px;
-  background: var(--accent);
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-html.dark tbody tr:hover::before {
-  opacity: 0.6;
-}
-html.dark td:first-child {
-  color: rgba(100,160,210,0.45) !important;
-  font-variant-numeric: tabular-nums;
+  background: rgba(0,140,210,0.05);
 }
 
 /* Text */
@@ -325,8 +299,7 @@ html.dark .text-danger  { text-shadow: 0 0 8px rgba(255,61,61,0.25); }
 /* ── Premium card inner gradient (dark) ── */
 html.dark .rounded-xl.bg-surface,
 html.dark .rounded-2xl.bg-surface {
-  background: linear-gradient(145deg, rgba(10,22,48,0.96) 0%, rgba(6,14,34,0.98) 100%) !important;
-  border: 1px solid rgba(0,140,200,0.12) !important;
+  background: linear-gradient(145deg, rgba(10,22,48,0.96) 0%, rgba(6,14,34,0.98) 100%);
 }
 
 /* ── Stat number pop ── */
