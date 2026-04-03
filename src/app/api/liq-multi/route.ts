@@ -230,9 +230,9 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Gerçek veri olan semboller = Hyperliquid'de VEYA Binance'te olanlar
-    const supportedSymbols = new Set([
-      ...hlResult.availableSymbols,
-      ...binanceSymbols,
+    const supportedSymbols = new Set<string>([
+      ...Array.from(hlResult.availableSymbols),
+      ...Array.from(binanceSymbols),
     ]);
 
     const allEvents: LiqEvent[] = [...hlResult.events];
