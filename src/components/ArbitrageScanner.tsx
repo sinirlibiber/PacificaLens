@@ -324,7 +324,7 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
 
             {/* Results count */}
             <div className="text-[11px] text-text3">
-              Showing <span className="font-semibold text-text1">{filtered.length}</span> opportunities across <span className="font-semibold text-text1">5</span> exchanges
+              Showing <span className="font-semibold text-text1">{filtered.length}</span> opportunities across <span className="font-semibold text-text1">4</span> perps
             </div>
 
             {/* Table */}
