@@ -10,13 +10,13 @@ interface Message {
 }
 
 const SUGGESTIONS = [
-  'What is DeFi yield farming?',
+  'How can I use PacificaLens to optimize my trades?',
   'Analyze BTC technically',
-  'Most talked coin on Twitter?',
+  'Analyze ETH technically',
   'Where is smart money now?',
   'What are the best altcoins to watch?',
-  'Explain perpetual futures',
-  'How does liquidation work?',
+  'Most talked coin on Twitter?',
+  'Which markets have the highest trading volume right now?',
   'What is open interest?',
 ];
 
