@@ -245,8 +245,8 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
 
       for (const lv of visible) {
         const x    = toX(lv.price);
-        const long  = lv.long;
-        const short = lv.short;
+        const long  = lv.longLiq;
+        const short = lv.shortLiq;
         const total = long + short;
         if (total <= 0) continue;
         const normH = Math.pow(total / maxLiq, 0.5) * LIQ_H * 0.88;
