@@ -12,11 +12,9 @@ interface LiqSymbolData {
   shortLiq: number;
   total: number;
   count: number;
-  byExchange: { hyperliquid: number; binance: number; bybit: number };
 }
 interface LiqEvent {
   id: string;
-  exchange: 'hyperliquid' | 'binance' | 'bybit';
   symbol: string;
   side: 'long' | 'short';
   price: number;
@@ -26,7 +24,6 @@ interface LiqEvent {
 interface ApiMeta {
   fetchedAt: number;
   totalEvents: number;
-  sources: { binance: number; hyperliquid: number; bybit: number };
 }
 
 const HOURS_OPTIONS = [
@@ -71,13 +68,13 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
     abortRef.current = ctrl;
     setLoading(true);
     try {
-      const res  = await fetch(`/api/liq-multi?hours=${hours}&exchange=all`, { signal: ctrl.signal });
+      const res  = await fetch(`/api/liq-multi?hours=${hours}`, { signal: ctrl.signal });
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json();
       if (!ctrl.signal.aborted) {
-        setSummary(data.summary  ?? []);
-        setRecent(data.recent    ?? []);
-        setMeta(data.meta        ?? null);
+        setSummary(data.summary ?? []);
+        setRecent(data.recent  ?? []);
+        setMeta(data.meta      ?? null);
       }
     } catch { /* aborted */ }
     finally  { if (!ctrl.signal.aborted) setLoading(false); }
@@ -95,12 +92,10 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
       return b.total - a.total;
     });
 
-  const maxTotal = filtered[0]?.total || 1;
-
-  // totals
-  const grandTotal     = filtered.reduce((s, x) => s + x.total, 0);
-  const grandLong      = filtered.reduce((s, x) => s + x.longLiq, 0);
-  const grandShort     = filtered.reduce((s, x) => s + x.shortLiq, 0);
+  const maxTotal   = filtered[0]?.total || 1;
+  const grandTotal = filtered.reduce((s, x) => s + x.total, 0);
+  const grandLong  = filtered.reduce((s, x) => s + x.longLiq, 0);
+  const grandShort = filtered.reduce((s, x) => s + x.shortLiq, 0);
 
   const SortBtn = ({ col, label }: { col: typeof sortBy; label: string }) => (
     <button onClick={() => setSortBy(col)}
@@ -109,9 +104,6 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
     </button>
   );
 
-  const SOURCE_COLORS: Record<string, string> = { binance: '#F0B90B', hyperliquid: '#00E5CF', bybit: '#00B2FF', okx: '#00B2FF' };
-  const SOURCE_SHORT:  Record<string, string> = { binance: 'BN', hyperliquid: 'HL', bybit: 'BB' };
-
   return (
     <div className="flex flex-col gap-4 h-full">
 
@@ -119,7 +111,9 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-[15px] font-bold text-text1">Liquidation Monitor</h2>
-          <p className="text-[11px] text-text3 mt-0.5">Real data from Pacifica · HyperLiquid · OKX · Pacifica markets only</p>
+          <p className="text-[11px] text-text3 mt-0.5">
+            HyperLiquid · Pacifica — Pacifica markets only
+          </p>
         </div>
         <div className="flex items-center gap-3 text-[11px] text-text3">
           {loading && <span className="animate-spin text-accent">↻</span>}
@@ -137,7 +131,6 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
 
       {/* Controls */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Time */}
         <div className="flex items-center gap-0.5 bg-surface border border-border1 rounded-xl p-1">
           {HOURS_OPTIONS.map(o => (
             <button key={o.value} onClick={() => setHours(o.value)}
@@ -148,14 +141,12 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
           ))}
         </div>
 
-        {/* Search */}
         <div className="relative">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text3 text-[12px]">⌕</span>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter..."
             className="bg-surface border border-border1 rounded-xl pl-7 pr-3 py-1.5 text-[11px] text-text1 outline-none focus:border-accent placeholder-text3 w-28" />
         </div>
 
-        {/* Tab */}
         <div className="ml-auto flex items-center gap-0.5 bg-surface border border-border1 rounded-xl p-1">
           {(['table','feed'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
@@ -167,8 +158,8 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
         </div>
 
         <button onClick={load} disabled={loading}
-          className="flex items-center gap-1 px-3 py-1.5 bg-surface border border-border1 rounded-xl text-[11px] text-text2 hover:text-text1 transition-colors disabled:opacity-40">
-          <span className={loading ? 'animate-spin' : ''}>↻</span>
+          className="px-3 py-1.5 bg-surface border border-border1 rounded-xl text-[11px] text-text2 hover:text-text1 transition-colors disabled:opacity-40">
+          <span className={loading ? 'animate-spin inline-block' : ''}>↻</span>
         </button>
       </div>
 
@@ -189,7 +180,6 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
             <span className="text-text3 text-[9px] uppercase font-semibold">Short Liq</span>
             <span className="text-danger font-bold text-[14px]">{fmtV(grandShort)}</span>
           </div>
-          {/* Ratio bar */}
           <div className="flex-1 ml-2">
             <div className="flex h-2 rounded-full overflow-hidden">
               <div className="bg-success/70 transition-all" style={{ width: `${grandTotal > 0 ? (grandLong/grandTotal)*100 : 50}%` }} />
@@ -201,9 +191,9 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
             </div>
           </div>
           <div className="w-px h-8 bg-border1" />
-          <div className="flex items-center gap-2 text-[10px] text-text3">
+          <div className="text-[10px] text-text3">
             <span className="font-semibold">{filtered.length} markets</span>
-            <span className="text-[9px]">· Click row for heatmap</span>
+            <span className="text-[9px] ml-1.5">· Click row for heatmap</span>
           </div>
         </div>
       )}
@@ -211,16 +201,14 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
       {/* Table */}
       {tab === 'table' && (
         <div className="bg-surface border border-border1 rounded-2xl overflow-hidden flex-1 flex flex-col">
-          {/* Header */}
           <div className="grid px-4 py-2.5 border-b border-border1 bg-surface2 text-[10px] uppercase tracking-wide"
-            style={{ gridTemplateColumns: '44px 1fr 110px 100px 100px 55px 90px' }}>
+            style={{ gridTemplateColumns: '40px 1fr 110px 100px 100px 55px' }}>
             <span className="text-text3">#</span>
             <span className="text-text3">Symbol</span>
             <SortBtn col="total"  label="Total Liq" />
             <SortBtn col="long"   label="Long Liq"  />
             <SortBtn col="short"  label="Short Liq" />
             <SortBtn col="count"  label="Events"    />
-            <span className="text-text3">Sources</span>
           </div>
 
           <div className="overflow-y-auto flex-1">
@@ -242,21 +230,21 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
               const shortPct = 100 - longPct;
               const bar      = Math.max(8, (s.total / maxTotal) * 100);
               const domLong  = longPct >= shortPct;
+              // Pacifica market listesinde var mı?
+              const pacMarket = markets.find(m => m.symbol.replace(/-USD$/i,'').toUpperCase() === s.symbol);
 
               return (
-                <div key={s.symbol} onClick={() => setModalSymbol(s.symbol + '-USD')}
+                <div key={s.symbol} onClick={() => setModalSymbol((pacMarket?.symbol ?? s.symbol + '-USD'))}
                   className="grid items-center px-4 py-2.5 border-b border-border1/40 hover:bg-surface2/60 transition-colors cursor-pointer"
-                  style={{ gridTemplateColumns: '44px 1fr 110px 100px 100px 55px 90px' }}>
+                  style={{ gridTemplateColumns: '40px 1fr 110px 100px 100px 55px' }}>
 
-                  {/* # */}
                   <span className="text-[11px] text-text3 font-mono">{idx + 1}</span>
 
-                  {/* Symbol */}
+                  {/* Symbol + Logo */}
                   <div className="flex items-center gap-2">
-                    <CoinLogo symbol={`${s.symbol}-USD`} size={20} />
+                    <CoinLogo symbol={pacMarket?.symbol ?? (s.symbol + '-USD')} size={22} />
                     <div>
                       <div className="text-[13px] font-bold text-text1 leading-none">{s.symbol}</div>
-                      {/* Long/short ratio bar */}
                       <div className="flex mt-1 rounded-full overflow-hidden" style={{ width: bar, height: 3 }}>
                         <div className="bg-success/80" style={{ width: `${longPct}%` }} />
                         <div className="bg-danger/80"  style={{ width: `${shortPct}%` }} />
@@ -268,55 +256,34 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
                   <div>
                     <span className="text-[13px] font-bold text-text1">{fmtV(s.total)}</span>
                     <div className={`text-[9px] font-semibold mt-0.5 ${domLong ? 'text-success' : 'text-danger'}`}>
-                      {domLong ? '▲ Longs dominated' : '▼ Shorts dominated'}
+                      {domLong ? '▲ Longs dom.' : '▼ Shorts dom.'}
                     </div>
                   </div>
 
-                  {/* Long */}
                   <div>
                     <span className="text-[13px] font-semibold text-success">{fmtV(s.longLiq)}</span>
                     <div className="text-[9px] text-text3 mt-0.5">{longPct.toFixed(0)}%</div>
                   </div>
 
-                  {/* Short */}
                   <div>
                     <span className="text-[13px] font-semibold text-danger">{fmtV(s.shortLiq)}</span>
                     <div className="text-[9px] text-text3 mt-0.5">{shortPct.toFixed(0)}%</div>
                   </div>
 
-                  {/* Events */}
                   <span className="text-[12px] font-mono text-text2">{s.count}</span>
-
-                  {/* Sources — mini stacked bars */}
-                  <div className="flex items-end gap-1 h-6">
-                    {Object.entries(s.byExchange).map(([ex, val]) => {
-                      if (!val) return null;
-                      const h = Math.max(4, Math.min(22, (val / s.total) * 24));
-                      return (
-                        <div key={ex} title={`${ex}: ${fmtV(val)}`}
-                          className="flex flex-col items-center gap-0.5">
-                          <div className="w-2 rounded-sm" style={{ height: h, background: SOURCE_COLORS[ex] ?? '#888' }} />
-                          <span className="text-[7px] leading-none" style={{ color: SOURCE_COLORS[ex] ?? '#888' }}>
-                            {SOURCE_SHORT[ex] ?? ex.slice(0,2).toUpperCase()}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Footer */}
           {filtered.length > 0 && (
             <div className="px-4 py-2 border-t border-border1 bg-surface2/50 flex items-center gap-4 text-[10px] text-text3 shrink-0">
-              <span>{filtered.length} markets · {(meta?.totalEvents ?? 0).toLocaleString()} events total</span>
+              <span>{filtered.length} markets · {(meta?.totalEvents ?? 0).toLocaleString()} events</span>
               <span className="ml-auto">
                 <span className="text-success font-semibold">{fmtV(grandLong)}</span>
                 <span className="mx-1">long /</span>
                 <span className="text-danger font-semibold">{fmtV(grandShort)}</span>
-                <span className="ml-1">short liq</span>
+                <span className="ml-1">short</span>
               </span>
             </div>
           )}
@@ -327,57 +294,51 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
       {tab === 'feed' && (
         <div className="bg-surface border border-border1 rounded-2xl overflow-hidden flex-1 flex flex-col">
           <div className="grid px-4 py-2.5 border-b border-border1 bg-surface2 text-[10px] uppercase tracking-wide text-text3"
-            style={{ gridTemplateColumns: '90px 1fr 75px 90px 100px 90px' }}>
-            <span>Time</span><span>Symbol</span><span>Side</span>
-            <span>Size</span><span>Source</span><span>Price</span>
+            style={{ gridTemplateColumns: '80px 1fr 75px 90px 90px' }}>
+            <span>Time</span><span>Symbol</span><span>Side</span><span>Size</span><span>Price</span>
           </div>
 
           <div className="overflow-y-auto flex-1">
             {loading && recent.length === 0 && (
               <div className="flex items-center justify-center py-20 text-text3 text-[12px] gap-2">
-                <span className="animate-spin text-accent">↻</span> Loading feed...
+                <span className="animate-spin text-accent">↻</span> Loading...
               </div>
             )}
             {!loading && recent.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 gap-2">
                 <span className="text-3xl">📭</span>
                 <span className="text-text2 text-[13px] font-semibold">No recent liquidations</span>
-                <span className="text-text3 text-[11px]">Try a wider time range</span>
               </div>
             )}
-
             {recent
               .filter(e => !search || e.symbol.toLowerCase().includes(search.toLowerCase()))
               .slice(0, 200)
-              .map((e, i) => (
-                <div key={e.id ?? i} onClick={() => setModalSymbol(e.symbol + '-USD')}
-                  className="grid items-center px-4 py-2 border-b border-border1/30 hover:bg-surface2/50 cursor-pointer transition-colors"
-                  style={{ gridTemplateColumns: '90px 1fr 75px 90px 100px 90px' }}>
-                  <span className="font-mono text-[10px] text-text3">{fmtTime(e.ts)}</span>
-                  <div className="flex items-center gap-1.5">
-                    <CoinLogo symbol={`${e.symbol}-USD`} size={15} />
-                    <span className="text-[12px] font-semibold text-text1">{e.symbol}</span>
-                  </div>
-                  <span className={`text-[10px] font-bold ${e.side === 'long' ? 'text-success' : 'text-danger'}`}>
-                    {e.side === 'long' ? '▲ LONG' : '▼ SHORT'}
-                  </span>
-                  <span className="text-[12px] font-mono font-semibold text-text1">{fmtV(e.notional)}</span>
-                  <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: SOURCE_COLORS[e.exchange] ?? '#888' }} />
-                    <span className="text-[10px] font-semibold" style={{ color: SOURCE_COLORS[e.exchange] ?? '#888' }}>
-                      {e.exchange === 'hyperliquid' ? 'HyperLiq' : e.exchange === 'binance' ? 'Binance' : 'Bybit'}
+              .map((e, i) => {
+                const pacMarket = markets.find(m => m.symbol.replace(/-USD$/i,'').toUpperCase() === e.symbol);
+                return (
+                  <div key={e.id ?? i} onClick={() => setModalSymbol(pacMarket?.symbol ?? (e.symbol + '-USD'))}
+                    className="grid items-center px-4 py-2 border-b border-border1/30 hover:bg-surface2/50 cursor-pointer transition-colors"
+                    style={{ gridTemplateColumns: '80px 1fr 75px 90px 90px' }}>
+                    <span className="font-mono text-[10px] text-text3">{fmtTime(e.ts)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <CoinLogo symbol={pacMarket?.symbol ?? (e.symbol + '-USD')} size={15} />
+                      <span className="text-[12px] font-semibold text-text1">{e.symbol}</span>
+                    </div>
+                    <span className={`text-[10px] font-bold ${e.side === 'long' ? 'text-success' : 'text-danger'}`}>
+                      {e.side === 'long' ? '▲ LONG' : '▼ SHORT'}
+                    </span>
+                    <span className="text-[12px] font-mono font-semibold text-text1">{fmtV(e.notional)}</span>
+                    <span className="font-mono text-[10px] text-text2">
+                      {e.price > 0 ? `$${e.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—'}
                     </span>
                   </div>
-                  <span className="font-mono text-[10px] text-text2">
-                    {e.price > 0 ? `$${e.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—'}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
           </div>
         </div>
       )}
 
-      {/* Heatmap Modal */}
+      {/* Modal */}
       {modalSymbol && (
         <LiquidationHeatmapModal symbol={modalSymbol} onClose={() => setModalSymbol(null)} />
       )}
