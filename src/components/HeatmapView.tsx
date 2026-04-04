@@ -109,7 +109,7 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
     </button>
   );
 
-  const SOURCE_COLORS: Record<string, string> = { binance: '#F0B90B', hyperliquid: '#00E5CF', bybit: '#F7A600' };
+  const SOURCE_COLORS: Record<string, string> = { binance: '#F0B90B', hyperliquid: '#00E5CF', bybit: '#00B2FF', okx: '#00B2FF' };
   const SOURCE_SHORT:  Record<string, string> = { binance: 'BN', hyperliquid: 'HL', bybit: 'BB' };
 
   return (
@@ -119,7 +119,7 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-[15px] font-bold text-text1">Liquidation Monitor</h2>
-          <p className="text-[11px] text-text3 mt-0.5">Real data from 4 perpetual exchanges · Pacifica markets only</p>
+          <p className="text-[11px] text-text3 mt-0.5">Real data from Pacifica · HyperLiquid · OKX · Pacifica markets only</p>
         </div>
         <div className="flex items-center gap-3 text-[11px] text-text3">
           {loading && <span className="animate-spin text-accent">↻</span>}

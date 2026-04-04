@@ -174,6 +174,47 @@ async function fetchBybitLiqs(hours: number, allowed: Set<string>): Promise<LiqE
   return events;
 }
 
+
+// ── OKX: public liquidation orders (auth gerekmez) ───────────────────────────
+async function fetchOKXLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
+  const events: LiqEvent[] = [];
+  const cutoff = Date.now() - hours * 3600 * 1000;
+  const topCoins = ['BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','LINK','ARB','OP',
+                    'SUI','INJ','TIA','APT','NEAR','DOT','MATIC','HYPE','BNB','WIF']
+    .filter(s => allowed.has(s));
+
+  await Promise.all(topCoins.map(async (coin) => {
+    try {
+      const res = await fetch(
+        `https://www.okx.com/api/v5/public/liquidation-orders?instType=SWAP&instId=${coin}-USDT-SWAP&limit=100`,
+        { signal: AbortSignal.timeout(6000) }
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      const items: Record<string,unknown>[] = json?.data?.[0]?.details ?? [];
+      for (const item of items) {
+        const ts = Number(item.ts ?? 0);
+        if (ts && ts < cutoff) continue;
+        const price    = parseFloat(String(item.bkPx ?? '0'));
+        const sz       = parseFloat(String(item.sz   ?? '0'));
+        const notional = price * sz;
+        if (notional < 50) continue;
+        const isLong = String(item.posSide ?? '').toLowerCase().includes('long') ||
+                       String(item.side ?? '').toLowerCase() === 'sell';
+        events.push({
+          id:       `okx-${coin}-${ts}`,
+          exchange: 'bybit' as 'bybit', // bybit slot'unu OKX için kullan
+          symbol:   coin,
+          side:     isLong ? 'long' : 'short',
+          price, notional,
+          ts:       ts || Date.now(),
+        });
+      }
+    } catch { /* per-coin ignore */ }
+  }));
+  return events;
+}
+
 function buildSummary(events: LiqEvent[]): LiqSymbolData[] {
   const map = new Map<string, LiqSymbolData>();
   for (const e of events) {

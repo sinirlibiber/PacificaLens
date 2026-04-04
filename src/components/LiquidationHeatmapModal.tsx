@@ -55,7 +55,7 @@ const SRC_COLORS: Record<string,string> = {
   pacifica:'#00d4ff', binance:'#F0B90B', hyperliquid:'#00E5CF', bybit:'#F7A600',
 };
 const SRC_LABEL: Record<string,string> = {
-  pacifica:'Pacifica', binance:'Binance', hyperliquid:'HyperLiq', bybit:'Bybit',
+  pacifica:'Pacifica', binance:'Binance', hyperliquid:'HyperLiq', bybit:'OKX', okx:'OKX',
 };
 
 // Kline fetch — önce Pacifica, sonra Hyperliquid fallback

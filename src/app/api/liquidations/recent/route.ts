@@ -191,6 +191,42 @@ async function fetchBybitLiqs(coin: string, hours: number): Promise<LiqEntry[]> 
   return results;
 }
 
+// ── OKX: public liquidation orders (auth gerekmez, Vercel'den çalışır) ────
+async function fetchOKXLiqs(coin: string, hours: number): Promise<LiqEntry[]> {
+  const results: LiqEntry[] = [];
+  const cutoff = Date.now() - hours * 3600 * 1000;
+  try {
+    // OKX SWAP instId format: BTC-USDT-SWAP
+    const instId = `${coin}-USDT-SWAP`;
+    const res = await fetch(
+      `https://www.okx.com/api/v5/public/liquidation-orders?instType=SWAP&instId=${instId}&limit=100`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return results;
+    const json = await res.json();
+    // OKX format: { code, data: [{ details: [{bkLoss, bkPx, ccy, posSide, side, sz, ts}] }] }
+    const items: Record<string,unknown>[] = json?.data?.[0]?.details ?? [];
+    for (const item of items) {
+      const ts = Number(item.ts ?? 0);
+      if (ts && ts < cutoff) continue;
+      const price    = parseFloat(String(item.bkPx ?? '0'));
+      const sz       = parseFloat(String(item.sz   ?? '0'));
+      const notional = price * sz;
+      if (notional < 50) continue;
+      // posSide: long/short = hangi taraf likide edildi
+      const isLong = String(item.posSide ?? item.side ?? '').toLowerCase().includes('long') ||
+                     String(item.side ?? '').toLowerCase() === 'sell'; // sell order = long liq
+      results.push({
+        symbol: coin, notional, price,
+        side: isLong ? 'long' : 'short',
+        ts:   new Date(ts || Date.now()).toISOString(),
+        source: 'okx' as 'bybit', // reuse bybit slot
+      });
+    }
+  } catch { /* ignore */ }
+  return results;
+}
+
 // ── Route ────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -198,20 +234,19 @@ export async function GET(req: NextRequest) {
   const symbol = (searchParams.get('symbol') || 'BTC-USD').toUpperCase();
   const coin   = symbol.replace(/-USD$/i, '').replace(/-PERP$/i, '');
 
-  const [pacifica, binance, hyperliquid, bybit] = await Promise.all([
+  const [pacifica, hyperliquid, okx] = await Promise.all([
     fetchPacificaLiqs(symbol, hours),
-    fetchBinanceLiqs(coin, hours),
     fetchHyperliquidLiqs(coin, hours),
-    fetchBybitLiqs(coin, hours),
+    fetchOKXLiqs(coin, hours),
   ]);
 
-  const all = [...pacifica, ...binance, ...hyperliquid, ...bybit]
+  const all = [...pacifica, ...hyperliquid, ...okx]
     .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
 
-  type Src = 'pacifica'|'binance'|'hyperliquid'|'bybit';
-  const summary = {} as Record<Src, {long:number;short:number;total:number;count:number}>;
+  type Src = 'pacifica'|'hyperliquid'|'okx';
+  const summary = {} as Record<string, {long:number;short:number;total:number;count:number}>;
 
-  for (const [src, arr] of [['pacifica',pacifica],['binance',binance],['hyperliquid',hyperliquid],['bybit',bybit]] as [Src, LiqEntry[]][]) {
+  for (const [src, arr] of [['pacifica',pacifica],['hyperliquid',hyperliquid],['okx',okx]] as [Src, LiqEntry[]][]) {
     let long=0, short=0;
     for (const e of arr) { if(e.side==='long') long+=e.notional; else short+=e.notional; }
     summary[src] = { long, short, total: long+short, count: arr.length };
