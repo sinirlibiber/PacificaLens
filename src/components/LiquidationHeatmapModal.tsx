@@ -165,7 +165,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       for (let dr = -2; dr <= 2; dr++) {
         const r = row + dr;
         if (r < 0 || r >= PRICE_ROWS) continue;
-        const w = dr === 0 ? 1 : dr === ±1 ? 0.6 : 0.3;
+        const w = dr === 0 ? 1 : Math.abs(dr) === 1 ? 0.6 : 0.3;
         cumLong[r]  += lv.longLiq  * w;
         cumShort[r] += lv.shortLiq * w;
         // Tüm sütunlara
