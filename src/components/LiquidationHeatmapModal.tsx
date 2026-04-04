@@ -570,7 +570,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
                 <button key={r.label} onClick={()=>setRangeIdx(i)}
                   className="text-[10px] font-bold px-2.5 py-1 rounded-md transition-all"
                   style={{
-                    background: rangeIdx===i ? (isDark?'rgba(0,180,216,0.2)':'rgba(0,0,0,0.1)') : 'transparent',
+                    background: rangeIdx===i ? (_dark?'rgba(0,180,216,0.2)':'rgba(0,0,0,0.1)') : 'transparent',
                     color: rangeIdx===i ? '#00d4ff' : text2,
                     boxShadow: rangeIdx===i ? '0 0 0 1px rgba(0,180,216,0.3)' : 'none',
                   }}>{r.label}</button>
@@ -591,7 +591,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
                     background: sideMode===s
                       ? s==='long'  ? 'rgba(74,222,128,0.18)'
                       : s==='short' ? 'rgba(248,113,113,0.18)'
-                      : (isDark?'rgba(0,180,216,0.15)':'rgba(0,0,0,0.07)')
+                      : (_dark?'rgba(0,180,216,0.15)':'rgba(0,0,0,0.07)')
                       : 'transparent',
                     color: sideMode===s
                       ? s==='long'  ? '#4ade80'
@@ -642,7 +642,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10" style={{ background:bgModal }}>
               <div className="w-7 h-7 border-2 rounded-full animate-spin mb-2"
-                style={{ borderColor:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)', borderTopColor:'#00d4ff' }} />
+                style={{ borderColor:_dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)', borderTopColor:'#00d4ff' }} />
               <span className="text-[11px]" style={{ color:text2 }}>Loading {symbol.replace('-USD','')} data...</span>
             </div>
           )}
@@ -660,7 +660,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
               style={{
                 left: Math.min(tooltip.x+14, 720),
                 top:  Math.max(tooltip.y-10, 4),
-                background: isDark?'rgba(4,8,28,0.95)':'rgba(255,255,255,0.97)',
+                background: _dark?'rgba(4,8,28,0.95)':'rgba(255,255,255,0.97)',
                 border:`1px solid ${border}`,
                 color:text1,
                 boxShadow:'0 8px 30px rgba(0,0,0,0.4)',
