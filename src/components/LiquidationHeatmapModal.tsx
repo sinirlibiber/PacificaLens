@@ -134,7 +134,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     // Meta kaydet
     metaRef.current = {
       candles, liqByPrice: visible.map(lv => ({ price: lv.price, long: lv.longLiq, short: lv.shortLiq })),
-      minP, maxP, minT, maxT, W: CW, H: CH, PRICE_H, LIQ_H, COLS, cellW, markPrice, isDark,
+      minP, maxP, minT, maxT, W: CW, H: CH, PRICE_H, LIQ_H, COLS, cellW, markPrice, isDark, cumLong: 0, cumShort: 0, buckets: [], bucketW: 0,
     };
 
     // ── BG ──
