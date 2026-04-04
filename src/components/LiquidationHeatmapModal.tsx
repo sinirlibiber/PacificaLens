@@ -67,6 +67,9 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     x: number; y: number;
     date: string; o: string; h: string; l: string; c: string;
     liqLong: number; liqShort: number;
+    inLiqPanel: boolean;
+    panelPrice: string;
+    cumLong: number; cumShort: number;
   } | null>(null);
 
   const coin = symbol.replace(/-USD$/i, '').replace(/-PERP$/i, '');
@@ -79,6 +82,9 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     COLS: 0, cellW: 0,
     markPrice: 0,
     isDark: true,
+    cumLong: 0, cumShort: 0,
+    buckets: [] as {long:number;short:number}[],
+    bucketW: 0,
   });
 
   const draw = useCallback((
@@ -233,42 +239,63 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
     }
 
-    if (visible.length > 0) {
-      // Her liq seviyesini X eksenine (fiyat) map et
-      // Bar genişliği: fiyat aralığı / bar sayısı
-      const BARS = Math.min(visible.length, 200);
-      // Fiyatı X koordinatına çevir
-      const toX = (px: number) => ((px - minP) / (maxP - minP)) * CW;
+    // Fiyatı X koordinatına çevir
+    const toX = (px: number) => ((px - minP) / (maxP - minP)) * CW;
 
-      // Komşu bar'lar birleşmesin diye min genişlik
-      const barW = Math.max(2, CW / BARS * 0.8);
+    if (visible.length > 0) {
+      // Fiyat aralığını eşit bucket'lara böl
+      const BUCKETS = 120;
+      const bucketW = (maxP - minP) / BUCKETS;
+      const buckets: {long:number;short:number}[] = Array.from({length:BUCKETS},()=>({long:0,short:0}));
 
       for (const lv of visible) {
-        const x    = toX(lv.price);
-        const long  = lv.longLiq;
-        const short = lv.shortLiq;
-        const total = long + short;
-        if (total <= 0) continue;
-        const normH = Math.pow(total / maxLiq, 0.5) * LIQ_H * 0.88;
-
-        // Long bar (teal)
-        const longH = (long / total) * normH;
-        ctx.fillStyle = isDark ? 'rgba(0,200,170,0.75)' : 'rgba(0,150,130,0.8)';
-        ctx.fillRect(x - barW / 2, PRICE_H + 2 + LIQ_H - longH, barW, longH);
-
-        // Short bar (kırmızı) — long'un üstüne
-        const shortH = (short / total) * normH;
-        ctx.fillStyle = isDark ? 'rgba(255,80,80,0.65)' : 'rgba(210,50,50,0.7)';
-        ctx.fillRect(x - barW / 2, PRICE_H + 2 + LIQ_H - normH, barW, shortH);
+        const bi = Math.floor((lv.price - minP) / bucketW);
+        if (bi >= 0 && bi < BUCKETS) {
+          buckets[bi].long  += lv.longLiq;
+          buckets[bi].short += lv.shortLiq;
+        }
       }
 
-      // Mevcut fiyat çizgisi (alt panelde de)
+      const maxBucket = Math.max(...buckets.map(b => b.long + b.short), 1);
+      const barPixW   = Math.max(2, CW / BUCKETS - 1);
+      const maxBarH   = LIQ_H * 0.85;
+      const panelTop  = PRICE_H + 2;
+
+      for (let bi = 0; bi < BUCKETS; bi++) {
+        const b     = buckets[bi];
+        const total = b.long + b.short;
+        if (total < maxBucket * 0.015) continue;
+
+        const x     = toX(minP + (bi + 0.5) * bucketW);
+        const normH = Math.pow(total / maxBucket, 0.55) * maxBarH;
+
+        // Long (teal) — altta
+        const longH = total > 0 ? (b.long / total) * normH : 0;
+        if (longH > 0.5) {
+          ctx.fillStyle = isDark ? 'rgba(0,200,170,0.80)' : 'rgba(0,150,130,0.85)';
+          ctx.fillRect(x - barPixW/2, panelTop + LIQ_H - longH, barPixW, longH);
+        }
+
+        // Short (kırmızı) — long'un üstünde
+        const shortH = total > 0 ? (b.short / total) * normH : 0;
+        if (shortH > 0.5) {
+          ctx.fillStyle = isDark ? 'rgba(255,80,80,0.70)' : 'rgba(210,50,50,0.75)';
+          ctx.fillRect(x - barPixW/2, panelTop + LIQ_H - longH - shortH, barPixW, shortH);
+        }
+      }
+
+      // Kümülatif değerleri meta'ya kaydet
+      const cumLong  = buckets.reduce((s,b)=>s+b.long,0);
+      const cumShort = buckets.reduce((s,b)=>s+b.short,0);
+      Object.assign(metaRef.current, {cumLong, cumShort, buckets, bucketW});
+
+      // Mark price dikey
       if (markPrice > 0) {
         const x = toX(markPrice);
         ctx.strokeStyle = '#FFD700';
-        ctx.setLineDash([3, 4]);
-        ctx.lineWidth   = 1;
-        ctx.beginPath(); ctx.moveTo(x, PRICE_H + 2); ctx.lineTo(x, PRICE_H + 2 + LIQ_H); ctx.stroke();
+        ctx.setLineDash([3,4]);
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, panelTop); ctx.lineTo(x, panelTop+LIQ_H); ctx.stroke();
         ctx.setLineDash([]);
       }
     }
@@ -373,15 +400,21 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     const candle = candles[col];
     if (!candle) return;
 
-    // Nearest liq at cursor fiyatı
-    const cursorPrice = my < PRICE_H
-      ? minP + (1 - my / PRICE_H) * (maxP - minP)
-      : minP + (mx / W) * (maxP - minP); // alt panelde X=fiyat
+    const inLiqPanel = my > PRICE_H + 2;
+
+    // Alt panelde X = fiyat ekseni
+    const cursorPrice = inLiqPanel
+      ? minP + (mx / W) * (maxP - minP)
+      : minP + (1 - my / PRICE_H) * (maxP - minP);
+
+    // Bucket'tan liq değerleri çek
+    const { cumLong, cumShort, buckets, bucketW } = metaRef.current as typeof metaRef.current;
     let liqLong = 0, liqShort = 0;
-    for (const lv of liqByPrice) {
-      if (Math.abs(lv.price - cursorPrice) < (maxP - minP) * 0.006) {
-        liqLong  += lv.long;
-        liqShort += lv.short;
+    if (buckets.length > 0 && bucketW > 0) {
+      const bi = Math.floor((cursorPrice - minP) / bucketW);
+      if (bi >= 0 && bi < buckets.length) {
+        liqLong  = buckets[bi].long;
+        liqShort = buckets[bi].short;
       }
     }
 
@@ -393,6 +426,9 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       l: parseFloat(candle.l).toFixed(1),
       c: parseFloat(candle.c).toFixed(1),
       liqLong, liqShort,
+      inLiqPanel,
+      panelPrice: fmtP(cursorPrice),
+      cumLong, cumShort,
     });
   }, []);
 
@@ -501,36 +537,61 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
                 background: isDark ? 'rgba(6,8,15,0.96)' : 'rgba(248,250,252,0.97)',
                 border: `1px solid ${bd}`,
                 padding: '10px 14px',
-                minWidth: 175,
+                minWidth: 200,
                 boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
               }}>
-              <div className="font-mono text-[9px] mb-2 font-semibold" style={{ color: t2 }}>{tooltip.date}</div>
-              <div className="space-y-1 text-[11px]">
-                {[['Open', tooltip.o, t2], ['High', tooltip.h, isDark?'rgba(0,200,170,0.9)':'rgba(0,130,110,0.9)'],
-                  ['Low',  tooltip.l, isDark?'rgba(255,100,100,0.9)':'rgba(190,40,40,0.9)'],
-                  ['Close',tooltip.c, t1]].map(([k, v, col]) => (
-                  <div key={k} className="flex items-center justify-between gap-4">
-                    <span style={{ color: t2 }}>{k}</span>
-                    <span className="font-mono font-semibold" style={{ color: col }}>{v}</span>
+              {tooltip.inLiqPanel ? (
+                // Alt panel tooltip — 2. görsel gibi
+                <>
+                  <div className="font-mono text-[12px] font-bold mb-2" style={{ color: t1 }}>
+                    {tooltip.panelPrice}
                   </div>
-                ))}
-                {(tooltip.liqLong > 0 || tooltip.liqShort > 0) && (
-                  <div className="pt-1.5 mt-1.5 border-t space-y-0.5" style={{ borderColor: bd }}>
-                    {tooltip.liqLong > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span style={{ color: t2 }}>Long Liq</span>
-                        <span className="font-mono font-bold" style={{ color: isDark?'rgba(0,200,170,1)':'rgba(0,130,110,1)' }}>{fmtU(tooltip.liqLong)}</span>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex items-center justify-between gap-6">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ background: isDark?'rgba(0,200,170,0.9)':'rgba(0,150,130,0.9)' }}/>
+                        <span style={{ color: t2 }}>Liquidation Leverage</span>
                       </div>
-                    )}
-                    {tooltip.liqShort > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span style={{ color: t2 }}>Short Liq</span>
-                        <span className="font-mono font-bold" style={{ color: isDark?'rgba(255,100,100,1)':'rgba(190,40,40,1)' }}>{fmtU(tooltip.liqShort)}</span>
+                      <span className="font-mono font-bold" style={{ color: t1 }}>
+                        {fmtU(tooltip.liqLong + tooltip.liqShort)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-6">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ background: '#FFD700' }}/>
+                        <span style={{ color: t2 }}>Cumulative Long Liq</span>
                       </div>
-                    )}
+                      <span className="font-mono font-bold" style={{ color: t1 }}>
+                        {fmtU(tooltip.cumLong)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-6">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ background: '#FFD700' }}/>
+                        <span style={{ color: t2 }}>Cumulative Short Liq</span>
+                      </div>
+                      <span className="font-mono font-bold" style={{ color: t1 }}>
+                        {fmtU(tooltip.cumShort)}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
+                </>
+              ) : (
+                // Üst panel tooltip — OHLC
+                <>
+                  <div className="font-mono text-[9px] mb-2 font-semibold" style={{ color: t2 }}>{tooltip.date}</div>
+                  <div className="space-y-1 text-[11px]">
+                    {[['Open', tooltip.o, t2], ['High', tooltip.h, isDark?'rgba(0,200,170,0.9)':'rgba(0,130,110,0.9)'],
+                      ['Low',  tooltip.l, isDark?'rgba(255,100,100,0.9)':'rgba(190,40,40,0.9)'],
+                      ['Close',tooltip.c, t1]].map(([k, v, col]) => (
+                      <div key={k} className="flex items-center justify-between gap-4">
+                        <span style={{ color: t2 }}>{k}</span>
+                        <span className="font-mono font-semibold" style={{ color: col }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
