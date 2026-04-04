@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { Market } from '@/lib/pacifica';
 import { CoinLogo } from './CoinLogo';
+const LiquidationHeatmapModal = dynamic(() => import('./LiquidationHeatmapModal'), { ssr: false });
 
 interface LiqEvent {
   id: string;
@@ -76,6 +78,7 @@ export default function HeatmapView({ markets }: HeatmapViewProps) {
   const [search,   setSearch  ] = useState('');
   const [tab,      setTab     ] = useState<'table' | 'feed'>('table');
   const [sortBy,   setSortBy  ] = useState<'total' | 'long' | 'short' | 'count'>('total');
+  const [modalSymbol, setModalSymbol] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
@@ -234,6 +237,7 @@ export default function HeatmapView({ markets }: HeatmapViewProps) {
             <SortBtn col="short"  label="Short Liq" />
             <SortBtn col="count"  label="Events"    />
             <span>Sources</span>
+            <span className="col-span-6 text-right text-[9px] text-text3 italic">Click row to open heatmap</span>
           </div>
 
           <div className="overflow-y-auto" style={{ maxHeight: 480 }}>
@@ -258,8 +262,9 @@ export default function HeatmapView({ markets }: HeatmapViewProps) {
 
               return (
                 <div key={s.symbol}
-                  className="grid items-center px-4 py-3 border-b border-border1/50 hover:bg-surface2/50 transition-colors"
-                  style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 60px 1fr' }}>
+                  className="grid items-center px-4 py-3 border-b border-border1/50 hover:bg-surface2/50 transition-colors cursor-pointer"
+                  style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 60px 1fr' }}
+                  onClick={() => setModalSymbol(s.symbol + '-USD')}>
 
                   {/* Symbol */}
                   <div className="flex items-center gap-2.5">
@@ -364,8 +369,9 @@ export default function HeatmapView({ markets }: HeatmapViewProps) {
               .slice(0, 200)
               .map(e => (
               <div key={e.id}
-                className="grid items-center px-4 py-2.5 border-b border-border1/40 hover:bg-surface2/50 transition-colors text-[12px]"
-                style={{ gridTemplateColumns: '100px 1fr 80px 100px 1fr 80px' }}>
+                className="grid items-center px-4 py-2.5 border-b border-border1/40 hover:bg-surface2/50 transition-colors text-[12px] cursor-pointer"
+                style={{ gridTemplateColumns: '100px 1fr 80px 100px 1fr 80px' }}
+                onClick={() => setModalSymbol(e.symbol + '-USD')}>
 
                 <div className="font-mono text-text3 text-[10px]">{fmtTime(e.ts)}</div>
 
@@ -394,6 +400,15 @@ export default function HeatmapView({ markets }: HeatmapViewProps) {
             ))}
           </div>
         </div>
+      )}
+    </div>
+
+      {/* Liquidation Heatmap Modal */}
+      {modalSymbol && (
+        <LiquidationHeatmapModal
+          symbol={modalSymbol}
+          onClose={() => setModalSymbol(null)}
+        />
       )}
     </div>
   );

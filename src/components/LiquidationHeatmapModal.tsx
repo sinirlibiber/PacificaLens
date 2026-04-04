@@ -23,7 +23,7 @@ import { CoinLogo } from './CoinLogo';
 interface Candle { t: number; o: string; h: string; l: string; c: string; v: string; }
 interface Trade  { cause: string; side: string; price: string; amount: string; created_at: number; }
 
-interface DbLiq { symbol: string; side: string; notional: number; ts: string; cause: string; }
+interface DbLiq { symbol: string; side: string; notional: number; price: number; ts: string; cause?: string; source?: string; }
 interface Props { symbol: string; onClose: () => void; }
 
 // ── Color scales ───────────────────────────────────────────────────────────────
@@ -104,6 +104,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
   const [error,    setError   ] = useState('');
   const [stats,    setStats   ] = useState({ currentPrice:0, longLiq:0, shortLiq:0 });
   const [dbLiqs,   setDbLiqs  ] = useState<DbLiq[]>([]);
+  const [liqSummary, setLiqSummary] = useState<Record<string,{long:number;short:number;total:number;count:number}>>({});
   const [tooltip,  setTooltip ] = useState<{
     x:number; y:number;
     date:string; price:string;
@@ -398,13 +399,14 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     Promise.all([
       fetch(`/api/proxy?path=${encodeURIComponent(`kline?symbol=${symbol}&interval=${range.interval}&start_time=${start}&end_time=${end}`)}`).then(r=>r.json()),
       fetch(`/api/proxy?path=${encodeURIComponent(`trades?symbol=${symbol}&limit=1000`)}`).then(r=>r.json()),
-      fetch(`/api/liquidations/recent?hours=${range.hours}&symbol=${encodeURIComponent(symbol)}`).then(r=>r.ok?r.json():[]).catch(()=>[]),
-    ]).then(([cj,tj,dbData]) => {
+      fetch(`/api/liquidations/recent?hours=${range.hours}&symbol=${encodeURIComponent(symbol)}`).then(r=>r.ok?r.json():{events:[],summary:{}}).catch(()=>({events:[],summary:{}})),
+    ]).then(([cj,tj,liqData]) => {
       if (cancelled) return;
       const candles: Candle[] = cj.success&&Array.isArray(cj.data) ? cj.data : [];
       const trades:  Trade[]  = tj.success&&Array.isArray(tj.data)  ? tj.data  : [];
-      const liqs: DbLiq[]     = Array.isArray(dbData) ? dbData : [];
+      const liqs: DbLiq[]     = Array.isArray(liqData?.events) ? liqData.events : [];
       setDbLiqs(liqs);
+      setLiqSummary(liqData?.summary ?? {});
       render(candles, trades, sideMode, liqs);
     }).catch(()=>{ if(!cancelled){setError('Failed to load data');setLoading(false);} });
 
@@ -506,7 +508,34 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {(stats.longLiq>0||stats.shortLiq>0) && (
+  
+          {/* 4-source breakdown */}
+          {Object.keys(liqSummary).length > 0 && (
+            <div className="flex items-center gap-1.5">
+              {[
+                { key:'pacifica',    label:'Pacifica', color:'#00d4ff' },
+                { key:'binance',     label:'Binance',  color:'#F0B90B' },
+                { key:'hyperliquid', label:'HyperLiq', color:'#00E5CF' },
+                { key:'bybit',       label:'Bybit',    color:'#F7A600' },
+              ].map(({key,label,color}) => {
+                const s = liqSummary[key];
+                if (!s || s.total < 1) return null;
+                const fmt = (v: number) => v>=1e6?`$${(v/1e6).toFixed(1)}M`:v>=1e3?`$${(v/1e3).toFixed(0)}K`:`$${v.toFixed(0)}`;
+                return (
+                  <div key={key} className="flex flex-col items-center px-2 py-1 rounded-lg text-[9px]"
+                    style={{ background:`${color}12`, border:`1px solid ${color}30` }}>
+                    <span className="font-bold" style={{ color }}>{label}</span>
+                    <span className="text-[8px] mt-0.5" style={{ color:'rgba(255,255,255,0.5)' }}>
+                      <span style={{ color:'#4ade80' }}>{fmt(s.long)}</span>
+                      {' / '}
+                      <span style={{ color:'#f87171' }}>{fmt(s.short)}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {(stats.longLiq>0||stats.shortLiq>0) && (
               <div className="flex gap-2 text-[11px]">
                 <span className="px-2 py-0.5 rounded-md font-semibold" style={{ background:'rgba(248,113,113,0.12)', color:'#f87171', border:'1px solid rgba(248,113,113,0.2)' }}>
                   Long liq: <b>{fmtUSD(stats.longLiq)}</b>
