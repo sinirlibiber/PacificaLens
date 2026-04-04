@@ -111,13 +111,8 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     liqVol:number; side:string; intensity:string;
   } | null>(null);
 
-  const [isDark, setIsDark] = useState(false);
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains('dark'));
-    const obs = new MutationObserver(() => setIsDark(document.documentElement.classList.contains('dark')));
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => obs.disconnect();
-  }, []);
+  // isDark computed inline — avoids render dependency cycle
+  const getIsDark = () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   const metaRef = useRef({
     minP:0, maxP:0, minT:0, maxT:0, COLS:0,
@@ -137,6 +132,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const isDark = getIsDark();
     const W = canvas.width - LEGEND_W;
     const H = canvas.height;
     ctx.clearRect(0, 0, canvas.width, H);
@@ -393,7 +389,8 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
 
     setStats({ currentPrice:lastPrice, longLiq:totalLong, shortLiq:totalShort });
     setLoading(false);
-  }, [isDark]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -421,6 +418,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
 
   // Crosshair + tooltip
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const isDark = getIsDark();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -471,7 +469,8 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       side: sideLabel,
       intensity: intensity>0.05 ? intensityLabel(intensity) : '',
     });
-  }, [isDark]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleMouseLeave = useCallback(() => {
     setTooltip(null);
@@ -485,11 +484,12 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     return ()=>window.removeEventListener('keydown', h);
   }, [onClose]);
 
-  const bgModal  = isDark ? '#07091c' : '#ffffff';
-  const bgBar    = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
-  const border   = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)';
-  const text1    = isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.82)';
-  const text2    = isDark ? 'rgba(255,255,255,0.42)' : 'rgba(0,0,0,0.42)';
+  const _dark    = getIsDark();
+  const bgModal  = _dark ? '#07091c' : '#ffffff';
+  const bgBar    = _dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
+  const border   = _dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)';
+  const text1    = _dark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.82)';
+  const text2    = _dark ? 'rgba(255,255,255,0.42)' : 'rgba(0,0,0,0.42)';
 
   return (
     <div
