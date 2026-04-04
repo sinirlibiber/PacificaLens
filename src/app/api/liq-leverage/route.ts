@@ -142,21 +142,22 @@ async function fetchHyperliquidLiqLevels(coin: string): Promise<{ levels: LiqLev
     // Tipik perp trader leverage dağılımı: 2x-50x
     // Liq price = entry * (1 - 1/leverage) for longs
     //           = entry * (1 + 1/leverage) for shorts
+    // Gerçekçi leverage dağılımı — her leverage için farklı entry price noktaları
+    // Traders farklı fiyatlardan girmiş = liq fiyatları dağılmış
     const leverageBuckets = [
-      { lev: 2,   weight: 0.05 },
-      { lev: 3,   weight: 0.08 },
-      { lev: 5,   weight: 0.15 },
-      { lev: 10,  weight: 0.25 },
-      { lev: 20,  weight: 0.22 },
+      { lev: 3,   weight: 0.06 },
+      { lev: 5,   weight: 0.12 },
+      { lev: 10,  weight: 0.28 },
+      { lev: 15,  weight: 0.16 },
+      { lev: 20,  weight: 0.18 },
       { lev: 25,  weight: 0.10 },
-      { lev: 50,  weight: 0.10 },
-      { lev: 100, weight: 0.05 },
+      { lev: 50,  weight: 0.07 },
+      { lev: 100, weight: 0.03 },
     ];
 
-    // Funding pozitifse longs dominant, negatifse shorts
-    const longBias  = funding >= 0 ? 0.55 : 0.45;
+    const longBias      = funding >= 0 ? 0.55 : 0.45;
     const totalNotional = openInt * markPrice;
-    const tickSize  = markPrice > 10000 ? 50 : markPrice > 1000 ? 5 : markPrice > 100 ? 1 : 0.1;
+    const tickSize      = markPrice > 10000 ? 25 : markPrice > 1000 ? 2 : markPrice > 100 ? 0.5 : 0.1;
 
     const levelMap = new Map<number, LiqLevel>();
     const addLevel = (px: number, isLong: boolean, notional: number) => {
@@ -167,18 +168,26 @@ async function fetchHyperliquidLiqLevels(coin: string): Promise<{ levels: LiqLev
       if (isLong) lv.longLiq += notional; else lv.shortLiq += notional;
     };
 
+    // Farklı entry noktaları simüle et (son 7 günün fiyat değişimi ±%15)
+    const entryOffsets = [-0.12, -0.08, -0.04, -0.02, 0, 0.02, 0.04, 0.08, 0.12];
+    const offsetWeights = [0.04, 0.08, 0.14, 0.18, 0.12, 0.18, 0.14, 0.08, 0.04];
+
     for (const { lev, weight } of leverageBuckets) {
       const bucketNotional = totalNotional * weight;
-      const longNotional   = bucketNotional * longBias;
-      const shortNotional  = bucketNotional * (1 - longBias);
+      
+      for (let oi = 0; oi < entryOffsets.length; oi++) {
+        const entryPrice     = markPrice * (1 + entryOffsets[oi]);
+        const sliceNotional  = bucketNotional * offsetWeights[oi];
+        const longNotional   = sliceNotional * longBias;
+        const shortNotional  = sliceNotional * (1 - longBias);
 
-      // Long liq: fiyat aşağı gidince (markPrice / (1 + 1/lev)) * maintenance_margin_factor
-      const longLiqPx  = markPrice * (1 - 0.9 / lev);
-      // Short liq: fiyat yukarı gidince
-      const shortLiqPx = markPrice * (1 + 0.9 / lev);
+        // Maintenance margin ~%0.5, liq price = entry * (1 - (1/lev - 0.005))
+        const longLiqPx  = entryPrice * (1 - (1/lev - 0.005));
+        const shortLiqPx = entryPrice * (1 + (1/lev - 0.005));
 
-      addLevel(longLiqPx,  true,  longNotional);
-      addLevel(shortLiqPx, false, shortNotional);
+        if (longLiqPx  > 0) addLevel(longLiqPx,  true,  longNotional);
+        if (shortLiqPx > 0) addLevel(shortLiqPx, false, shortNotional);
+      }
     }
 
     return { levels: Array.from(levelMap.values()), markPrice };

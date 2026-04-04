@@ -123,17 +123,18 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     const W    = CW - RIGHT_W;
     const H    = CH;
 
-    // Fiyat aralığı
+    // Fiyat aralığı — candle'lar + markPrice bazlı, liq seviyeleri dahil değil
+    // (liq seviyeleri çok geniş aralık açıyor)
     const allH = candles.map(c => parseFloat(c.h));
     const allL = candles.map(c => parseFloat(c.l));
-    let maxP = Math.max(...allH, markPrice);
-    let minP = Math.min(...allL, markPrice);
-    // Liq seviyeleri de dahil et
-    for (const lv of liqLevels) {
-      if (lv.price > 0) { maxP = Math.max(maxP, lv.price); minP = Math.min(minP, lv.price); }
-    }
-    const pad = (maxP - minP) * 0.12;
-    maxP += pad; minP = Math.max(0, minP - pad);
+    const candleMax = Math.max(...allH);
+    const candleMin = Math.min(...allL);
+    const center = markPrice || (candleMax + candleMin) / 2;
+    // Mark price etrafında ±25% göster — Coinglass gibi
+    const range  = Math.max(candleMax - candleMin, center * 0.1);
+    let maxP = Math.max(candleMax, center) + range * 0.35;
+    let minP = Math.min(candleMin, center) - range * 0.35;
+    minP = Math.max(0, minP);
     if (maxP <= minP) return;
 
     const times = candles.map(c => c.t > 1e12 ? c.t : c.t * 1000);
@@ -161,11 +162,11 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     for (const lv of liqLevels) {
       if (lv.price <= 0) continue;
       const row = priceToRow(lv.price);
-      // Spread: ±2 row
-      for (let dr = -2; dr <= 2; dr++) {
+      // Spread: ±1 row (dar bantlar)
+      for (let dr = -1; dr <= 1; dr++) {
         const r = row + dr;
         if (r < 0 || r >= PRICE_ROWS) continue;
-        const w = dr === 0 ? 1 : Math.abs(dr) === 1 ? 0.6 : 0.3;
+        const w = dr === 0 ? 1 : 0.4;
         cumLong[r]  += lv.longLiq  * w;
         cumShort[r] += lv.shortLiq * w;
         // Tüm sütunlara
@@ -176,13 +177,16 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       }
     }
 
-    // Normalize
-    let maxVal = 0;
+    // Normalize — tüm değerleri topla, P80 threshold kullan
+    const allVals: number[] = [];
     for (let ci = 0; ci < COLS; ci++)
       for (let ri = 0; ri < PRICE_ROWS; ri++) {
         const v = grid[ci][ri].long + grid[ci][ri].short;
-        if (v > maxVal) maxVal = v;
+        if (v > 0) allVals.push(v);
       }
+    allVals.sort((a,b) => a - b);
+    // P95 değerini max olarak kullan — top %5 tam parlak, geri kalanlar orantılı
+    const maxVal = allVals.length > 0 ? allVals[Math.floor(allVals.length * 0.95)] : 1;
 
     // Meta kaydet
     metaRef.current = { minP, maxP, minT, maxT, W, H, cellW, priceStep, COLS, grid, cumLong, cumShort, candles, markPrice };
@@ -198,7 +202,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
         const v = grid[ci][ri].long + grid[ci][ri].short;
         if (v <= 0) continue;
         const norm = Math.pow(v / maxVal, 0.4);
-        if (norm < 0.03) continue;
+        if (norm < 0.08) continue;  // sadece belirgin seviyeleri göster
         ctx.fillStyle = liqColor(norm);
         const x = Math.floor(ci * cellW);
         const y = H - Math.floor((ri + 1) * cellH); // fiyat yukarı = canvas aşağı
@@ -212,8 +216,8 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       const open   = parseFloat(c.o), close = parseFloat(c.c);
       const high   = parseFloat(c.h), low   = parseFloat(c.l);
       const isGreen = close >= open;
-      const x  = ci * cellW + cellW * 0.2;
-      const w  = cellW * 0.6;
+      const x  = ci * cellW + cellW * 0.15;
+      const w  = Math.max(1, cellW * 0.7);
 
       const toY = (px: number) => H - ((px - minP) / (maxP - minP)) * H;
       const yH  = toY(high), yL = toY(low);
