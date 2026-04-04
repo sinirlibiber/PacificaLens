@@ -401,7 +401,6 @@ export default function HeatmapView({ markets }: HeatmapViewProps) {
           </div>
         </div>
       )}
-    </div>
 
       {/* Liquidation Heatmap Modal */}
       {modalSymbol && (
