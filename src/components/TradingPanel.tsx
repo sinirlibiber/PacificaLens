@@ -123,7 +123,9 @@ export function TradingPanel({ markets, tickers, wallet, onExecute, accountInfo 
   const entryPrice = orderType === 'market' ? markPrice : (Number(price) || markPrice);
   const amountNum = Number(amount) || 0;
   const positionValue = amountNum * entryPrice;
-  const requiredMargin = leverage > 0 ? positionValue / leverage : positionValue;
+  const TOTAL_FEE_RATE = 0.0004 + 0.001; // taker 0.04% + builder 0.1%
+  const estimatedFee = positionValue * TOTAL_FEE_RATE;
+  const requiredMargin = leverage > 0 ? (positionValue / leverage) + estimatedFee : positionValue + estimatedFee;
   const liqPrice = side === 'long'
     ? entryPrice * (1 - 0.9 / leverage)
     : entryPrice * (1 + 0.9 / leverage);
@@ -163,7 +165,9 @@ export function TradingPanel({ markets, tickers, wallet, onExecute, accountInfo 
   const available = Number(accountInfo?.available_to_spend || accountInfo?.balance || 0);
   function setAmountPct(pct: number) {
     if (!markPrice || !leverage) return;
-    const usd = available * pct / 100 * leverage;
+    // Reserve fee from available balance so order doesn't fail
+    const spendable = available * (1 - TOTAL_FEE_RATE * leverage);
+    const usd = spendable * pct / 100 * leverage;
     setAmount((usd / markPrice).toFixed(4));
   }
 

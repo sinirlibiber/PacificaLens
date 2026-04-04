@@ -59,7 +59,11 @@ function CopyModal({
 
   const maxLev = market?.max_leverage || 50;
   const entryPrice = orderType === 'market' ? markPrice : (Number(limitPrice) || markPrice);
-  const positionValue = usdcAmount * leverage;
+  // Deduct taker fee (0.04%) + builder fee (0.01%) from effective margin
+  const TOTAL_FEE_RATE = 0.0004 + 0.001; // taker 0.04% + builder 0.1%
+  const estimatedFee = usdcAmount * leverage * TOTAL_FEE_RATE;
+  const effectiveMargin = Math.max(0, usdcAmount - estimatedFee);
+  const positionValue = effectiveMargin * leverage;
   const contracts = entryPrice > 0 ? positionValue / entryPrice : 0;
   const liqPrice = side === 'long'
     ? entryPrice * (1 - 0.9 / leverage)
@@ -71,10 +75,10 @@ function CopyModal({
     if (!myWallet) return;
     setPlacing(true);
     const r: CalcResult = {
-      riskAmount: usdcAmount,
+      riskAmount: effectiveMargin,
       positionSize: contracts,
       positionValue,
-      requiredMargin: usdcAmount,
+      requiredMargin: effectiveMargin,
       marginPct: 0,
       slPct: 0,
       liquidationPrice: liqPrice,

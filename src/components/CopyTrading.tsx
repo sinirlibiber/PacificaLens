@@ -224,12 +224,23 @@ function CopyTradePanel({
       lev = Math.max(1, Math.min(cfg.customLeverage, maxLev));
     }
 
-    const contracts = (cfg.marginUsd * lev) / px;
-    const minSize   = mkt?.min_order_size ? Number(mkt.min_order_size) : 0;
-    // If below min size, snap up to minSize so the order can proceed
-    const finalContracts = (minSize > 0 && contracts < minSize) ? minSize : contracts;
+    // Deduct taker fee (0.04%) + builder fee (0.01%) from margin before sizing
+    // to prevent "Insufficient balance" errors from the exchange
+    const TOTAL_FEE_RATE = 0.0004 + 0.001; // taker 0.04% + builder 0.1%
+    const notional = cfg.marginUsd * lev;
+    const estimatedFee = notional * TOTAL_FEE_RATE;
+    const effectiveMargin = Math.max(0, cfg.marginUsd - estimatedFee);
 
-    return { contracts: finalContracts.toFixed(dec), lev, px, belowMin: minSize > 0 && contracts < minSize, minSize };
+    const contracts = (effectiveMargin * lev) / px;
+    // min_order_size is in USD notional, not contracts
+    const minNotionalUsd = mkt?.min_order_size ? Number(mkt.min_order_size) : 0;
+    const contractsNotional = contracts * px;
+    const belowMin = minNotionalUsd > 0 && contractsNotional < minNotionalUsd;
+    // If below min notional, bump contracts up to meet the minimum
+    const minContracts = minNotionalUsd > 0 ? minNotionalUsd / px : 0;
+    const finalContracts = belowMin ? minContracts : contracts;
+
+    return { contracts: finalContracts.toFixed(dec), lev, px, belowMin, minSize: minNotionalUsd };
   }
 
   const poll = useCallback(async () => {
@@ -279,7 +290,7 @@ function CopyTradePanel({
         const { contracts, lev, px, belowMin, minSize } = order;
         if (belowMin) {
           log({ symbol: tp.symbol, side: tp.side, action: 'info',
-            msg: `Margin $${cfg.marginUsd} too low for min size ${minSize} — using min size instead` });
+            msg: `Margin $${cfg.marginUsd} below $${minSize} min notional — bumping contracts to meet minimum` });
         }
         const side    = tp.side as 'bid'|'ask';
         const isLong  = side === 'bid';
