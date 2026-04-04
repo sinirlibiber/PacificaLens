@@ -111,7 +111,13 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     liqVol:number; side:string; intensity:string;
   } | null>(null);
 
-  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains('dark'));
+    const obs = new MutationObserver(() => setIsDark(document.documentElement.classList.contains('dark')));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
 
   const metaRef = useRef({
     minP:0, maxP:0, minT:0, maxT:0, COLS:0,

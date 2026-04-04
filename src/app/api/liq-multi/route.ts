@@ -24,18 +24,29 @@ export interface LiqSymbolData {
   byExchange: { hyperliquid: number; binance: number; bybit: number };
 }
 
+// Popular Pacifica markets as fallback (in case API is slow)
+const PACIFICA_FALLBACK = new Set([
+  'BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','LINK','DOT','MATIC',
+  'BNB','LTC','BCH','UNI','ATOM','FIL','NEAR','APT','ARB','OP',
+  'SUI','TRX','TON','HYPE','PEPE','WIF','BONK','JUP','PYTH','W',
+  'SEI','INJ','TIA','MANTA','ALT','PIXEL','PORTAL','DYM','STRK','NYAN',
+  'WLD','BLUR','ID','EDU','MAV','PENDLE','ARKM','CYBER','HOOK','RDNT',
+  'GMX','GNS','PERP','SNX','DYDX','RUNE','OCEAN','RNDR','FET','AGIX',
+]);
+
 async function fetchPacificaSymbols(): Promise<Set<string>> {
   const set = new Set<string>();
   try {
-    const res = await fetch('https://api.pacifica.fi/api/v1/info', { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return set;
+    const res = await fetch('https://api.pacifica.fi/api/v1/info', { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return PACIFICA_FALLBACK;
     const json = await res.json();
     const markets: { symbol?: string }[] = json?.data ?? json ?? [];
     for (const m of markets) {
       if (m.symbol) set.add(m.symbol.replace(/-USD$/i, '').toUpperCase());
     }
-  } catch { /* ignore */ }
-  return set;
+    // If empty (parse failed), use fallback
+    return set.size > 0 ? set : PACIFICA_FALLBACK;
+  } catch { return PACIFICA_FALLBACK; }
 }
 
 async function fetchBinanceLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
