@@ -1,7 +1,5 @@
 /**
  * GET /api/liq-multi?hours=24
- * HyperLiquid + Pacifica liq data
- * Sadece Pacifica'da gerçekten listelenen marketler gösterilir.
  */
 import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 20;
@@ -22,88 +20,49 @@ export interface LiqSymbolData {
   count: number;
 }
 
-// HyperLiquid sembol adı → Pacifica sembol adı
-// HL'de birden fazla pair olabilir (USDT/USDC/USDH), hepsi aynı Pacifica sembolüne map edilir
+// HyperLiquid sembol → Pacifica sembol
+// HL'de bir sembolün USDT/USDC/USDH varyantları olabilir, hepsi aynı Pacifica sembolüne gider
 const HL_TO_PAC: Record<string, string> = {
-  // SP500
-  'USA500-USDT': 'SP500', 'USA500-USDC': 'SP500', 'USA500-USDH': 'SP500', 'USA500': 'SP500',
-  // XAU (Altın)
-  'GOLD-USDC': 'XAU', 'GOLD-USDT': 'XAU', 'GOLD-USDH': 'XAU', 'GOLD': 'XAU',
-  // CL (Ham petrol)
-  'WTIOIL-USDC': 'CL', 'WTIOIL-USDT': 'CL', 'WTIOIL-USDH': 'CL', 'WTIOIL': 'CL',
-  // TSLA
-  'TSLA-USDT': 'TSLA', 'TSLA-USDC': 'TSLA', 'TSLA-USDH': 'TSLA',
-  // USDJPY
-  'USDJPY-USDC': 'USDJPY', 'USDJPY-USDT': 'USDJPY', 'USDJPY-USDH': 'USDJPY',
-  // EURUSD
-  'EURUSD-USDC': 'EURUSD', 'EURUSD-USDT': 'EURUSD', 'EURUSD-USDH': 'EURUSD',
-  // GOOGL
-  'GOOGL-USDC': 'GOOGL', 'GOOGL-USDT': 'GOOGL', 'GOOGL-USDH': 'GOOGL',
-  // NVDA
-  'NVDA-USDT': 'NVDA', 'NVDA-USDC': 'NVDA', 'NVDA-USDH': 'NVDA',
-  // PLTR
-  'PLTR-USDC': 'PLTR', 'PLTR-USDT': 'PLTR', 'PLTR-USDH': 'PLTR',
-  // PLATINUM
-  'PLATINUM-USDC': 'PLATINUM', 'PLATINUM-USDT': 'PLATINUM', 'PLATINUM-USDH': 'PLATINUM',
-  // URNM
-  'URNM-USDC': 'URNM', 'URNM-USDT': 'URNM', 'URNM-USDH': 'URNM',
-  // COPPER
-  'COPPER-USDC': 'COPPER', 'COPPER-USDT': 'COPPER', 'COPPER-USDH': 'COPPER',
-  // SILVER
-  'SILVER-USDC': 'SILVER', 'SILVER-USDT': 'SILVER', 'SILVER-USDH': 'SILVER',
-  // NATGAS
-  'NATGAS-USDC': 'NATGAS', 'NATGAS-USDT': 'NATGAS', 'NATGAS-USDH': 'NATGAS',
-  // CRCL
-  'CRCL-USDC': 'CRCL', 'CRCL-USDT': 'CRCL', 'CRCL-USDH': 'CRCL',
-  // HOOD
-  'HOOD-USDT': 'HOOD', 'HOOD-USDC': 'HOOD', 'HOOD-USDH': 'HOOD',
+  'USA500-USDT':'SP500','USA500-USDC':'SP500','USA500-USDH':'SP500','USA500':'SP500',
+  'GOLD-USDC':'XAU','GOLD-USDT':'XAU','GOLD-USDH':'XAU','GOLD':'XAU',
+  'WTIOIL-USDC':'CL','WTIOIL-USDT':'CL','WTIOIL-USDH':'CL','WTIOIL':'CL',
+  'TSLA-USDT':'TSLA','TSLA-USDC':'TSLA','TSLA-USDH':'TSLA',
+  'USDJPY-USDC':'USDJPY','USDJPY-USDT':'USDJPY','USDJPY-USDH':'USDJPY',
+  'EURUSD-USDC':'EURUSD','EURUSD-USDT':'EURUSD','EURUSD-USDH':'EURUSD',
+  'GOOGL-USDC':'GOOGL','GOOGL-USDT':'GOOGL','GOOGL-USDH':'GOOGL',
+  'NVDA-USDT':'NVDA','NVDA-USDC':'NVDA','NVDA-USDH':'NVDA',
+  'PLTR-USDC':'PLTR','PLTR-USDT':'PLTR','PLTR-USDH':'PLTR',
+  'PLATINUM-USDC':'PLATINUM','PLATINUM-USDT':'PLATINUM','PLATINUM-USDH':'PLATINUM',
+  'URNM-USDC':'URNM','URNM-USDT':'URNM','URNM-USDH':'URNM',
+  'COPPER-USDC':'COPPER','COPPER-USDT':'COPPER','COPPER-USDH':'COPPER',
+  'SILVER-USDC':'SILVER','SILVER-USDT':'SILVER','SILVER-USDH':'SILVER',
+  'NATGAS-USDC':'NATGAS','NATGAS-USDT':'NATGAS','NATGAS-USDH':'NATGAS',
+  'CRCL-USDC':'CRCL','CRCL-USDT':'CRCL','CRCL-USDH':'CRCL',
+  'HOOD-USDT':'HOOD','HOOD-USDC':'HOOD','HOOD-USDH':'HOOD',
 };
 
-// Pacifica'daki gerçek market listesi — API'den çekilemezse kullanılır
-// Bunlar Pacifica Overview'da görünen semboller
-const PACIFICA_MARKETS = [
-  // Kripto
-  'BTC-USD','ETH-USD','SOL-USD','XRP-USD','DOGE-USD','ADA-USD','AVAX-USD','LINK-USD','DOT-USD',
-  'BNB-USD','LTC-USD','BCH-USD','UNI-USD','ATOM-USD','NEAR-USD','APT-USD','ARB-USD','OP-USD',
-  'SUI-USD','TRX-USD','HYPE-USD','PEPE-USD','WIF-USD','JUP-USD','SEI-USD','INJ-USD','TIA-USD',
-  'WLD-USD','BLUR-USD','PENDLE-USD','GMX-USD','DYDX-USD','RUNE-USD','RNDR-USD','FET-USD',
-  'MATIC-USD','TON-USD','BONK-USD','PYTH-USD','W-USD','ALT-USD','STRK-USD','ZEC-USD','ASTER-USD',
-  'LIT-USD','PAXG-USD','ZRO-USD','VIRTUAL-USD','FARTCOIN-USD','AI16Z-USD','TRUMP-USD',
-  // Hisse/Emtia/Forex (Pacifica sembol adları)
-  'SP500-USD','XAU-USD','CL-USD','TSLA-USD','USDJPY-USD','EURUSD-USD',
-  'GOOGL-USD','NVDA-USD','PLTR-USD','PLATINUM-USD','URNM-USD','COPPER-USD',
-  'SILVER-USD','NATGAS-USD','CRCL-USD','HOOD-USD',
+// Pacifica'da kesinlikle olan tüm semboller (normalize edilmiş, -USD olmadan)
+// Bu liste HER ZAMAN kullanılır — API'den ne gelirse gelsin
+const ALWAYS_INCLUDE = [
+  'BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','LINK','DOT',
+  'BNB','LTC','BCH','UNI','ATOM','NEAR','APT','ARB','OP',
+  'SUI','TRX','HYPE','PEPE','WIF','JUP','SEI','INJ','TIA',
+  'WLD','BLUR','PENDLE','GMX','DYDX','RUNE','RNDR','FET',
+  'MATIC','TON','BONK','PYTH','W','ALT','STRK','ZEC','ASTER',
+  'LIT','PAXG','ZRO','VIRTUAL','FARTCOIN','AI16Z','TRUMP',
+  // Yeni eklenen Pacifica marketleri
+  'SP500','XAU','CL','TSLA','USDJPY','EURUSD',
+  'GOOGL','NVDA','PLTR','PLATINUM','URNM','COPPER',
+  'SILVER','NATGAS','CRCL','HOOD',
 ];
 
-// Pacifica API'den gerçek sembol listesini çek, başarısız olursa PACIFICA_MARKETS kullan
-async function fetchPacificaSymbols(): Promise<Set<string>> {
-  try {
-    const res = await fetch('https://api.pacifica.fi/api/v1/info', { signal: AbortSignal.timeout(6000) });
-    if (!res.ok) throw new Error('not ok');
-    const json = await res.json();
-    const markets: { symbol?: string }[] = json?.data ?? json ?? [];
-    if (!Array.isArray(markets) || markets.length < 5) throw new Error('empty');
-    const set = new Set<string>();
-    for (const m of markets) {
-      if (m.symbol) set.add(m.symbol.toUpperCase()); // BTC-USD formatında
-    }
-    return set;
-  } catch {
-    // Fallback: PACIFICA_MARKETS listesini kullan
-    return new Set(PACIFICA_MARKETS.map(s => s.toUpperCase()));
-  }
+// İzin verilen semboller seti — normalize edilmiş (BTC-USD → BTC)
+function buildAllowedSet(): Set<string> {
+  return new Set(ALWAYS_INCLUDE);
 }
 
-// Sembolü normalize et: BTC-USD → BTC, SP500-USD → SP500
-function normalizeSymbol(raw: string): string {
-  return raw.replace(/-USD$/i, '').toUpperCase();
-}
-
-async function fetchHyperliquidLiqs(hours: number, pacificaSymbols: Set<string>): Promise<LiqEvent[]> {
+async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
   const events: LiqEvent[] = [];
-  // Pacifica sembollerini normalize et (BTC-USD → BTC formatına çevir)
-  const normalizedPac = new Set(Array.from(pacificaSymbols).map(normalizeSymbol));
-
   try {
     const res = await fetch('https://api.hyperliquid.xyz/info', {
       method: 'POST',
@@ -121,11 +80,11 @@ async function fetchHyperliquidLiqs(hours: number, pacificaSymbols: Set<string>)
       if (!hlRaw || !ctx) continue;
 
       // HL sembolünü Pacifica sembolüne çevir
-      // Önce mapping'e bak, yoksa bare sembolü dene
-      const pacSymbol = HL_TO_PAC[hlRaw] ?? HL_TO_PAC[hlRaw.toUpperCase()] ?? hlRaw.toUpperCase().split('-')[0];
+      const pacSymbol = HL_TO_PAC[hlRaw]
+        ?? HL_TO_PAC[hlRaw.toUpperCase()]
+        ?? hlRaw.toUpperCase().replace(/-(USDT|USDC|USDH|USD)$/i, '');
 
-      // Pacifica'da bu sembol var mı kontrol et
-      if (!normalizedPac.has(pacSymbol)) continue;
+      if (!allowed.has(pacSymbol)) continue;
 
       const openInt   = parseFloat(String(ctx.openInterest ?? '0'));
       const markPrice = parseFloat(String(ctx.markPx ?? '0'));
@@ -150,19 +109,15 @@ async function fetchHyperliquidLiqs(hours: number, pacificaSymbols: Set<string>)
   return events;
 }
 
-async function fetchPacificaLiqs(hours: number, pacificaSymbols: Set<string>): Promise<LiqEvent[]> {
+async function fetchPacificaLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
   const events: LiqEvent[] = [];
   const cutoff  = Date.now() - hours * 3600 * 1000;
-  // Pacifica API'ye sembol-USD formatında gönder
-  const symbols = Array.from(pacificaSymbols).slice(0, 70);
+  const symbols = Array.from(allowed);
 
-  await Promise.all(symbols.map(async (rawSymbol) => {
-    // rawSymbol: BTC-USD veya BTC formatında olabilir
-    const apiSymbol = rawSymbol.includes('-USD') ? rawSymbol : `${rawSymbol}-USD`;
-    const displaySymbol = normalizeSymbol(rawSymbol);
+  await Promise.all(symbols.map(async (coin) => {
     try {
       const res = await fetch(
-        `https://api.pacifica.fi/api/v1/trades?symbol=${apiSymbol}&limit=500`,
+        `https://api.pacifica.fi/api/v1/trades?symbol=${coin}-USD&limit=500`,
         { signal: AbortSignal.timeout(5000) }
       );
       if (!res.ok) return;
@@ -178,8 +133,8 @@ async function fetchPacificaLiqs(hours: number, pacificaSymbols: Set<string>): P
         const notional = price * parseFloat(t.amount ?? '0');
         if (!notional || notional < 10) continue;
         events.push({
-          id:     `pac-${displaySymbol}-${ts}`,
-          symbol: displaySymbol,
+          id:     `pac-${coin}-${ts}-${Math.random().toString(36).slice(2,5)}`,
+          symbol: coin,
           side:   (t.side ?? '').includes('long') ? 'long' : 'short',
           price, notional, ts,
         });
@@ -203,19 +158,19 @@ function buildSummary(events: LiqEvent[]): LiqSymbolData[] {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const hours = Math.min(parseInt(searchParams.get('hours') || '24'), 168);
+  const hours   = Math.min(parseInt(searchParams.get('hours') || '24'), 168);
+  const allowed = buildAllowedSet();
   try {
-    const pacificaSymbols = await fetchPacificaSymbols();
     const [hlEvents, pacEvents] = await Promise.all([
-      fetchHyperliquidLiqs(hours, pacificaSymbols),
-      fetchPacificaLiqs(hours, pacificaSymbols),
+      fetchHyperliquidLiqs(hours, allowed),
+      fetchPacificaLiqs(hours, allowed),
     ]);
     const allEvents = [...hlEvents, ...pacEvents];
     const summary   = buildSummary(allEvents);
     const recent    = [...allEvents].sort((a, b) => b.ts - a.ts).slice(0, 300);
     return NextResponse.json({
       summary, recent,
-      pacificaSymbols: Array.from(pacificaSymbols),
+      pacificaSymbols: Array.from(allowed),
       meta: {
         fetchedAt:   Date.now(),
         hours,
