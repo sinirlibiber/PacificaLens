@@ -95,7 +95,7 @@ export function Overview({ markets, tickers }: OverviewProps) {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [chartInterval, setChartInterval] = useState('1h');
-  const [detailTab, setDetailTab] = useState<'chart' | 'orderbook' | 'liquidations'>('chart');
+  const [detailTab, setDetailTab] = useState<'chart' | 'orderbook' | 'trades'>('chart');
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('volume');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -443,7 +443,7 @@ export function Overview({ markets, tickers }: OverviewProps) {
 
           <div className="flex border-b border-border1 bg-surface shrink-0">
             {(['chart', 'orderbook', 'trades'] as const).map(t => (
-              <button key={t} onClick={() => setDetailTab(t as 'chart' | 'orderbook' | 'liquidations')}
+              <button key={t} onClick={() => setDetailTab(t)}
                 className={'px-4 py-2 text-[11px] font-semibold uppercase tracking-wide border-b-2 transition-all ' + (detailTab === t ? 'border-accent text-accent' : 'border-transparent text-text3 hover:text-text2')}>
                 {t === 'trades' ? 'Recent Trades' : t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
@@ -509,7 +509,7 @@ export function Overview({ markets, tickers }: OverviewProps) {
               </div>
             )}
 
-            {detailTab === 'liquidations' && (
+            {detailTab === 'trades' && (
               <div className="flex flex-col h-full overflow-hidden">
                 <div className="flex-1 overflow-y-auto">
                   {liquidations.length > 0 ? (
