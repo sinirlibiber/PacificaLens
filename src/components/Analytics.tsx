@@ -290,14 +290,14 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
   }
 
   const NAV_ITEMS = [
-    { id: 'ai-assistant',      label: 'AI Assistant',                icon: '🤖', desc: 'Ask anything about market conditions, analyze coins, get trading ideas' },
-    { id: 'market-overview',   label: 'Market Overview',             icon: '📊', desc: 'Volume, open interest, active markets — live snapshot of Pacifica' },
-    { id: 'oi-distribution',   label: 'OI Distribution',             icon: '🔮', desc: 'Open interest split across markets. Shows where capital is concentrated' },
-    { id: 'funding-extreme',   label: 'Funding Rates — Extreme',     icon: '⚡', desc: 'Markets with highest/lowest funding rates. Indicates overcrowded positions' },
-    { id: 'long-short-ratio',  label: 'Long / Short Ratio',          icon: '⚖️',  desc: 'Estimated long vs short bias per market, derived from funding rate direction' },
-    { id: 'all-funding',       label: 'All Markets Funding Rate',    icon: '🌡️',  desc: 'Color-coded heatmap of funding rates across all Pacifica markets' },
-    { id: 'market-signals',    label: 'Market Signals',              icon: '🚨', desc: 'Real-time OI spikes and funding anomalies — early warning system' },
-    { id: 'liquidation-monitor', label: 'Liquidation Monitor',       icon: '💧', desc: 'Estimated liquidation volumes from HyperLiquid + Pacifica DEX data' },
+    { id: 'ai-assistant',      label: 'AI Assistant',                icon: '🤖', desc: 'Ask questions, analyze coins, get trade ideas' },
+    { id: 'market-overview',   label: 'Market Overview',             icon: '📊', desc: 'Volume, OI, active markets — live Pacifica snapshot' },
+    { id: 'oi-distribution',   label: 'OI Distribution',             icon: '🔮', desc: 'OI split across markets. Where capital is concentrated' },
+    { id: 'funding-extreme',   label: 'Funding Rates — Extreme',     icon: '⚡', desc: 'Highest/lowest funding rates. Crowded positions signal' },
+    { id: 'long-short-ratio',  label: 'Long / Short Ratio',          icon: '⚖️',  desc: 'Long vs short bias per market, from funding rate direction' },
+    { id: 'all-funding',       label: 'All Markets Funding Rate',    icon: '🌡️',  desc: 'Color-coded funding heatmap across all markets' },
+    { id: 'market-signals',    label: 'Market Signals',              icon: '🚨', desc: 'Real-time OI spikes and funding anomalies' },
+    { id: 'liquidation-monitor', label: 'Liquidation Monitor',       icon: '💧', desc: 'Liq volumes from HyperLiquid + Pacifica DEX' },
   ];
 
   const scrollTo = (id: string) => {
@@ -309,19 +309,19 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     <div className="flex h-full bg-bg overflow-hidden">
 
       {/* ─── FAR LEFT: Navigation Sidebar ─── */}
-      <div className="w-52 shrink-0 border-r border-border1 flex flex-col bg-surface overflow-y-auto">
+      <div className="w-56 shrink-0 border-r border-border1 flex flex-col bg-surface overflow-y-auto">
         <div className="px-3 py-3 border-b border-border1">
           <div className="text-[10px] font-bold text-text3 uppercase tracking-wider">Sections</div>
         </div>
         <div className="flex-1 py-2">
           {NAV_ITEMS.map(item => (
             <button key={item.id} onClick={() => scrollTo(item.id)}
-              className="w-full text-left px-3 py-2 hover:bg-surface2 transition-colors group">
-              <div className="flex items-center gap-2">
-                <span className="text-[13px]">{item.icon}</span>
-                <span className="text-[11px] font-semibold text-text2 group-hover:text-text1 leading-tight">{item.label}</span>
+              className="w-full text-left px-3 py-2.5 hover:bg-surface2 transition-colors group border-b border-border1/40 last:border-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-[12px]">{item.icon}</span>
+                <span className="text-[11px] font-semibold text-text2 group-hover:text-accent leading-tight transition-colors">{item.label}</span>
               </div>
-              <div className="text-[9px] text-text3 mt-0.5 leading-tight pl-5 line-clamp-2">{item.desc}</div>
+              <div className="text-[9px] text-text3 leading-snug pl-5">{item.desc}</div>
             </button>
           ))}
         </div>
@@ -442,7 +442,8 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
               <div className="px-3 pb-3">
                 <ResponsiveContainer width="100%" height={130}>
                   <BarChart data={fundingData} margin={{ left: 0, right: 4, top: 4, bottom: 0 }}>
-                    <XAxis dataKey="symbol" tick={{ fontSize: 8, fill: 'var(--text2)' }} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="symbol" tick={{ fontSize: 8, fill: 'var(--text2)' }} tickLine={false} axisLine={false}
+                      tickFormatter={(v: string) => v.length > 5 ? v.slice(0,5) + '..' : v} />
                     <YAxis tick={{ fontSize: 8, fill: 'var(--text2)' }} tickLine={false} axisLine={false}
                       tickFormatter={(v: number) => v.toFixed(3) + '%'} width={48} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v.toFixed(4) + '%', 'Funding/hr']} />

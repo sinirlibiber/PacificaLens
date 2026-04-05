@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { Market } from '@/lib/pacifica';
 import { CoinLogo } from './CoinLogo';
@@ -301,7 +302,10 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
         </div>
       )}
 
-      {modalSymbol && <LiquidationHeatmapModal symbol={modalSymbol} onClose={() => setModalSymbol(null)} />}
+      {modalSymbol && typeof document !== 'undefined' && createPortal(
+        <LiquidationHeatmapModal symbol={modalSymbol} onClose={() => setModalSymbol(null)} />,
+        document.body
+      )}
     </div>
   );
 }
