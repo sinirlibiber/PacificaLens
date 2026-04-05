@@ -41,7 +41,7 @@ async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promis
     const res = await fetch('https://api.hyperliquid.xyz/info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'metaAndAssetCtxs' }),
+      body: JSON.stringify({ type: 'metaAndAssetCtxs', dex: 'xyz' }),
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return events;
