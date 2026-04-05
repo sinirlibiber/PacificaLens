@@ -99,8 +99,8 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     if (!ctx) return;
 
     const CW = canvas.width, CH = canvas.height;
-    const PRICE_H = Math.round(CH * 0.58); // üst %58 fiyat
-    const LIQ_H   = CH - PRICE_H - 2;      // alt panel liq
+    const PRICE_H = Math.round(CH * 0.78); // üst %78 fiyat
+    const LIQ_H   = CH - PRICE_H - 2;      // alt panel liq (~%20)
 
     // Tema renkleri
     const bgMain   = isDark ? '#06080f' : '#f8fafc';
@@ -205,7 +205,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       const y = toY(markPrice);
       if (y >= 0 && y <= PRICE_H) {
         ctx.setLineDash([5, 5]);
-        ctx.strokeStyle = isDark ? 'rgba(255,215,0,0.7)' : 'rgba(200,150,0,0.8)';
+        ctx.strokeStyle = isDark ? 'rgba(255,215,0,0.85)' : 'rgba(180,120,0,1)';
         ctx.lineWidth   = 1;
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
         ctx.setLineDash([]);
@@ -213,9 +213,9 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
         const lbl = fmtP(markPrice);
         ctx.font  = 'bold 10px ui-monospace,monospace';
         const tw  = ctx.measureText(lbl).width;
-        ctx.fillStyle = '#FFD700';
+        ctx.fillStyle = isDark ? '#FFD700' : '#b87800';
         ctx.fillRect(CW - tw - 18, y - 9, tw + 14, 18);
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = isDark ? '#000' : '#fff';
         ctx.textAlign = 'right';
         ctx.fillText(lbl, CW - 5, y + 4);
       }
@@ -261,6 +261,19 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       const maxBarH   = LIQ_H * 0.85;
       const panelTop  = PRICE_H + 2;
 
+      // Kümülatif hesapla (soldaki toplam)
+      let runLong = 0, runShort = 0;
+      const cumLongArr:  number[] = new Array(BUCKETS).fill(0);
+      const cumShortArr: number[] = new Array(BUCKETS).fill(0);
+      for (let bi = 0; bi < BUCKETS; bi++) {
+        runLong  += buckets[bi].long;
+        runShort += buckets[bi].short;
+        cumLongArr[bi]  = runLong;
+        cumShortArr[bi] = runShort;
+      }
+      const maxCumLong  = Math.max(...cumLongArr,  1);
+      const maxCumShort = Math.max(...cumShortArr, 1);
+
       for (let bi = 0; bi < BUCKETS; bi++) {
         const b     = buckets[bi];
         const total = b.long + b.short;
@@ -272,21 +285,48 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
         // Long (teal) — altta
         const longH = total > 0 ? (b.long / total) * normH : 0;
         if (longH > 0.5) {
-          ctx.fillStyle = isDark ? 'rgba(0,200,170,0.80)' : 'rgba(0,150,130,0.85)';
+          ctx.fillStyle = isDark ? 'rgba(0,200,170,0.70)' : 'rgba(0,150,130,0.75)';
           ctx.fillRect(x - barPixW/2, panelTop + LIQ_H - longH, barPixW, longH);
         }
 
         // Short (kırmızı) — long'un üstünde
         const shortH = total > 0 ? (b.short / total) * normH : 0;
         if (shortH > 0.5) {
-          ctx.fillStyle = isDark ? 'rgba(255,80,80,0.70)' : 'rgba(210,50,50,0.75)';
+          ctx.fillStyle = isDark ? 'rgba(255,80,80,0.60)' : 'rgba(210,50,50,0.65)';
           ctx.fillRect(x - barPixW/2, panelTop + LIQ_H - longH - shortH, barPixW, shortH);
         }
       }
 
+      // Cumulative Long line (teal)
+      ctx.beginPath();
+      ctx.strokeStyle = isDark ? 'rgba(0,220,180,0.90)' : 'rgba(0,160,130,0.95)';
+      ctx.lineWidth   = 1.5;
+      ctx.lineJoin    = 'round';
+      let cLStarted = false;
+      for (let bi = 0; bi < BUCKETS; bi++) {
+        if (cumLongArr[bi] <= 0) continue;
+        const x = toX(minP + (bi + 0.5) * bucketW);
+        const y = panelTop + LIQ_H - (cumLongArr[bi] / maxCumLong) * maxBarH * 0.92;
+        if (!cLStarted) { ctx.moveTo(x, y); cLStarted = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Cumulative Short line (kırmızı)
+      ctx.beginPath();
+      ctx.strokeStyle = isDark ? 'rgba(255,100,100,0.90)' : 'rgba(200,50,50,0.95)';
+      ctx.lineWidth   = 1.5;
+      let cSStarted = false;
+      for (let bi = 0; bi < BUCKETS; bi++) {
+        if (cumShortArr[bi] <= 0) continue;
+        const x = toX(minP + (bi + 0.5) * bucketW);
+        const y = panelTop + LIQ_H - (cumShortArr[bi] / maxCumShort) * maxBarH * 0.92;
+        if (!cSStarted) { ctx.moveTo(x, y); cSStarted = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
       // Kümülatif değerleri meta'ya kaydet
-      const cumLong  = buckets.reduce((s,b)=>s+b.long,0);
-      const cumShort = buckets.reduce((s,b)=>s+b.short,0);
+      const cumLong  = cumLongArr[BUCKETS-1] || 0;
+      const cumShort = cumShortArr[BUCKETS-1] || 0;
       Object.assign(metaRef.current, {cumLong, cumShort, buckets, bucketW});
 
       // Mark price dikey

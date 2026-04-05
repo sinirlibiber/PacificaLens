@@ -113,6 +113,26 @@ async function fetchPacificaLiqLevels(
   }
 }
 
+// Pacifica → HyperLiquid sembol mapping
+const PAC_TO_HL: Record<string, string[]> = {
+  'SP500':    ['USA500-USDT','SP500'],
+  'XAU':      ['GOLD-USDC','GOLD'],
+  'CL':       ['WTIOIL-USDC','WTIOIL'],
+  'TSLA':     ['TSLA-USDT','TSLA'],
+  'USDJPY':   ['USDJPY-USDC','USDJPY'],
+  'EURUSD':   ['EURUSD-USDC','EURUSD'],
+  'GOOGL':    ['GOOGL-USDC','GOOGL'],
+  'NVDA':     ['NVDA-USDT','NVDA'],
+  'PLTR':     ['PLTR-USDC','PLTR'],
+  'PLATINUM': ['PLATINUM-USDC','PLATINUM'],
+  'URNM':     ['URNM-USDC','URNM'],
+  'COPPER':   ['COPPER-USDC','COPPER'],
+  'SILVER':   ['SILVER-USDC','SILVER'],
+  'NATGAS':   ['NATGAS-USDC','NATGAS'],
+  'CRCL':     ['CRCL-USDC','CRCL'],
+  'HOOD':     ['HOOD-USDT','HOOD'],
+};
+
 // HyperLiquid: assetCtx'ten OI ve funding bazlı liq dağılımı tahmin et
 async function fetchHyperliquidLiqLevels(coin: string): Promise<{ levels: LiqLevel[]; markPrice: number }> {
   const result: LiqLevel[] = [];
@@ -129,7 +149,11 @@ async function fetchHyperliquidLiqLevels(coin: string): Promise<{ levels: LiqLev
     const [meta, ctxs] = await res.json();
     if (!Array.isArray(meta?.universe)) return { levels: result, markPrice };
 
-    const idx = meta.universe.findIndex((u: { name: string }) => u.name.toUpperCase() === coin);
+    // Pacifica sembolünü HL sembollerine çevir
+    const hlNames = PAC_TO_HL[coin.toUpperCase()]
+      ? [coin.toUpperCase(), ...PAC_TO_HL[coin.toUpperCase()].map(s => s.toUpperCase())]
+      : [coin.toUpperCase()];
+    const idx = meta.universe.findIndex((u: { name: string }) => hlNames.includes(u.name.toUpperCase()));
     if (idx < 0 || !ctxs[idx]) return { levels: result, markPrice };
 
     const ctx = ctxs[idx];

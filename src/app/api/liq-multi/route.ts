@@ -1,7 +1,7 @@
 /**
  * GET /api/liq-multi?hours=24
  * Liquidation data: HyperLiquid (OI+funding) + Pacifica (real trades)
- * Sadece Pacifica'da listelenen semboller döner.
+ * Pacifica'da listelenen semboller + mapping'li özel semboller
  */
 import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 20;
@@ -22,7 +22,26 @@ export interface LiqSymbolData {
   count: number;
 }
 
-// Pacifica fallback market listesi
+// Pacifica sembol → HyperLiquid sembol mapping
+const PAC_TO_HL: Record<string, string[]> = {
+  'SP500':    ['USA500-USDT','SP500'],
+  'XAU':      ['GOLD-USDC','GOLD'],
+  'CL':       ['WTIOIL-USDC','WTIOIL'],
+  'TSLA':     ['TSLA-USDT','TSLA'],
+  'USDJPY':   ['USDJPY-USDC','USDJPY'],
+  'EURUSD':   ['EURUSD-USDC','EURUSD'],
+  'GOOGL':    ['GOOGL-USDC','GOOGL'],
+  'NVDA':     ['NVDA-USDT','NVDA'],
+  'PLTR':     ['PLTR-USDC','PLTR'],
+  'PLATINUM': ['PLATINUM-USDC','PLATINUM'],
+  'URNM':     ['URNM-USDC','URNM'],
+  'COPPER':   ['COPPER-USDC','COPPER'],
+  'SILVER':   ['SILVER-USDC','SILVER'],
+  'NATGAS':   ['NATGAS-USDC','NATGAS'],
+  'CRCL':     ['CRCL-USDC','CRCL'],
+  'HOOD':     ['HOOD-USDT','HOOD'],
+};
+
 const PACIFICA_FALLBACK = new Set([
   'BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','LINK','DOT',
   'BNB','LTC','BCH','UNI','ATOM','NEAR','APT','ARB','OP',
@@ -30,6 +49,9 @@ const PACIFICA_FALLBACK = new Set([
   'WLD','BLUR','PENDLE','GMX','DYDX','RUNE','RNDR','FET',
   'MATIC','TON','BONK','PYTH','W','ALT','STRK','ZEC','ASTER',
   'LIT','PAXG','ZRO','VIRTUAL','FARTCOIN','AI16Z','TRUMP',
+  // Yeni eklenenler
+  'SP500','XAU','CL','TSLA','USDJPY','EURUSD','GOOGL','NVDA',
+  'PLTR','PLATINUM','URNM','COPPER','SILVER','NATGAS','CRCL','HOOD',
 ]);
 
 async function fetchPacificaSymbols(): Promise<Set<string>> {
@@ -59,20 +81,30 @@ async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promis
     const [meta, ctxs] = await res.json();
     if (!Array.isArray(meta?.universe) || !Array.isArray(ctxs)) return events;
 
+    // HL sembollerini Pacifica sembollerine ters map et
+    const hlToPac = new Map<string, string>();
+    for (const [pac, hlList] of Object.entries(PAC_TO_HL)) {
+      for (const hl of hlList) hlToPac.set(hl.toUpperCase(), pac);
+    }
+
     for (let i = 0; i < meta.universe.length; i++) {
-      const coin = String(meta.universe[i]?.name ?? '').toUpperCase();
-      const ctx  = ctxs[i];
-      if (!coin || !ctx || !allowed.has(coin)) continue;
+      const hlName = String(meta.universe[i]?.name ?? '').toUpperCase();
+      const ctx    = ctxs[i];
+      if (!hlName || !ctx) continue;
+
+      // Pacifica sembolüne çevir
+      const coin = hlToPac.get(hlName) ?? hlName;
+      if (!allowed.has(coin)) continue;
 
       const openInt   = parseFloat(String(ctx.openInterest ?? '0'));
       const markPrice = parseFloat(String(ctx.markPx ?? '0'));
       const dayVol    = parseFloat(String(ctx.dayNtlVlm ?? '0'));
-      if (!markPrice || openInt <= 0 || dayVol < 1000) continue;
+      if (!markPrice || openInt <= 0 || dayVol < 100) continue;
 
       const funding   = parseFloat(String(ctx.funding ?? '0'));
       const liqRate   = Math.min(Math.max(Math.abs(funding) * 600 + 0.0015, 0.0015), 0.01);
       const totalLiq  = openInt * markPrice * liqRate * Math.min(hours / 24, 1);
-      if (totalLiq < 200) continue;
+      if (totalLiq < 50) continue;
 
       const longBias  = funding > 0 ? 0.65 : 0.35;
       const slices    = Math.max(1, Math.min(hours * 2, 48));
@@ -90,7 +122,7 @@ async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promis
 async function fetchPacificaLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
   const events: LiqEvent[] = [];
   const cutoff = Date.now() - hours * 3600 * 1000;
-  const symbols = Array.from(allowed).slice(0, 30);
+  const symbols = Array.from(allowed).slice(0, 50);
   await Promise.all(symbols.map(async (coin) => {
     try {
       const res = await fetch(
