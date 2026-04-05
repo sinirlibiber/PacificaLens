@@ -1,58 +1,30 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const symbol = url.searchParams.get('symbol') || 'SP500';
+  
   try {
-    const spotRes = await fetch('https://api.hyperliquid.xyz/info', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({type:'spotMetaAndAssetCtxs'}),
-      signal: AbortSignal.timeout(10000),
-    });
-    const raw = await spotRes.json();
-    // raw[0] = meta, raw[1] = ctxs
-    const meta = raw[0];
-    const ctxs = raw[1];
-
-    const targets = ['USA500','US500','TSLA','NVDA','GOOGL','GOLD',
-      'WTIOIL','EURUSD','USDJPY','SILVER','COPPER','NATGAS','PLATINUM',
-      'URNM','HOOD','CRCL','cash','fix','flx','km','xyz','XAU','CL'];
-
-    const tokenFound: string[] = [];
-    const universeFound: string[] = [];
-
-    for (const token of meta?.tokens ?? []) {
-      const n = String(token.name ?? '');
-      for (const t of targets) {
-        if (n.toUpperCase().includes(t.toUpperCase())) {
-          tokenFound.push(n); break;
-        }
-      }
-    }
-    for (const u of meta?.universe ?? []) {
-      const n = String(u.name ?? '');
-      for (const t of targets) {
-        if (n.toUpperCase().includes(t.toUpperCase())) {
-          universeFound.push(n); break;
-        }
-      }
-    }
-
-    // Tüm token isimlerini de gönder
-    const allTokenNames = (meta?.tokens ?? []).map((t: {name?:string}) => t.name ?? '').sort();
-    const allUniverseNames = (meta?.universe ?? []).map((u: {name?:string}) => u.name ?? '').sort();
-
+    // Pacifica trade endpoint'ini test et
+    const res = await fetch(
+      `https://api.pacifica.fi/api/v1/trades?symbol=${symbol}-USD&limit=100`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    const json = await res.json();
+    const trades = json?.data ?? [];
+    
+    // Tüm cause değerlerini göster
+    const causes = [...new Set(trades.map((t: {cause?:string}) => t.cause))];
+    const liqTrades = trades.filter((t: {cause?:string}) => 
+      t.cause?.toLowerCase().includes('liq')
+    );
+    
     return NextResponse.json({
-      tokenFound,
-      universeFound,
-      allTokenNames: allTokenNames.filter((n: string) => 
-        ['USA','TSLA','NVDA','GOLD','SILVER','COPPER','EURUSD','USDJPY','GAS','OIL','cash','fix','flx','km','xyz']
-        .some(t => n.toUpperCase().includes(t.toUpperCase()))
-      ),
-      allUniverseNames: allUniverseNames.filter((n: string) =>
-        ['USA','TSLA','NVDA','GOLD','SILVER','COPPER','EURUSD','USDJPY','GAS','OIL','cash','fix','flx','km','xyz']
-        .some(t => n.toUpperCase().includes(t.toUpperCase()))
-      ),
-      totalTokens: allTokenNames.length,
-      totalUniverse: allUniverseNames.length,
+      symbol,
+      totalTrades: trades.length,
+      causes,
+      liqTradeCount: liqTrades.length,
+      sample: trades.slice(0,3),
     });
   } catch(e) {
     return NextResponse.json({error: String(e)});
