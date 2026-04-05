@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
 import { calculateScores } from '@/lib/traderScore';

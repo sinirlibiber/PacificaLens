@@ -84,13 +84,7 @@ export default function Home() {
         {/* CTA Buttons */}
         <ConnectWalletButton />
         
-        <a href="/overview"
-          className="mt-3 text-[11px] font-medium transition-colors"
-          style={{ color: 'rgba(130,170,190,0.7)' }}
-          onMouseOver={e => (e.currentTarget.style.color = 'rgba(0,212,255,0.9)')}
-          onMouseOut={e => (e.currentTarget.style.color = 'rgba(130,170,190,0.7)')}>
-          Explore without wallet →
-        </a>
+
 
       </div>
 
