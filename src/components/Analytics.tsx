@@ -289,20 +289,55 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
     );
   }
 
+  const NAV_ITEMS = [
+    { id: 'ai-assistant',      label: 'AI Assistant',                icon: '🤖', desc: 'Ask anything about market conditions, analyze coins, get trading ideas' },
+    { id: 'market-overview',   label: 'Market Overview',             icon: '📊', desc: 'Volume, open interest, active markets — live snapshot of Pacifica' },
+    { id: 'oi-distribution',   label: 'OI Distribution',             icon: '🔮', desc: 'Open interest split across markets. Shows where capital is concentrated' },
+    { id: 'funding-extreme',   label: 'Funding Rates — Extreme',     icon: '⚡', desc: 'Markets with highest/lowest funding rates. Indicates overcrowded positions' },
+    { id: 'long-short-ratio',  label: 'Long / Short Ratio',          icon: '⚖️',  desc: 'Estimated long vs short bias per market, derived from funding rate direction' },
+    { id: 'all-funding',       label: 'All Markets Funding Rate',    icon: '🌡️',  desc: 'Color-coded heatmap of funding rates across all Pacifica markets' },
+    { id: 'market-signals',    label: 'Market Signals',              icon: '🚨', desc: 'Real-time OI spikes and funding anomalies — early warning system' },
+    { id: 'liquidation-monitor', label: 'Liquidation Monitor',       icon: '💧', desc: 'Estimated liquidation volumes from HyperLiquid + Pacifica DEX data' },
+  ];
+
+  const scrollTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div className="flex h-full bg-bg overflow-hidden">
 
-      {/* ─── LEFT: Market Analytics ─── */}
+      {/* ─── FAR LEFT: Navigation Sidebar ─── */}
+      <div className="w-52 shrink-0 border-r border-border1 flex flex-col bg-surface overflow-y-auto">
+        <div className="px-3 py-3 border-b border-border1">
+          <div className="text-[10px] font-bold text-text3 uppercase tracking-wider">Sections</div>
+        </div>
+        <div className="flex-1 py-2">
+          {NAV_ITEMS.map(item => (
+            <button key={item.id} onClick={() => scrollTo(item.id)}
+              className="w-full text-left px-3 py-2 hover:bg-surface2 transition-colors group">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px]">{item.icon}</span>
+                <span className="text-[11px] font-semibold text-text2 group-hover:text-text1 leading-tight">{item.label}</span>
+              </div>
+              <div className="text-[9px] text-text3 mt-0.5 leading-tight pl-5 line-clamp-2">{item.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── CENTER: Market Analytics ─── */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-[920px] mx-auto px-6 py-5 space-y-5">
+        <div className="max-w-[860px] mx-auto px-5 py-5 space-y-5">
 
           {/* AI Assistant */}
-          <div className="bg-surface border border-border1 rounded-xl overflow-hidden" style={{ minHeight: 44 }}>
+          <div id="ai-assistant" className="bg-surface border border-border1 rounded-xl overflow-hidden" style={{ minHeight: 44 }}>
             <AiAssistant tickers={tickers} />
           </div>
 
           {/* Stat cards */}
-          <div className="grid grid-cols-4 gap-3">
+          <div id="market-overview" className="grid grid-cols-4 gap-3">
             {[
               { icon: '📊', label: '24h Volume', value: fmtLarge(totalVolume), sub: 'across all markets', color: 'text-accent' },
               { icon: '🔮', label: 'Open Interest', value: fmtLarge(totalOI), sub: 'across all markets', color: 'text-success' },
@@ -340,7 +375,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           </div>
 
           {/* OI Distribution + Volume Dominance */}
-          <div className="grid grid-cols-2 gap-4">
+          <div id="oi-distribution" className="grid grid-cols-2 gap-4">
             {/* OI Donut */}
             <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
               <div className="text-[12px] font-bold text-text1 mb-3">OI Distribution</div>
@@ -391,76 +426,81 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
             </div>
           </div>
 
-          {/* Funding Rates (top extreme) */}
-          <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-            <div className="flex justify-between items-center mb-3">
-              <div className="text-[12px] font-bold text-text1">Funding Rates — Most Extreme</div>
-              <div className="flex items-center gap-3 text-[10px] text-text3">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block" /> Positive (longs pay)</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block" /> Negative (shorts pay)</span>
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={fundingData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
-                <XAxis dataKey="symbol" tick={{ fontSize: 9, fill: 'var(--text2)' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 9, fill: 'var(--text2)' }} tickLine={false} axisLine={false}
-                  tickFormatter={v => v.toFixed(3) + '%'} width={56} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v.toFixed(4) + '%', 'Funding/hr']} />
-                <Bar dataKey="funding" radius={[3, 3, 0, 0]}>
-                  {fundingData.map((d, i) => <Cell key={i} fill={d.funding >= 0 ? '#10b981' : '#ef4444'} fillOpacity={0.85} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Long/Short Ratio */}
-          <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
-            <div className="flex justify-between items-center mb-3">
-              <div>
-                <div className="text-[12px] font-bold text-text1">Long / Short Ratio</div>
-                <div className="text-[10px] text-text3 mt-0.5">⚠️ Estimated from funding rate bias — not real order-book data</div>
-              </div>
-              <div className="flex items-center gap-3 text-[10px] text-text3">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block" /> Long</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block" /> Short</span>
-                <span>· funding bias</span>
-              </div>
-            </div>
-            <div className="space-y-1.5 max-h-64 overflow-y-auto overflow-x-visible pr-1" style={{ overflowY: "auto", overflowX: "visible" }}>
-              {longShortData.map((m, idx) => (
-                <div key={m.symbol} className="flex items-center gap-2 relative group">
-                  <div className="flex items-center gap-1.5 w-16 shrink-0">
-                    <CoinLogo symbol={m.symbol} size={14} />
-                    <span className="text-[11px] font-semibold text-text1 truncate">{m.symbol}</span>
-                  </div>
-                  <div className="flex-1 h-3.5 rounded-full overflow-hidden flex cursor-pointer">
-                    <div className="h-full bg-success/70 transition-all" style={{ width: `${m.long}%` }} />
-                    <div className="h-full bg-danger/70 transition-all" style={{ width: `${m.short}%` }} />
-                  </div>
-                  <span className="text-[10px] font-mono text-success w-7 text-right shrink-0">{m.long}%</span>
-                  <span className="text-[10px] font-mono text-danger w-7 text-right shrink-0">{m.short}%</span>
-                  {/* Tooltip — top 5 show below, rest show above */}
-                  <div className={`absolute left-16 hidden group-hover:flex flex-col bg-surface border border-border1 rounded-xl shadow-card-md px-3 py-2.5 z-[100] min-w-[180px] pointer-events-none ${idx < 5 ? 'top-full mt-1' : 'bottom-6'}`}>
-                    <div className="text-[11px] font-bold text-text1 mb-1.5">{m.symbol}</div>
-                    <div className="flex items-center justify-between gap-6 text-[10px] mb-1">
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-success inline-block" />Long</span>
-                      <span className="font-mono font-bold text-success">{fmtLarge(m.longVol)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-6 text-[10px] mb-1.5">
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-danger inline-block" />Short</span>
-                      <span className="font-mono font-bold text-danger">{fmtLarge(m.shortVol)}</span>
-                    </div>
-                    <div className="text-[9px] text-text3 border-t border-border1 pt-1.5">
-                      Total 24h vol: {fmtLarge(m.volume)} · est. from funding
-                    </div>
-                  </div>
+          {/* Funding Rates + Long/Short — yan yana */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Funding Rates Most Extreme */}
+            <div id="funding-extreme" className="bg-surface border border-border1 rounded-xl shadow-card">
+              <div className="px-4 pt-3 pb-0">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="text-[12px] font-bold text-text1">Funding Rates — Extreme</div>
                 </div>
-              ))}
+                <div className="flex items-center gap-3 text-[9px] text-text3 mb-2">
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-success inline-block" /> Positive</span>
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-danger inline-block" /> Negative</span>
+                </div>
+              </div>
+              <div className="px-3 pb-3">
+                <ResponsiveContainer width="100%" height={130}>
+                  <BarChart data={fundingData} margin={{ left: 0, right: 4, top: 4, bottom: 0 }}>
+                    <XAxis dataKey="symbol" tick={{ fontSize: 8, fill: 'var(--text2)' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 8, fill: 'var(--text2)' }} tickLine={false} axisLine={false}
+                      tickFormatter={(v: number) => v.toFixed(3) + '%'} width={48} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v.toFixed(4) + '%', 'Funding/hr']} />
+                    <Bar dataKey="funding" radius={[3, 3, 0, 0]}>
+                      {fundingData.map((_d: {funding: number}, i: number) => <Cell key={i} fill={_d.funding >= 0 ? '#10b981' : '#ef4444'} fillOpacity={0.85} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Long/Short Ratio */}
+            <div id="long-short-ratio" className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
+              <div className="flex justify-between items-center mb-2">
+                <div>
+                  <div className="text-[12px] font-bold text-text1">Long / Short Ratio</div>
+                  <div className="text-[9px] text-text3 mt-0.5">Estimated from funding rate bias</div>
+                </div>
+                <div className="flex items-center gap-2 text-[9px] text-text3">
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-success inline-block" /> L</span>
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-danger inline-block" /> S</span>
+                </div>
+              </div>
+              <div className="space-y-1 overflow-y-auto pr-1" style={{ maxHeight: 180 }}>
+                {longShortData.map((m: {symbol: string; long: number; short: number; longVol: number; shortVol: number; volume: number}, idx: number) => (
+                  <div key={m.symbol} className="flex items-center gap-2 relative group">
+                    <div className="flex items-center gap-1.5 w-14 shrink-0">
+                      <CoinLogo symbol={m.symbol} size={12} />
+                      <span className="text-[10px] font-semibold text-text1 truncate">{m.symbol}</span>
+                    </div>
+                    <div className="flex-1 h-3 rounded-full overflow-hidden flex">
+                      <div className="h-full bg-success/70 transition-all" style={{ width: `${m.long}%` }} />
+                      <div className="h-full bg-danger/70 transition-all" style={{ width: `${m.short}%` }} />
+                    </div>
+                    <span className="text-[9px] font-mono text-success w-6 text-right shrink-0">{m.long}%</span>
+                    <span className="text-[9px] font-mono text-danger w-6 text-right shrink-0">{m.short}%</span>
+                    <div className={`absolute left-14 hidden group-hover:flex flex-col bg-surface border border-border1 rounded-xl shadow-card-md px-3 py-2.5 z-[100] min-w-[160px] pointer-events-none ${idx < 4 ? 'top-full mt-1' : 'bottom-6'}`}>
+                      <div className="text-[11px] font-bold text-text1 mb-1.5">{m.symbol}</div>
+                      <div className="flex items-center justify-between gap-4 text-[10px] mb-1">
+                        <span className="text-success">Long</span>
+                        <span className="font-mono font-bold text-success">{fmtLarge(m.longVol)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4 text-[10px] mb-1.5">
+                        <span className="text-danger">Short</span>
+                        <span className="font-mono font-bold text-danger">{fmtLarge(m.shortVol)}</span>
+                      </div>
+                      <div className="text-[9px] text-text3 border-t border-border1 pt-1.5">
+                        Vol: {fmtLarge(m.volume)} · est. from funding
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* All Markets Funding Rate Heatmap */}
-          <div className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
+          <div id="all-funding" className="bg-surface border border-border1 rounded-xl p-4 shadow-card">
             <div className="flex items-center justify-between mb-3">
               <div className="text-[12px] font-bold text-text1">All Markets Funding Rate</div>
               <div className="text-[10px] text-text3">Live snapshot · updates every 30s</div>
@@ -489,7 +529,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           </div>
 
           {/* ─── Market Signals ─── */}
-          <div className="bg-surface border border-border1 rounded-xl shadow-card overflow-hidden">
+          <div id="market-signals" className="bg-surface border border-border1 rounded-xl shadow-card overflow-hidden">
             <div className="px-4 py-3 border-b border-border1 bg-surface2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-accent" />
@@ -544,10 +584,12 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
           </div>
 
           {/* Estimated Liquidation Heatmap */}
-          <HeatmapView markets={markets} />
+          <div id="liquidation-monitor">
+            <HeatmapView markets={markets} />
+          </div>
 
-        </div> {/* max-w-[920px] konteynerini kapatır */}
-      </div>   {/* flex-1 (Sol Panel) konteynerini kapatır */}
+        </div> {/* max-w-[860px] konteynerini kapatır */}
+      </div>   {/* CENTER panel kapanır */}
 
       {/* ─── RIGHT: News + Calendar ─── */}
       <div className="w-[320px] shrink-0 border-l border-border1 flex flex-col min-h-0">
