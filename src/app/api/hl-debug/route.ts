@@ -2,38 +2,70 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const res = await fetch('https://api.hyperliquid.xyz/info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'metaAndAssetCtxs' }),
-      signal: AbortSignal.timeout(10000),
-    });
-    const [meta, ctxs] = await res.json();
-    
-    const targets = ['SP500','USA500','GOLD','XAU','WTIOIL','CL','TSLA',
-      'NVDA','GOOGL','PLTR','EURUSD','USDJPY','SILVER','COPPER',
-      'NATGAS','PLATINUM','URNM','HOOD','CRCL'];
-    
-    const found: Record<string, {oi:string;mark:string;vol:string}> = {};
-    const allNames: string[] = [];
-    
-    for (let i = 0; i < meta.universe.length; i++) {
-      const name = meta.universe[i]?.name ?? '';
-      allNames.push(name);
-      const upper = name.toUpperCase();
+    // Hem perp hem spot meta dene
+    const [perpRes, spotRes] = await Promise.all([
+      fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({type:'metaAndAssetCtxs'}),
+        signal: AbortSignal.timeout(10000),
+      }),
+      fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({type:'spotMetaAndAssetCtxs'}),
+        signal: AbortSignal.timeout(10000),
+      }),
+    ]);
+
+    const perpData = await perpRes.json();
+    const spotData = await spotRes.json();
+
+    const targets = ['SP500','USA500','US500','TSLA','NVDA','GOOGL','GOLD','XAU',
+      'WTIOIL','CL','EURUSD','USDJPY','SILVER','COPPER','NATGAS','PLATINUM',
+      'URNM','HOOD','CRCL','cash','fix','flx','km','xyz'];
+
+    // Perp universe
+    const perpFound: string[] = [];
+    const [meta] = perpData;
+    for (const u of meta?.universe ?? []) {
+      const n = u.name ?? '';
       for (const t of targets) {
-        if (upper.includes(t) || t.includes(upper)) {
-          found[name] = {
-            oi:   String(ctxs[i]?.openInterest ?? '?'),
-            mark: String(ctxs[i]?.markPx ?? '?'),
-            vol:  String(ctxs[i]?.dayNtlVlm ?? '?'),
-          };
+        if (n.toUpperCase().includes(t.toUpperCase())) {
+          perpFound.push(n);
+          break;
         }
       }
     }
-    
-    return NextResponse.json({ found, totalSymbols: allNames.length, allNames: allNames.sort() });
+
+    // Spot universe
+    const spotFound: string[] = [];
+    for (const token of spotData?.tokens ?? []) {
+      const n = token.name ?? '';
+      for (const t of targets) {
+        if (n.toUpperCase().includes(t.toUpperCase())) {
+          spotFound.push(n);
+          break;
+        }
+      }
+    }
+    // Spot universe2
+    for (const u of spotData?.universe ?? []) {
+      const n = u.name ?? '';
+      for (const t of targets) {
+        if (n.toUpperCase().includes(t.toUpperCase())) {
+          if (!spotFound.includes(n)) spotFound.push(n);
+          break;
+        }
+      }
+    }
+
+    return NextResponse.json({
+      perpFound,
+      spotFound,
+      spotKeys: Object.keys(spotData ?? {}),
+      spotTokensCount: spotData?.tokens?.length ?? 0,
+      spotUniverseCount: spotData?.universe?.length ?? 0,
+    });
   } catch(e) {
-    return NextResponse.json({ error: String(e) });
+    return NextResponse.json({error: String(e)});
   }
 }
