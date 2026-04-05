@@ -2,68 +2,57 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    // Hem perp hem spot meta dene
-    const [perpRes, spotRes] = await Promise.all([
-      fetch('https://api.hyperliquid.xyz/info', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({type:'metaAndAssetCtxs'}),
-        signal: AbortSignal.timeout(10000),
-      }),
-      fetch('https://api.hyperliquid.xyz/info', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({type:'spotMetaAndAssetCtxs'}),
-        signal: AbortSignal.timeout(10000),
-      }),
-    ]);
+    const spotRes = await fetch('https://api.hyperliquid.xyz/info', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({type:'spotMetaAndAssetCtxs'}),
+      signal: AbortSignal.timeout(10000),
+    });
+    const raw = await spotRes.json();
+    // raw[0] = meta, raw[1] = ctxs
+    const meta = raw[0];
+    const ctxs = raw[1];
 
-    const perpData = await perpRes.json();
-    const spotData = await spotRes.json();
+    const targets = ['USA500','US500','TSLA','NVDA','GOOGL','GOLD',
+      'WTIOIL','EURUSD','USDJPY','SILVER','COPPER','NATGAS','PLATINUM',
+      'URNM','HOOD','CRCL','cash','fix','flx','km','xyz','XAU','CL'];
 
-    const targets = ['SP500','USA500','US500','TSLA','NVDA','GOOGL','GOLD','XAU',
-      'WTIOIL','CL','EURUSD','USDJPY','SILVER','COPPER','NATGAS','PLATINUM',
-      'URNM','HOOD','CRCL','cash','fix','flx','km','xyz'];
+    const tokenFound: string[] = [];
+    const universeFound: string[] = [];
 
-    // Perp universe
-    const perpFound: string[] = [];
-    const [meta] = perpData;
+    for (const token of meta?.tokens ?? []) {
+      const n = String(token.name ?? '');
+      for (const t of targets) {
+        if (n.toUpperCase().includes(t.toUpperCase())) {
+          tokenFound.push(n); break;
+        }
+      }
+    }
     for (const u of meta?.universe ?? []) {
-      const n = u.name ?? '';
+      const n = String(u.name ?? '');
       for (const t of targets) {
         if (n.toUpperCase().includes(t.toUpperCase())) {
-          perpFound.push(n);
-          break;
+          universeFound.push(n); break;
         }
       }
     }
 
-    // Spot universe
-    const spotFound: string[] = [];
-    for (const token of spotData?.tokens ?? []) {
-      const n = token.name ?? '';
-      for (const t of targets) {
-        if (n.toUpperCase().includes(t.toUpperCase())) {
-          spotFound.push(n);
-          break;
-        }
-      }
-    }
-    // Spot universe2
-    for (const u of spotData?.universe ?? []) {
-      const n = u.name ?? '';
-      for (const t of targets) {
-        if (n.toUpperCase().includes(t.toUpperCase())) {
-          if (!spotFound.includes(n)) spotFound.push(n);
-          break;
-        }
-      }
-    }
+    // Tüm token isimlerini de gönder
+    const allTokenNames = (meta?.tokens ?? []).map((t: {name?:string}) => t.name ?? '').sort();
+    const allUniverseNames = (meta?.universe ?? []).map((u: {name?:string}) => u.name ?? '').sort();
 
     return NextResponse.json({
-      perpFound,
-      spotFound,
-      spotKeys: Object.keys(spotData ?? {}),
-      spotTokensCount: spotData?.tokens?.length ?? 0,
-      spotUniverseCount: spotData?.universe?.length ?? 0,
+      tokenFound,
+      universeFound,
+      allTokenNames: allTokenNames.filter((n: string) => 
+        ['USA','TSLA','NVDA','GOLD','SILVER','COPPER','EURUSD','USDJPY','GAS','OIL','cash','fix','flx','km','xyz']
+        .some(t => n.toUpperCase().includes(t.toUpperCase()))
+      ),
+      allUniverseNames: allUniverseNames.filter((n: string) =>
+        ['USA','TSLA','NVDA','GOLD','SILVER','COPPER','EURUSD','USDJPY','GAS','OIL','cash','fix','flx','km','xyz']
+        .some(t => n.toUpperCase().includes(t.toUpperCase()))
+      ),
+      totalTokens: allTokenNames.length,
+      totalUniverse: allUniverseNames.length,
     });
   } catch(e) {
     return NextResponse.json({error: String(e)});
