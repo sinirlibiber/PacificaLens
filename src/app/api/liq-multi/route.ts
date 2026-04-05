@@ -1,7 +1,5 @@
 /**
  * GET /api/liq-multi?hours=24
- * Liquidation data: HyperLiquid (OI+funding) + Pacifica (real trades)
- * Pacifica'da listelenen semboller + mapping'li özel semboller
  */
 import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 20;
@@ -22,26 +20,29 @@ export interface LiqSymbolData {
   count: number;
 }
 
-// Pacifica sembol → HyperLiquid sembol mapping
-const PAC_TO_HL: Record<string, string[]> = {
-  'SP500':    ['USA500-USDT','SP500'],
-  'XAU':      ['GOLD-USDC','GOLD'],
-  'CL':       ['WTIOIL-USDC','WTIOIL'],
-  'TSLA':     ['TSLA-USDT','TSLA'],
-  'USDJPY':   ['USDJPY-USDC','USDJPY'],
-  'EURUSD':   ['EURUSD-USDC','EURUSD'],
-  'GOOGL':    ['GOOGL-USDC','GOOGL'],
-  'NVDA':     ['NVDA-USDT','NVDA'],
-  'PLTR':     ['PLTR-USDC','PLTR'],
-  'PLATINUM': ['PLATINUM-USDC','PLATINUM'],
-  'URNM':     ['URNM-USDC','URNM'],
-  'COPPER':   ['COPPER-USDC','COPPER'],
-  'SILVER':   ['SILVER-USDC','SILVER'],
-  'NATGAS':   ['NATGAS-USDC','NATGAS'],
-  'CRCL':     ['CRCL-USDC','CRCL'],
-  'HOOD':     ['HOOD-USDT','HOOD'],
+// HL sembol → Pacifica sembol mapping
+// Anahtar: HyperLiquid'deki sembol adı (tam eşleşme)
+// Değer: Pacifica'daki sembol adı
+const HL_TO_PAC: Record<string, string> = {
+  'USA500-USDT': 'SP500',
+  'GOLD-USDC':   'XAU',
+  'WTIOIL-USDC': 'CL',
+  'TSLA-USDT':   'TSLA',
+  'USDJPY-USDC': 'USDJPY',
+  'EURUSD-USDC': 'EURUSD',
+  'GOOGL-USDC':  'GOOGL',
+  'NVDA-USDT':   'NVDA',
+  'PLTR-USDC':   'PLTR',
+  'PLATINUM-USDC': 'PLATINUM',
+  'URNM-USDC':   'URNM',
+  'COPPER-USDC': 'COPPER',
+  'SILVER-USDC': 'SILVER',
+  'NATGAS-USDC': 'NATGAS',
+  'CRCL-USDC':   'CRCL',
+  'HOOD-USDT':   'HOOD',
 };
 
+// Pacifica market fallback listesi — API'den çekilemezse kullanılır
 const PACIFICA_FALLBACK = new Set([
   'BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','LINK','DOT',
   'BNB','LTC','BCH','UNI','ATOM','NEAR','APT','ARB','OP',
@@ -49,7 +50,6 @@ const PACIFICA_FALLBACK = new Set([
   'WLD','BLUR','PENDLE','GMX','DYDX','RUNE','RNDR','FET',
   'MATIC','TON','BONK','PYTH','W','ALT','STRK','ZEC','ASTER',
   'LIT','PAXG','ZRO','VIRTUAL','FARTCOIN','AI16Z','TRUMP',
-  // Yeni eklenenler
   'SP500','XAU','CL','TSLA','USDJPY','EURUSD','GOOGL','NVDA',
   'PLTR','PLATINUM','URNM','COPPER','SILVER','NATGAS','CRCL','HOOD',
 ]);
@@ -64,6 +64,8 @@ async function fetchPacificaSymbols(): Promise<Set<string>> {
     for (const m of markets) {
       if (m.symbol) set.add(m.symbol.replace(/-USD$/i, '').toUpperCase());
     }
+    // Her zaman yeni marketleri ekle
+    for (const s of PACIFICA_FALLBACK) set.add(s);
     return set.size > 5 ? set : PACIFICA_FALLBACK;
   } catch { return PACIFICA_FALLBACK; }
 }
@@ -81,38 +83,33 @@ async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promis
     const [meta, ctxs] = await res.json();
     if (!Array.isArray(meta?.universe) || !Array.isArray(ctxs)) return events;
 
-    // HL sembollerini Pacifica sembollerine ters map et
-    const hlToPac = new Map<string, string>();
-    for (const [pac, hlList] of Object.entries(PAC_TO_HL)) {
-      for (const hl of hlList) hlToPac.set(hl.toUpperCase(), pac);
-    }
-
     for (let i = 0; i < meta.universe.length; i++) {
-      const hlName = String(meta.universe[i]?.name ?? '').toUpperCase();
-      const ctx    = ctxs[i];
-      if (!hlName || !ctx) continue;
+      const hlRaw = String(meta.universe[i]?.name ?? '');
+      const ctx   = ctxs[i];
+      if (!hlRaw || !ctx) continue;
 
-      // Pacifica sembolüne çevir
-      const coin = hlToPac.get(hlName) ?? hlName;
-      if (!allowed.has(coin)) continue;
+      // Pacifica sembolüne çevir: önce mapping'e bak, sonra direkt kullan
+      const pacSymbol = HL_TO_PAC[hlRaw] ?? HL_TO_PAC[hlRaw.toUpperCase()] ?? hlRaw.toUpperCase();
+
+      if (!allowed.has(pacSymbol)) continue;
 
       const openInt   = parseFloat(String(ctx.openInterest ?? '0'));
       const markPrice = parseFloat(String(ctx.markPx ?? '0'));
       const dayVol    = parseFloat(String(ctx.dayNtlVlm ?? '0'));
       if (!markPrice || openInt <= 0 || dayVol < 100) continue;
 
-      const funding   = parseFloat(String(ctx.funding ?? '0'));
-      const liqRate   = Math.min(Math.max(Math.abs(funding) * 600 + 0.0015, 0.0015), 0.01);
-      const totalLiq  = openInt * markPrice * liqRate * Math.min(hours / 24, 1);
+      const funding  = parseFloat(String(ctx.funding ?? '0'));
+      const liqRate  = Math.min(Math.max(Math.abs(funding) * 600 + 0.0015, 0.0015), 0.01);
+      const totalLiq = openInt * markPrice * liqRate * Math.min(hours / 24, 1);
       if (totalLiq < 50) continue;
 
-      const longBias  = funding > 0 ? 0.65 : 0.35;
-      const slices    = Math.max(1, Math.min(hours * 2, 48));
+      const longBias = funding > 0 ? 0.65 : 0.35;
+      const slices   = Math.max(1, Math.min(hours * 2, 48));
       for (let h = 0; h < slices; h++) {
         const ts    = Date.now() - (h / slices) * hours * 3600 * 1000;
         const slice = totalLiq / slices;
-        events.push({ id: `hl-${coin}-L-${h}`, symbol: coin, side: 'long',  price: markPrice, notional: slice * longBias,       ts });
-        events.push({ id: `hl-${coin}-S-${h}`, symbol: coin, side: 'short', price: markPrice, notional: slice * (1 - longBias), ts });
+        events.push({ id: `hl-${pacSymbol}-L-${h}`, symbol: pacSymbol, side: 'long',  price: markPrice, notional: slice * longBias,       ts });
+        events.push({ id: `hl-${pacSymbol}-S-${h}`, symbol: pacSymbol, side: 'short', price: markPrice, notional: slice * (1 - longBias), ts });
       }
     }
   } catch (e) { console.error('[liq-multi] HL:', e); }
@@ -122,7 +119,7 @@ async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promis
 async function fetchPacificaLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
   const events: LiqEvent[] = [];
   const cutoff = Date.now() - hours * 3600 * 1000;
-  const symbols = Array.from(allowed).slice(0, 50);
+  const symbols = Array.from(allowed).slice(0, 60);
   await Promise.all(symbols.map(async (coin) => {
     try {
       const res = await fetch(
@@ -142,13 +139,13 @@ async function fetchPacificaLiqs(hours: number, allowed: Set<string>): Promise<L
         const notional = price * parseFloat(t.amount ?? '0');
         if (!notional || notional < 10) continue;
         events.push({
-          id:       `pac-${coin}-${ts}`,
-          symbol:   coin,
-          side:     (t.side ?? '').includes('long') ? 'long' : 'short',
+          id:     `pac-${coin}-${ts}`,
+          symbol: coin,
+          side:   (t.side ?? '').includes('long') ? 'long' : 'short',
           price, notional, ts,
         });
       }
-    } catch { /* per-symbol ignore */ }
+    } catch { /* ignore */ }
   }));
   return events;
 }

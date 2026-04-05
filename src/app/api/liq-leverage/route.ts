@@ -113,24 +113,25 @@ async function fetchPacificaLiqLevels(
   }
 }
 
-// Pacifica → HyperLiquid sembol mapping
-const PAC_TO_HL: Record<string, string[]> = {
-  'SP500':    ['USA500-USDT','SP500'],
-  'XAU':      ['GOLD-USDC','GOLD'],
-  'CL':       ['WTIOIL-USDC','WTIOIL'],
-  'TSLA':     ['TSLA-USDT','TSLA'],
-  'USDJPY':   ['USDJPY-USDC','USDJPY'],
-  'EURUSD':   ['EURUSD-USDC','EURUSD'],
-  'GOOGL':    ['GOOGL-USDC','GOOGL'],
-  'NVDA':     ['NVDA-USDT','NVDA'],
-  'PLTR':     ['PLTR-USDC','PLTR'],
-  'PLATINUM': ['PLATINUM-USDC','PLATINUM'],
-  'URNM':     ['URNM-USDC','URNM'],
-  'COPPER':   ['COPPER-USDC','COPPER'],
-  'SILVER':   ['SILVER-USDC','SILVER'],
-  'NATGAS':   ['NATGAS-USDC','NATGAS'],
-  'CRCL':     ['CRCL-USDC','CRCL'],
-  'HOOD':     ['HOOD-USDT','HOOD'],
+// Pacifica sembol → HyperLiquid sembol (liq-leverage için)
+// Anahtar: Pacifica sembol adı, Değer: HL'deki karşılığı
+const PAC_TO_HL: Record<string, string> = {
+  'SP500':    'USA500-USDT',
+  'XAU':      'GOLD-USDC',
+  'CL':       'WTIOIL-USDC',
+  'TSLA':     'TSLA-USDT',
+  'USDJPY':   'USDJPY-USDC',
+  'EURUSD':   'EURUSD-USDC',
+  'GOOGL':    'GOOGL-USDC',
+  'NVDA':     'NVDA-USDT',
+  'PLTR':     'PLTR-USDC',
+  'PLATINUM': 'PLATINUM-USDC',
+  'URNM':     'URNM-USDC',
+  'COPPER':   'COPPER-USDC',
+  'SILVER':   'SILVER-USDC',
+  'NATGAS':   'NATGAS-USDC',
+  'CRCL':     'CRCL-USDC',
+  'HOOD':     'HOOD-USDT',
 };
 
 // HyperLiquid: assetCtx'ten OI ve funding bazlı liq dağılımı tahmin et
@@ -149,11 +150,12 @@ async function fetchHyperliquidLiqLevels(coin: string): Promise<{ levels: LiqLev
     const [meta, ctxs] = await res.json();
     if (!Array.isArray(meta?.universe)) return { levels: result, markPrice };
 
-    // Pacifica sembolünü HL sembollerine çevir
-    const hlNames = PAC_TO_HL[coin.toUpperCase()]
-      ? [coin.toUpperCase(), ...PAC_TO_HL[coin.toUpperCase()].map(s => s.toUpperCase())]
-      : [coin.toUpperCase()];
-    const idx = meta.universe.findIndex((u: { name: string }) => hlNames.includes(u.name.toUpperCase()));
+    // Pacifica sembolünü HL sembolüne çevir
+    const hlName = PAC_TO_HL[coin.toUpperCase()] ?? coin;
+    const idx = meta.universe.findIndex((u: { name: string }) =>
+      u.name.toUpperCase() === hlName.toUpperCase() ||
+      u.name.toUpperCase() === coin.toUpperCase()
+    );
     if (idx < 0 || !ctxs[idx]) return { levels: result, markPrice };
 
     const ctx = ctxs[idx];
