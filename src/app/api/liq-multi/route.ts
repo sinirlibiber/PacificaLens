@@ -21,25 +21,40 @@ export interface LiqSymbolData {
 }
 
 // HL sembol → Pacifica sembol mapping
-// Anahtar: HyperLiquid'deki sembol adı (tam eşleşme)
-// Değer: Pacifica'daki sembol adı
+// Tüm olası varyantlar dahil (USDT/USDC/bare)
 const HL_TO_PAC: Record<string, string> = {
-  'USA500-USDT': 'SP500',
-  'GOLD-USDC':   'XAU',
-  'WTIOIL-USDC': 'CL',
-  'TSLA-USDT':   'TSLA',
-  'USDJPY-USDC': 'USDJPY',
-  'EURUSD-USDC': 'EURUSD',
-  'GOOGL-USDC':  'GOOGL',
-  'NVDA-USDT':   'NVDA',
-  'PLTR-USDC':   'PLTR',
-  'PLATINUM-USDC': 'PLATINUM',
-  'URNM-USDC':   'URNM',
-  'COPPER-USDC': 'COPPER',
-  'SILVER-USDC': 'SILVER',
-  'NATGAS-USDC': 'NATGAS',
-  'CRCL-USDC':   'CRCL',
-  'HOOD-USDT':   'HOOD',
+  // SP500
+  'USA500-USDT': 'SP500', 'USA500-USDC': 'SP500', 'USA500': 'SP500',
+  // XAU (Altın)
+  'GOLD-USDC': 'XAU', 'GOLD-USDT': 'XAU', 'GOLD': 'XAU', 'XAU': 'XAU', 'XAU-USDC': 'XAU',
+  // CL (Ham petrol)
+  'WTIOIL-USDC': 'CL', 'WTIOIL-USDT': 'CL', 'WTIOIL': 'CL', 'CL': 'CL', 'CL-USDC': 'CL',
+  // TSLA
+  'TSLA-USDT': 'TSLA', 'TSLA-USDC': 'TSLA', 'TSLA': 'TSLA',
+  // USDJPY
+  'USDJPY-USDC': 'USDJPY', 'USDJPY-USDT': 'USDJPY', 'USDJPY': 'USDJPY',
+  // EURUSD
+  'EURUSD-USDC': 'EURUSD', 'EURUSD-USDT': 'EURUSD', 'EURUSD': 'EURUSD',
+  // GOOGL
+  'GOOGL-USDC': 'GOOGL', 'GOOGL-USDT': 'GOOGL', 'GOOGL': 'GOOGL',
+  // NVDA
+  'NVDA-USDT': 'NVDA', 'NVDA-USDC': 'NVDA', 'NVDA': 'NVDA',
+  // PLTR
+  'PLTR-USDC': 'PLTR', 'PLTR-USDT': 'PLTR', 'PLTR': 'PLTR',
+  // PLATINUM
+  'PLATINUM-USDC': 'PLATINUM', 'PLATINUM-USDT': 'PLATINUM', 'PLATINUM': 'PLATINUM',
+  // URNM
+  'URNM-USDC': 'URNM', 'URNM-USDT': 'URNM', 'URNM': 'URNM',
+  // COPPER
+  'COPPER-USDC': 'COPPER', 'COPPER-USDT': 'COPPER', 'COPPER': 'COPPER',
+  // SILVER
+  'SILVER-USDC': 'SILVER', 'SILVER-USDT': 'SILVER', 'SILVER': 'SILVER',
+  // NATGAS
+  'NATGAS-USDC': 'NATGAS', 'NATGAS-USDT': 'NATGAS', 'NATGAS': 'NATGAS',
+  // CRCL
+  'CRCL-USDC': 'CRCL', 'CRCL-USDT': 'CRCL', 'CRCL': 'CRCL',
+  // HOOD
+  'HOOD-USDT': 'HOOD', 'HOOD-USDC': 'HOOD', 'HOOD': 'HOOD',
 };
 
 // Pacifica market fallback listesi — API'den çekilemezse kullanılır
@@ -54,20 +69,9 @@ const PACIFICA_FALLBACK = new Set([
   'PLTR','PLATINUM','URNM','COPPER','SILVER','NATGAS','CRCL','HOOD',
 ]);
 
-async function fetchPacificaSymbols(): Promise<Set<string>> {
-  try {
-    const res = await fetch('https://api.pacifica.fi/api/v1/info', { signal: AbortSignal.timeout(6000) });
-    if (!res.ok) return PACIFICA_FALLBACK;
-    const json = await res.json();
-    const markets: { symbol?: string }[] = json?.data ?? json ?? [];
-    const set = new Set<string>();
-    for (const m of markets) {
-      if (m.symbol) set.add(m.symbol.replace(/-USD$/i, '').toUpperCase());
-    }
-    // Her zaman yeni marketleri ekle
-    PACIFICA_FALLBACK.forEach(s => set.add(s));
-    return set.size > 5 ? set : PACIFICA_FALLBACK;
-  } catch { return PACIFICA_FALLBACK; }
+// Dinamik fetch kaldırıldı — sabit whitelist kullan
+function fetchPacificaSymbols(): Set<string> {
+  return PACIFICA_FALLBACK;
 }
 
 async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
@@ -166,7 +170,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const hours = Math.min(parseInt(searchParams.get('hours') || '24'), 168);
   try {
-    const pacificaSymbols = await fetchPacificaSymbols();
+    const pacificaSymbols = fetchPacificaSymbols();
     const [hlEvents, pacEvents] = await Promise.all([
       fetchHyperliquidLiqs(hours, pacificaSymbols),
       fetchPacificaLiqs(hours, pacificaSymbols),
