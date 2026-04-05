@@ -41,24 +41,27 @@ const HL_TO_PAC: Record<string, string> = {
   'HOOD-USDT':'HOOD','HOOD-USDC':'HOOD','HOOD-USDH':'HOOD',
 };
 
-// Pacifica'da kesinlikle olan tüm semboller (normalize edilmiş, -USD olmadan)
-// Bu liste HER ZAMAN kullanılır — API'den ne gelirse gelsin
-const ALWAYS_INCLUDE = [
+// Pacifica'daki TÜM 61 market — sabit liste
+// BP ve PIPPIN: sadece Pacifica'da var (HL'de yok)
+// SP500,XAU,CL,TSLA,EURUSD,GOOGL,NVDA,USDJPY,PLTR,PLATINUM,URNM,COPPER,SILVER,NATGAS,HOOD: her iki yerde de var
+// CRCL: Pacifica'da var ama HL'de henüz yok
+const PACIFICA_ALL = new Set([
+  // Kripto
   'BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','LINK','DOT',
   'BNB','LTC','BCH','UNI','ATOM','NEAR','APT','ARB','OP',
   'SUI','TRX','HYPE','PEPE','WIF','JUP','SEI','INJ','TIA',
   'WLD','BLUR','PENDLE','GMX','DYDX','RUNE','RNDR','FET',
   'MATIC','TON','BONK','PYTH','W','ALT','STRK','ZEC','ASTER',
   'LIT','PAXG','ZRO','VIRTUAL','FARTCOIN','AI16Z','TRUMP',
-  // Yeni eklenen Pacifica marketleri
-  'SP500','XAU','CL','TSLA','USDJPY','EURUSD',
-  'GOOGL','NVDA','PLTR','PLATINUM','URNM','COPPER',
-  'SILVER','NATGAS','CRCL','HOOD',
-];
+  'BP','PIPPIN',
+  // Hisse / Emtia / Forex
+  'SP500','XAU','CL','TSLA','EURUSD','GOOGL',
+  'NVDA','USDJPY','PLTR','PLATINUM','URNM','COPPER',
+  'SILVER','NATGAS','HOOD','CRCL',
+]);
 
-// İzin verilen semboller seti — normalize edilmiş (BTC-USD → BTC)
 function buildAllowedSet(): Set<string> {
-  return new Set(ALWAYS_INCLUDE);
+  return PACIFICA_ALL;
 }
 
 async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
