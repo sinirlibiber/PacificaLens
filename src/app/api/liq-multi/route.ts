@@ -38,15 +38,35 @@ const HL_TO_PAC: Record<string,string> = {
 async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
   const events: LiqEvent[] = [];
   try {
-    const res = await fetch('https://api.hyperliquid.xyz/info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'metaAndAssetCtxs', dex: 'xyz' }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return events;
-    const [meta, ctxs] = await res.json();
-    if (!Array.isArray(meta?.universe) || !Array.isArray(ctxs)) return events;
+    // İki endpoint paralel çek: normal kripto + xyz HIP-3
+    const [cryptoRes, xyzRes] = await Promise.all([
+      fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'metaAndAssetCtxs' }),
+        signal: AbortSignal.timeout(10000),
+      }),
+      fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'metaAndAssetCtxs', dex: 'xyz' }),
+        signal: AbortSignal.timeout(10000),
+      }),
+    ]);
+    if (!cryptoRes.ok || !xyzRes.ok) return events;
+    const [cryptoMeta, cryptoCtxs] = await cryptoRes.json();
+    const [xyzMeta, xyzCtxs] = await xyzRes.json();
+    // İkisini birleştir
+    const universe = [
+      ...(cryptoMeta?.universe ?? []),
+      ...(xyzMeta?.universe ?? []),
+    ];
+    const ctxs = [
+      ...(Array.isArray(cryptoCtxs) ? cryptoCtxs : []),
+      ...(Array.isArray(xyzCtxs) ? xyzCtxs : []),
+    ];
+    const meta = { universe };
+    if (!Array.isArray(universe) || !Array.isArray(ctxs)) return events;
 
     for (let i = 0; i < meta.universe.length; i++) {
       const hlRaw    = String(meta.universe[i]?.name ?? '');
