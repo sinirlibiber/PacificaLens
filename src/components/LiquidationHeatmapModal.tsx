@@ -25,7 +25,7 @@ const fmtU = (v: number) =>
 const RANGES = [
   { label: '12h', hours: 12,  interval: '15m' },
   { label: '24h', hours: 24,  interval: '1h'  },
-  { label: '48h', hours: 48,  interval: '1h'  },
+  { label: '48h', hours: 48,  interval: '2h'  },
   { label: '7d',  hours: 168, interval: '4h'  },
 ];
 
@@ -38,10 +38,19 @@ async function fetchCandles(symbol: string, interval: string, hours: number): Pr
     if (json?.success && Array.isArray(json.data) && json.data.length > 0) return json.data;
   } catch { /* fallback */ }
   const coin = symbol.replace(/-USD$/i, '');
+  // xyz HIP-3 semboller için mapping
+  const HIP3_MAP: Record<string,string> = {
+    'SP500':'xyz:SP500','XAU':'xyz:GOLD','CL':'xyz:CL','TSLA':'xyz:TSLA',
+    'NVDA':'xyz:NVDA','GOOGL':'xyz:GOOGL','PLTR':'xyz:PLTR','SILVER':'xyz:SILVER',
+    'COPPER':'xyz:COPPER','NATGAS':'xyz:NATGAS','PLATINUM':'xyz:PLATINUM',
+    'URNM':'xyz:URNM','HOOD':'xyz:HOOD','CRCL':'xyz:CRCL',
+    'EURUSD':'xyz:EUR','USDJPY':'xyz:JPY',
+  };
+  const hlCoin = HIP3_MAP[coin.toUpperCase()] ?? coin;
   try {
     const res = await fetch('https://api.hyperliquid.xyz/info', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'candleSnapshot', req: { coin, interval, startTime: start, endTime: end } }),
+      body: JSON.stringify({ type: 'candleSnapshot', req: { coin: hlCoin, interval, startTime: start, endTime: end } }),
       signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {

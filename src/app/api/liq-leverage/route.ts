@@ -116,22 +116,22 @@ async function fetchPacificaLiqLevels(
 // Pacifica sembol → HyperLiquid sembol (liq-leverage için)
 // Anahtar: Pacifica sembol adı, Değer: HL'deki karşılığı
 const PAC_TO_HL: Record<string, string> = {
-  'SP500':    'USA500-USDT',
-  'XAU':      'GOLD-USDC',
-  'CL':       'WTIOIL-USDC',
-  'TSLA':     'TSLA-USDT',
-  'USDJPY':   'USDJPY-USDC',
-  'EURUSD':   'EURUSD-USDC',
-  'GOOGL':    'GOOGL-USDC',
-  'NVDA':     'NVDA-USDT',
-  'PLTR':     'PLTR-USDC',
-  'PLATINUM': 'PLATINUM-USDC',
-  'URNM':     'URNM-USDC',
-  'COPPER':   'COPPER-USDC',
-  'SILVER':   'SILVER-USDC',
-  'NATGAS':   'NATGAS-USDC',
-  'CRCL':     'CRCL-USDC',
-  'HOOD':     'HOOD-USDT',
+  'SP500':    'xyz:SP500',
+  'XAU':      'xyz:GOLD',
+  'CL':       'xyz:CL',
+  'TSLA':     'xyz:TSLA',
+  'USDJPY':   'xyz:JPY',
+  'EURUSD':   'xyz:EUR',
+  'GOOGL':    'xyz:GOOGL',
+  'NVDA':     'xyz:NVDA',
+  'PLTR':     'xyz:PLTR',
+  'PLATINUM': 'xyz:PLATINUM',
+  'URNM':     'xyz:URNM',
+  'COPPER':   'xyz:COPPER',
+  'SILVER':   'xyz:SILVER',
+  'NATGAS':   'xyz:NATGAS',
+  'CRCL':     'xyz:CRCL',
+  'HOOD':     'xyz:HOOD',
 };
 
 // HyperLiquid: assetCtx'ten OI ve funding bazlı liq dağılımı tahmin et
@@ -140,14 +140,26 @@ async function fetchHyperliquidLiqLevels(coin: string): Promise<{ levels: LiqLev
   let markPrice = 0;
 
   try {
-    const res = await fetch('https://api.hyperliquid.xyz/info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'metaAndAssetCtxs' }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return { levels: result, markPrice };
-    const [meta, ctxs] = await res.json();
+    // Hem kripto hem xyz HIP-3 marketleri çek
+    const [cryptoRes, xyzRes] = await Promise.all([
+      fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'metaAndAssetCtxs' }),
+        signal: AbortSignal.timeout(10000),
+      }),
+      fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'metaAndAssetCtxs', dex: 'xyz' }),
+        signal: AbortSignal.timeout(10000),
+      }),
+    ]);
+    if (!cryptoRes.ok) return { levels: result, markPrice };
+    const [cryptoMeta, cryptoCtxs] = await cryptoRes.json();
+    const xyzData = xyzRes.ok ? await xyzRes.json() : [{ universe: [] }, []];
+    const universe = [...(cryptoMeta?.universe ?? []), ...(xyzData[0]?.universe ?? [])];
+    const ctxsAll  = [...(Array.isArray(cryptoCtxs) ? cryptoCtxs : []), ...(Array.isArray(xyzData[1]) ? xyzData[1] : [])];
+    const meta = { universe };
+    const ctxs = ctxsAll;
     if (!Array.isArray(meta?.universe)) return { levels: result, markPrice };
 
     // Pacifica sembolünü HL sembolüne çevir
