@@ -20,7 +20,7 @@ interface ScoreBadgeProps {
 }
 
 export function ScoreBadge({ score, showNumber = true }: ScoreBadgeProps) {
-  const [showTip, setShowTip] = useState(false);
+  const [tipPos, setTipPos] = useState<{x:number;y:number}|null>(null);
 
   if (!score) {
     return (
@@ -46,8 +46,8 @@ export function ScoreBadge({ score, showNumber = true }: ScoreBadgeProps) {
         </span>
       )}
       <div className="relative"
-        onMouseEnter={() => setShowTip(true)}
-        onMouseLeave={() => setShowTip(false)}>
+        onMouseEnter={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setTipPos({x: r.left + r.width/2, y: r.top}); }}
+        onMouseLeave={() => setTipPos(null)}>
         <span
           className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-[10px] font-bold border cursor-help
             ${bg} ${text} ${border}
@@ -56,9 +56,9 @@ export function ScoreBadge({ score, showNumber = true }: ScoreBadgeProps) {
         >
           {score.tier}
         </span>
-        {showTip && (
-          <div className="absolute bottom-full right-0 mb-1.5 z-[200] pointer-events-none" style={{ minWidth: 160 }}>
-            <div className="bg-surface border border-border1 rounded-lg px-2.5 py-1.5 shadow-md whitespace-nowrap">
+        {tipPos && (
+          <div className="pointer-events-none" style={{ position:'fixed', left: tipPos.x, top: tipPos.y, minWidth: 180, transform:'translate(-50%,-100%) translateY(-8px)', zIndex: 9999 }}>
+            <div className="bg-surface border border-border1 rounded-lg px-3 py-2 shadow-xl">
               <div className={`text-[11px] font-bold ${text}`}>{TIER_LABELS[score.tier]}</div>
               <div className="text-[10px] text-text3 mt-0.5">
                 Score: {score.score} / 100
@@ -68,15 +68,15 @@ export function ScoreBadge({ score, showNumber = true }: ScoreBadgeProps) {
                 {styleMeta.icon} {score.style}
               </div>
               {/* Breakdown */}
-              <div className="text-[9px] text-text3 mt-1 space-y-0.5">
-                <div>PnL <span className="text-text2">{score.breakdown.pnl}/20</span></div>
-                <div>Consistency <span className="text-text2">{score.breakdown.consistency}/20</span></div>
-                <div>EPR <span className="text-text2">{score.breakdown.epr}/15</span></div>
-                <div>Win Rate <span className="text-text2">{score.breakdown.winRate}/15</span></div>
-                <div>Drawdown <span className="text-text2">{score.breakdown.drawdown}/10</span></div>
-                <div>OI Risk <span className="text-text2">{score.breakdown.oiRisk}/5</span></div>
-                <div>Track Record <span className="text-text2">{score.breakdown.trackRecord ?? 0}/10</span></div>
-                <div>Cap. Efficiency <span className="text-text2">{score.breakdown.capEfficiency ?? 0}/5</span></div>
+              <div className="text-[9px] text-text3 mt-1.5 space-y-0.5">
+                <div className="flex justify-between gap-4"><span>PnL</span><span className="text-text2">{score.breakdown.pnl}/20</span></div>
+                <div className="flex justify-between gap-4"><span>Consistency</span><span className="text-text2">{score.breakdown.consistency}/20</span></div>
+                <div className="flex justify-between gap-4"><span>EPR</span><span className="text-text2">{score.breakdown.epr}/15</span></div>
+                <div className="flex justify-between gap-4"><span>Win Rate</span><span className="text-text2">{score.breakdown.winRate}/15</span></div>
+                <div className="flex justify-between gap-4"><span>Drawdown</span><span className="text-text2">{score.breakdown.drawdown}/10</span></div>
+                <div className="flex justify-between gap-4"><span>OI Risk</span><span className="text-text2">{score.breakdown.oiRisk}/5</span></div>
+                <div className="flex justify-between gap-4"><span>Track Record</span><span className="text-text2">{score.breakdown.trackRecord ?? 0}/10</span></div>
+                <div className="flex justify-between gap-4"><span>Cap. Efficiency</span><span className="text-text2">{score.breakdown.capEfficiency ?? 0}/5</span></div>
               </div>
             </div>
           </div>
