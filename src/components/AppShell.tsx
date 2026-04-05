@@ -277,16 +277,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <AppShellContext.Provider value={{ markets, tickers, fundingRates, positions, accountInfo, accountSize, setAccountSize, wallet, error, handleExecute, loading, ensureBuilderApproved, builderApproved, walletSignFn, setToast }}>
       <div className="flex flex-col h-screen overflow-hidden bg-bg">
         <Header tab={currentTab} onTabChange={handleTabChange} accountInfo={accountInfo} />
-        {!authenticated ? (
-          // Not connected — send back to globe landing page
-          <RedirectHome />
+        {loading && authenticated ? (
+          <div className="flex items-center justify-center flex-1 gap-3">
+            <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
+            <span className="text-[12px] text-text3">Loading markets...</span>
+          </div>
         ) : (
-          loading ? (
-            <div className="flex items-center justify-center flex-1 gap-3">
-              <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-              <span className="text-[12px] text-text3">Loading markets...</span>
-            </div>
-          ) : children
+          <>
+            {/* Demo mode banner */}
+            {!authenticated && (
+              <div className="flex items-center justify-center gap-3 px-4 py-1.5 text-[11px] shrink-0"
+                style={{ background: 'rgba(0,180,216,0.08)', borderBottom: '1px solid rgba(0,180,216,0.15)' }}>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                  style={{ background: 'rgba(0,180,216,0.15)', color: '#00b4d8' }}>DEMO</span>
+                <span style={{ color: 'rgba(160,200,220,0.8)' }}>
+                  Viewing in read-only mode — connect wallet to trade and access personal features
+                </span>
+              </div>
+            )}
+            {children}
+          </>
         )}
         <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-2 items-end">
           {toasts.map(t => (
