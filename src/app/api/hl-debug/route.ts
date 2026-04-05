@@ -10,28 +10,31 @@ export async function GET() {
     });
     const [meta, ctxs] = await res.json();
 
-    // Tüm sembolleri döndür — filtresiz
-    const all = meta.universe.map((u: {name:string; szDecimals:number}, i: number) => ({
+    // xyz: prefix içeren TÜM sembolleri bul
+    const xyzSymbols: {name:string;oi:string;mark:string}[] = [];
+    // İlk 10 sembolü göster (format kontrolü)
+    const first10 = meta.universe.slice(0,10).map((u: {name:string}, i: number) => ({
       name: u.name,
-      oi:   String(ctxs[i]?.openInterest ?? '0'),
-      mark: String(ctxs[i]?.markPx ?? '0'),
-      vol:  String(ctxs[i]?.dayNtlVlm ?? '0'),
+      hasColon: u.name.includes(':'),
+      oi: String(ctxs[i]?.openInterest ?? '0'),
     }));
 
-    // Sadece : içerenleri filtrele
-    const withColon = all.filter((x: {name:string}) => x.name.includes(':'));
-    
-    // SP500, GOLD, CL içerenleri filtrele  
-    const targets = ['SP500','GOLD','CL','SILVER','COPPER','TSLA','NVDA','EURUSD','USDJPY','NATGAS','PLATINUM','USA500','EUR'];
-    const withTarget = all.filter((x: {name:string}) => 
-      targets.some(t => x.name.toUpperCase().includes(t.toUpperCase()))
-    );
+    for (let i = 0; i < meta.universe.length; i++) {
+      const name = String(meta.universe[i]?.name ?? '');
+      if (name.includes(':')) {
+        xyzSymbols.push({
+          name,
+          oi:   String(ctxs[i]?.openInterest ?? '0'),
+          mark: String(ctxs[i]?.markPx ?? '0'),
+        });
+      }
+    }
 
-    return NextResponse.json({ 
-      withColon,
-      withTarget,
+    return NextResponse.json({
       totalUniverse: meta.universe.length,
-      first10: all.slice(0,10),
+      xyzCount: xyzSymbols.length,
+      xyzSymbols: xyzSymbols.slice(0,20),
+      first10,
     });
   } catch(e) {
     return NextResponse.json({error: String(e)});
