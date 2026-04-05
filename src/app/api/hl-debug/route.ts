@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     const trades = json?.data ?? [];
     
     // Tüm cause değerlerini göster
-    const causes = [...new Set(trades.map((t: {cause?:string}) => t.cause))];
+    const causesSet: Record<string,boolean> = {}; trades.forEach((t: {cause?:string}) => { if(t.cause) causesSet[t.cause]=true; }); const causes = Object.keys(causesSet);
     const liqTrades = trades.filter((t: {cause?:string}) => 
       t.cause?.toLowerCase().includes('liq')
     );
