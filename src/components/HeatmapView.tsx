@@ -6,49 +6,28 @@ import { Market } from '@/lib/pacifica';
 import { CoinLogo } from './CoinLogo';
 const LiquidationHeatmapModal = dynamic(() => import('./LiquidationHeatmapModal'), { ssr: false });
 
-interface LiqSymbolData {
-  symbol: string;
-  longLiq: number;
-  shortLiq: number;
-  total: number;
-  count: number;
-}
-interface LiqEvent {
-  id: string;
-  symbol: string;
-  side: 'long' | 'short';
-  price: number;
-  notional: number;
-  ts: number;
-}
-interface ApiMeta {
-  fetchedAt: number;
-  totalEvents: number;
-}
+interface LiqSymbolData { symbol: string; longLiq: number; shortLiq: number; total: number; count: number; }
+interface LiqEvent { id: string; symbol: string; side: 'long'|'short'; price: number; notional: number; ts: number; }
+interface ApiMeta { fetchedAt: number; totalEvents: number; }
 
 const HOURS_OPTIONS = [
-  { label: '1h',  value: 1   },
-  { label: '6h',  value: 6   },
-  { label: '24h', value: 24  },
-  { label: '7d',  value: 168 },
+  { label: '1h', value: 1 }, { label: '6h', value: 6 },
+  { label: '24h', value: 24 }, { label: '7d', value: 168 },
 ];
 
-function fmtV(v: number): string {
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
-  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
-  return `$${v.toFixed(0)}`;
-}
-function fmtTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-function fmtAgo(ts: number): string {
+const fmtV = (v: number) =>
+  v >= 1e9 ? `$${(v/1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` :
+  v >= 1e3 ? `$${(v/1e3).toFixed(1)}K` : `$${v.toFixed(0)}`;
+
+const fmtAgo = (ts: number) => {
   const d = Date.now() - ts;
-  if (d < 60000) return `${Math.floor(d / 1000)}s ago`;
-  if (d < 3600000) return `${Math.floor(d / 60000)}m ago`;
-  if (d < 86400000) return `${Math.floor(d / 3600000)}h ago`;
-  return `${Math.floor(d / 86400000)}d ago`;
-}
+  if (d < 60000) return `${Math.floor(d/1000)}s ago`;
+  if (d < 3600000) return `${Math.floor(d/60000)}m ago`;
+  return `${Math.floor(d/3600000)}h ago`;
+};
+
+const fmtTime = (ts: number) =>
+  new Date(ts).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12: false });
 
 export default function HeatmapView({ markets }: { markets: Market[] }) {
   const [summary,     setSummary    ] = useState<LiqSymbolData[]>([]);
@@ -57,8 +36,8 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
   const [loading,     setLoading    ] = useState(false);
   const [hours,       setHours      ] = useState(24);
   const [search,      setSearch     ] = useState('');
-  const [tab,         setTab        ] = useState<'table' | 'feed'>('table');
-  const [sortBy,      setSortBy     ] = useState<'total' | 'long' | 'short' | 'count'>('total');
+  const [tab,         setTab        ] = useState<'grid'|'list'|'feed'>('grid');
+  const [sortBy,      setSortBy     ] = useState<'total'|'long'|'short'>('total');
   const [modalSymbol, setModalSymbol] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -68,247 +47,282 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
     abortRef.current = ctrl;
     setLoading(true);
     try {
-      // Pacifica markets + görseldeki HL-mapped ekstra semboller
       const EXTRA_HL = ['SP500','XAU','CL','TSLA','USDJPY','EURUSD','GOOGL','NVDA','PLTR','PLATINUM','URNM','COPPER','SILVER','NATGAS','CRCL','HOOD'];
       const fromMarkets = markets.map(m => m.symbol.replace(/-USD$/i,'').toUpperCase());
       const allSymbols = Array.from(new Set([...fromMarkets, ...EXTRA_HL]));
-      const res  = await fetch(`/api/liq-multi?hours=${hours}&symbols=${encodeURIComponent(allSymbols.join(','))}`, { signal: ctrl.signal });
-      if (!res.ok) throw new Error('fetch failed');
+      const res = await fetch(`/api/liq-multi?hours=${hours}&symbols=${encodeURIComponent(allSymbols.join(','))}`, { signal: ctrl.signal });
+      if (!res.ok) throw new Error('fail');
       const data = await res.json();
       if (!ctrl.signal.aborted) {
         setSummary(data.summary ?? []);
-        setRecent(data.recent  ?? []);
-        setMeta(data.meta      ?? null);
+        setRecent(data.recent ?? []);
+        setMeta(data.meta ?? null);
       }
     } catch { /* aborted */ }
-    finally  { if (!ctrl.signal.aborted) setLoading(false); }
-  }, [hours]);
+    finally { if (!ctrl.signal.aborted) setLoading(false); }
+  }, [hours, markets]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
 
   const filtered = summary
     .filter(s => !search || s.symbol.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === 'long')  return b.longLiq  - a.longLiq;
-      if (sortBy === 'short') return b.shortLiq - a.shortLiq;
-      if (sortBy === 'count') return b.count    - a.count;
-      return b.total - a.total;
-    });
+    .sort((a, b) =>
+      sortBy === 'long' ? b.longLiq - a.longLiq :
+      sortBy === 'short' ? b.shortLiq - a.shortLiq :
+      b.total - a.total
+    );
 
   const maxTotal   = filtered[0]?.total || 1;
   const grandTotal = filtered.reduce((s, x) => s + x.total, 0);
   const grandLong  = filtered.reduce((s, x) => s + x.longLiq, 0);
   const grandShort = filtered.reduce((s, x) => s + x.shortLiq, 0);
+  const longPct    = grandTotal > 0 ? (grandLong / grandTotal) * 100 : 50;
 
-  const SortBtn = ({ col, label }: { col: typeof sortBy; label: string }) => (
-    <button onClick={() => setSortBy(col)}
-      className={`flex items-center gap-0.5 transition-colors text-[11px] font-semibold ${sortBy === col ? 'text-accent' : 'text-text3 hover:text-text2'}`}>
-      {label}{sortBy === col && <span className="text-[9px] ml-0.5">▼</span>}
-    </button>
-  );
+  const getPacMarket = (sym: string) =>
+    markets.find(m => m.symbol.replace(/-USD$/i,'').toUpperCase() === sym);
+
+  const openModal = (sym: string) => {
+    const pm = getPacMarket(sym);
+    setModalSymbol(pm?.symbol ?? (sym + '-USD'));
+  };
 
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-col h-full gap-0">
 
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-[15px] font-bold text-text1">Liquidation Monitor</h2>
-          <p className="text-[11px] text-text3 mt-0.5">
-            HyperLiquid · Pacifica — Pacifica markets only
-          </p>
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-border1 shrink-0">
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="text-[14px] font-bold text-text1 leading-none">Liquidation Monitor</h2>
+            <p className="text-[10px] text-text3 mt-0.5">HyperLiquid · Pacifica</p>
+          </div>
+          {/* Live dot */}
+          <div className="flex items-center gap-1.5 text-[10px] text-text3">
+            {loading
+              ? <span className="animate-spin text-accent text-[12px]">↻</span>
+              : <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse inline-block"/>}
+            {meta && !loading && <span>{meta.totalEvents.toLocaleString()} events · {fmtAgo(meta.fetchedAt)}</span>}
+          </div>
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-text3">
-          {loading && <span className="animate-spin text-accent">↻</span>}
-          {meta && !loading && (
-            <>
-              <span className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse inline-block" />
-                {meta.totalEvents.toLocaleString()} events
-              </span>
-              <span>· {fmtAgo(meta.fetchedAt)}</span>
-            </>
-          )}
+
+        <div className="flex items-center gap-2">
+          {/* Time filter */}
+          <div className="flex items-center gap-0.5 bg-surface2 rounded-lg p-0.5 border border-border1">
+            {HOURS_OPTIONS.map(o => (
+              <button key={o.value} onClick={() => setHours(o.value)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                  hours === o.value ? 'bg-accent/15 text-accent' : 'text-text3 hover:text-text2'}`}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text3 text-[11px]">⌕</span>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..."
+              className="bg-surface2 border border-border1 rounded-lg pl-7 pr-3 py-1 text-[11px] text-text1 outline-none focus:border-accent placeholder-text3 w-24" />
+          </div>
+
+          {/* View toggle */}
+          <div className="flex items-center gap-0.5 bg-surface2 rounded-lg p-0.5 border border-border1">
+            {([['grid','⊞'],['list','☰'],['feed','⚡']] as const).map(([t, icon]) => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-2 py-1 rounded-md text-[11px] transition-all ${tab === t ? 'bg-surface text-text1 shadow-sm' : 'text-text3 hover:text-text2'}`}
+                title={t}>
+                {icon}
+              </button>
+            ))}
+          </div>
+
+          <button onClick={load} disabled={loading}
+            className="p-1.5 bg-surface2 border border-border1 rounded-lg text-text2 hover:text-text1 transition-colors disabled:opacity-40">
+            <span className={`text-[12px] ${loading ? 'animate-spin inline-block' : ''}`}>↻</span>
+          </button>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-0.5 bg-surface border border-border1 rounded-xl p-1">
-          {HOURS_OPTIONS.map(o => (
-            <button key={o.value} onClick={() => setHours(o.value)}
-              className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                hours === o.value ? 'bg-accent/15 text-accent border border-accent/30' : 'text-text3 hover:text-text2'}`}>
-              {o.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text3 text-[12px]">⌕</span>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter..."
-            className="bg-surface border border-border1 rounded-xl pl-7 pr-3 py-1.5 text-[11px] text-text1 outline-none focus:border-accent placeholder-text3 w-28" />
-        </div>
-
-        <div className="ml-auto flex items-center gap-0.5 bg-surface border border-border1 rounded-xl p-1">
-          {(['table','feed'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                tab === t ? 'bg-surface2 text-text1 border border-border1' : 'text-text3 hover:text-text2'}`}>
-              {t === 'table' ? '⊞ Table' : '≡ Feed'}
-            </button>
-          ))}
-        </div>
-
-        <button onClick={load} disabled={loading}
-          className="px-3 py-1.5 bg-surface border border-border1 rounded-xl text-[11px] text-text2 hover:text-text1 transition-colors disabled:opacity-40">
-          <span className={loading ? 'animate-spin inline-block' : ''}>↻</span>
-        </button>
-      </div>
-
-      {/* Grand totals bar */}
+      {/* ── Stats strip ── */}
       {grandTotal > 0 && (
-        <div className="flex items-center gap-4 px-4 py-2.5 bg-surface border border-border1 rounded-xl text-[11px]">
-          <div className="flex flex-col">
-            <span className="text-text3 text-[9px] uppercase font-semibold">Total Liquidated</span>
-            <span className="text-text1 font-bold text-[14px]">{fmtV(grandTotal)}</span>
-          </div>
-          <div className="w-px h-8 bg-border1" />
-          <div className="flex flex-col">
-            <span className="text-text3 text-[9px] uppercase font-semibold">Long Liq</span>
-            <span className="text-success font-bold text-[14px]">{fmtV(grandLong)}</span>
-          </div>
-          <div className="w-px h-8 bg-border1" />
-          <div className="flex flex-col">
-            <span className="text-text3 text-[9px] uppercase font-semibold">Short Liq</span>
-            <span className="text-danger font-bold text-[14px]">{fmtV(grandShort)}</span>
-          </div>
-          <div className="flex-1 ml-2">
-            <div className="flex h-2 rounded-full overflow-hidden">
-              <div className="bg-success/70 transition-all" style={{ width: `${grandTotal > 0 ? (grandLong/grandTotal)*100 : 50}%` }} />
-              <div className="bg-danger/70 flex-1" />
+        <div className="flex items-center gap-4 px-5 py-2 border-b border-border1 bg-surface2/30 shrink-0">
+          <div className="flex items-center gap-4">
+            <div>
+              <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide">Total Liq</div>
+              <div className="text-[14px] font-bold text-text1">{fmtV(grandTotal)}</div>
             </div>
-            <div className="flex justify-between mt-0.5 text-[9px] text-text3">
-              <span>Long {grandTotal > 0 ? ((grandLong/grandTotal)*100).toFixed(0) : 50}%</span>
-              <span>Short {grandTotal > 0 ? ((grandShort/grandTotal)*100).toFixed(0) : 50}%</span>
+            <div className="w-px h-8 bg-border1"/>
+            <div>
+              <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide">Long</div>
+              <div className="text-[14px] font-bold text-success">{fmtV(grandLong)}</div>
+            </div>
+            <div className="w-px h-8 bg-border1"/>
+            <div>
+              <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide">Short</div>
+              <div className="text-[14px] font-bold text-danger">{fmtV(grandShort)}</div>
+            </div>
+            <div className="w-px h-8 bg-border1"/>
+            {/* Long/short bar */}
+            <div className="flex flex-col gap-0.5 w-32">
+              <div className="flex h-2 rounded-full overflow-hidden">
+                <div className="bg-success transition-all" style={{ width: `${longPct}%` }}/>
+                <div className="bg-danger flex-1"/>
+              </div>
+              <div className="flex justify-between text-[9px] text-text3">
+                <span>Long {longPct.toFixed(0)}%</span>
+                <span>Short {(100-longPct).toFixed(0)}%</span>
+              </div>
             </div>
           </div>
-          <div className="w-px h-8 bg-border1" />
-          <div className="text-[10px] text-text3">
-            <span className="font-semibold">{filtered.length} markets</span>
-            <span className="text-[9px] ml-1.5">· Click row for heatmap</span>
+          <div className="ml-auto text-[10px] text-text3">
+            <span className="font-semibold text-text2">{filtered.length}</span> markets
+            <span className="ml-2 opacity-60">· click for heatmap</span>
           </div>
+          {/* Sort (for list/grid) */}
+          {tab !== 'feed' && (
+            <div className="flex items-center gap-1 ml-2">
+              {(['total','long','short'] as const).map(s => (
+                <button key={s} onClick={() => setSortBy(s)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors capitalize ${
+                    sortBy === s ? 'bg-accent/15 text-accent' : 'text-text3 hover:text-text2'}`}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Table */}
-      {tab === 'table' && (
-        <div className="bg-surface border border-border1 rounded-2xl overflow-hidden flex-1 flex flex-col">
-          <div className="grid px-4 py-2.5 border-b border-border1 bg-surface2 text-[10px] uppercase tracking-wide"
-            style={{ gridTemplateColumns: '40px 1fr 110px 100px 100px 55px' }}>
-            <span className="text-text3">#</span>
-            <span className="text-text3">Symbol</span>
-            <SortBtn col="total"  label="Total Liq" />
-            <SortBtn col="long"   label="Long Liq"  />
-            <SortBtn col="short"  label="Short Liq" />
-            <SortBtn col="count"  label="Events"    />
+      {/* ── Content ── */}
+      <div className="flex-1 overflow-y-auto">
+
+        {loading && filtered.length === 0 && (
+          <div className="flex items-center justify-center py-20 gap-2 text-text3 text-[12px]">
+            <span className="animate-spin text-accent">↻</span> Fetching data...
           </div>
+        )}
+        {!loading && filtered.length === 0 && tab !== 'feed' && (
+          <div className="flex flex-col items-center justify-center py-20 gap-2">
+            <span className="text-3xl">⚡</span>
+            <span className="text-text2 text-[13px] font-semibold">No liquidation data</span>
+            <span className="text-text3 text-[11px]">Try a wider time range</span>
+          </div>
+        )}
 
-          <div className="overflow-y-auto flex-1">
-            {loading && filtered.length === 0 && (
-              <div className="flex items-center justify-center py-20 text-text3 text-[12px] gap-2">
-                <span className="animate-spin text-accent">↻</span> Fetching data...
-              </div>
-            )}
-            {!loading && filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 gap-2">
-                <span className="text-3xl">⚡</span>
-                <span className="text-text2 text-[13px] font-semibold">No liquidation data</span>
-                <span className="text-text3 text-[11px]">Try a wider time range</span>
-              </div>
-            )}
-
-            {filtered.map((s, idx) => {
-              const longPct  = s.total > 0 ? (s.longLiq / s.total) * 100 : 50;
-              const shortPct = 100 - longPct;
-              const bar      = Math.max(8, (s.total / maxTotal) * 100);
-              const domLong  = longPct >= shortPct;
-              // Pacifica market listesinde var mı?
-              const pacMarket = markets.find(m => m.symbol.replace(/-USD$/i,'').toUpperCase() === s.symbol);
-
+        {/* GRID VIEW */}
+        {tab === 'grid' && filtered.length > 0 && (
+          <div className="p-4 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+            {filtered.map((s) => {
+              const lp = s.total > 0 ? (s.longLiq / s.total) * 100 : 50;
+              const sp = 100 - lp;
+              const intensity = Math.pow(s.total / maxTotal, 0.4);
+              const pm = getPacMarket(s.symbol);
               return (
-                <div key={s.symbol} onClick={() => setModalSymbol((pacMarket?.symbol ?? s.symbol + '-USD'))}
-                  className="grid items-center px-4 py-2.5 border-b border-border1/40 hover:bg-surface2/60 transition-colors cursor-pointer"
-                  style={{ gridTemplateColumns: '40px 1fr 110px 100px 100px 55px' }}>
+                <div key={s.symbol}
+                  onClick={() => openModal(s.symbol)}
+                  className="group relative bg-surface border border-border1 rounded-xl p-3 cursor-pointer hover:border-accent/40 hover:bg-surface2/60 transition-all"
+                  style={{ boxShadow: `0 0 0 0 transparent` }}>
 
-                  <span className="text-[11px] text-text3 font-mono">{idx + 1}</span>
+                  {/* Intensity indicator */}
+                  <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl overflow-hidden">
+                    <div className="h-full transition-all"
+                      style={{
+                        width: `${intensity * 100}%`,
+                        background: lp >= 50
+                          ? `rgba(52,211,153,${0.4 + intensity * 0.6})`
+                          : `rgba(239,68,68,${0.4 + intensity * 0.6})`,
+                      }}/>
+                  </div>
 
-                  {/* Symbol + Logo */}
-                  <div className="flex items-center gap-2">
-                    <CoinLogo symbol={pacMarket?.symbol ?? (s.symbol + '-USD')} size={22} />
-                    <div>
-                      <div className="text-[13px] font-bold text-text1 leading-none">{s.symbol}</div>
-                      <div className="flex mt-1 rounded-full overflow-hidden" style={{ width: bar, height: 3 }}>
-                        <div className="bg-success/80" style={{ width: `${longPct}%` }} />
-                        <div className="bg-danger/80"  style={{ width: `${shortPct}%` }} />
-                      </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <CoinLogo symbol={pm?.symbol ?? (s.symbol+'-USD')} size={20}/>
+                      <span className="text-[12px] font-bold text-text1">{s.symbol}</span>
                     </div>
+                    <span className="text-[9px] text-text3 opacity-0 group-hover:opacity-100 transition-opacity">↗ map</span>
                   </div>
 
-                  {/* Total */}
-                  <div>
-                    <span className="text-[13px] font-bold text-text1">{fmtV(s.total)}</span>
-                    <div className={`text-[9px] font-semibold mt-0.5 ${domLong ? 'text-success' : 'text-danger'}`}>
-                      {domLong ? '▲ Longs dom.' : '▼ Shorts dom.'}
-                    </div>
+                  <div className="text-[15px] font-bold text-text1 mb-1">{fmtV(s.total)}</div>
+
+                  {/* Long/short bar */}
+                  <div className="flex h-1.5 rounded-full overflow-hidden mb-1.5">
+                    <div className="bg-success/80" style={{ width: `${lp}%` }}/>
+                    <div className="bg-danger/80 flex-1"/>
                   </div>
 
-                  <div>
-                    <span className="text-[13px] font-semibold text-success">{fmtV(s.longLiq)}</span>
-                    <div className="text-[9px] text-text3 mt-0.5">{longPct.toFixed(0)}%</div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-success font-semibold">{fmtV(s.longLiq)}</span>
+                    <span className="text-danger font-semibold">{fmtV(s.shortLiq)}</span>
                   </div>
-
-                  <div>
-                    <span className="text-[13px] font-semibold text-danger">{fmtV(s.shortLiq)}</span>
-                    <div className="text-[9px] text-text3 mt-0.5">{shortPct.toFixed(0)}%</div>
+                  <div className="flex justify-between text-[9px] text-text3 mt-0.5">
+                    <span>Long {lp.toFixed(0)}%</span>
+                    <span>Short {sp.toFixed(0)}%</span>
                   </div>
-
-                  <span className="text-[12px] font-mono text-text2">{s.count}</span>
                 </div>
               );
             })}
           </div>
+        )}
 
-          {filtered.length > 0 && (
-            <div className="px-4 py-2 border-t border-border1 bg-surface2/50 flex items-center gap-4 text-[10px] text-text3 shrink-0">
-              <span>{filtered.length} markets · {(meta?.totalEvents ?? 0).toLocaleString()} events</span>
-              <span className="ml-auto">
-                <span className="text-success font-semibold">{fmtV(grandLong)}</span>
-                <span className="mx-1">long /</span>
-                <span className="text-danger font-semibold">{fmtV(grandShort)}</span>
-                <span className="ml-1">short</span>
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+        {/* LIST VIEW */}
+        {tab === 'list' && filtered.length > 0 && (
+          <table className="w-full text-[12px]">
+            <thead className="sticky top-0 bg-surface2 border-b border-border1 z-10">
+              <tr>
+                <th className="text-left pl-4 py-2 text-[10px] text-text3 font-semibold uppercase w-8">#</th>
+                <th className="text-left pl-2 py-2 text-[10px] text-text3 font-semibold uppercase">Symbol</th>
+                <th className="text-right pr-4 py-2 text-[10px] text-text3 font-semibold uppercase">Total</th>
+                <th className="text-right pr-4 py-2 text-[10px] text-success font-semibold uppercase">Long</th>
+                <th className="text-right pr-4 py-2 text-[10px] text-danger font-semibold uppercase">Short</th>
+                <th className="text-right pr-4 py-2 text-[10px] text-text3 font-semibold uppercase w-40">L/S Ratio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((s, idx) => {
+                const lp = s.total > 0 ? (s.longLiq / s.total) * 100 : 50;
+                const pm = getPacMarket(s.symbol);
+                return (
+                  <tr key={s.symbol}
+                    onClick={() => openModal(s.symbol)}
+                    className="border-b border-border1/30 hover:bg-surface2/50 cursor-pointer transition-colors">
+                    <td className="pl-4 py-2.5 text-text3 font-mono">{idx+1}</td>
+                    <td className="pl-2 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <CoinLogo symbol={pm?.symbol ?? (s.symbol+'-USD')} size={20}/>
+                        <div>
+                          <div className="font-bold text-text1">{s.symbol}</div>
+                          <div className={`text-[9px] font-semibold ${lp >= 50 ? 'text-success' : 'text-danger'}`}>
+                            {lp >= 50 ? '▲ Longs' : '▼ Shorts'} dom.
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="pr-4 py-2.5 text-right">
+                      <span className="font-bold text-text1">{fmtV(s.total)}</span>
+                    </td>
+                    <td className="pr-4 py-2.5 text-right text-success font-semibold">{fmtV(s.longLiq)}</td>
+                    <td className="pr-4 py-2.5 text-right text-danger font-semibold">{fmtV(s.shortLiq)}</td>
+                    <td className="pr-4 py-2.5 w-40">
+                      <div className="flex h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-success/70" style={{ width: `${lp}%` }}/>
+                        <div className="bg-danger/70 flex-1"/>
+                      </div>
+                      <div className="flex justify-between text-[9px] text-text3 mt-0.5">
+                        <span>{lp.toFixed(0)}%</span>
+                        <span>{(100-lp).toFixed(0)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
 
-      {/* Feed */}
-      {tab === 'feed' && (
-        <div className="bg-surface border border-border1 rounded-2xl overflow-hidden flex-1 flex flex-col">
-          <div className="grid px-4 py-2.5 border-b border-border1 bg-surface2 text-[10px] uppercase tracking-wide text-text3"
-            style={{ gridTemplateColumns: '80px 1fr 75px 90px 90px' }}>
-            <span>Time</span><span>Symbol</span><span>Side</span><span>Size</span><span>Price</span>
-          </div>
-
-          <div className="overflow-y-auto flex-1">
-            {loading && recent.length === 0 && (
-              <div className="flex items-center justify-center py-20 text-text3 text-[12px] gap-2">
-                <span className="animate-spin text-accent">↻</span> Loading...
-              </div>
-            )}
-            {!loading && recent.length === 0 && (
+        {/* FEED VIEW */}
+        {tab === 'feed' && (
+          <div>
+            {recent.length === 0 && !loading && (
               <div className="flex flex-col items-center justify-center py-20 gap-2">
                 <span className="text-3xl">📭</span>
                 <span className="text-text2 text-[13px] font-semibold">No recent liquidations</span>
@@ -318,31 +332,31 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
               .filter(e => !search || e.symbol.toLowerCase().includes(search.toLowerCase()))
               .slice(0, 200)
               .map((e, i) => {
-                const pacMarket = markets.find(m => m.symbol.replace(/-USD$/i,'').toUpperCase() === e.symbol);
+                const pm = getPacMarket(e.symbol);
                 return (
-                  <div key={e.id ?? i} onClick={() => setModalSymbol(pacMarket?.symbol ?? (e.symbol + '-USD'))}
-                    className="grid items-center px-4 py-2 border-b border-border1/30 hover:bg-surface2/50 cursor-pointer transition-colors"
-                    style={{ gridTemplateColumns: '80px 1fr 75px 90px 90px' }}>
-                    <span className="font-mono text-[10px] text-text3">{fmtTime(e.ts)}</span>
-                    <div className="flex items-center gap-1.5">
-                      <CoinLogo symbol={pacMarket?.symbol ?? (e.symbol + '-USD')} size={15} />
-                      <span className="text-[12px] font-semibold text-text1">{e.symbol}</span>
+                  <div key={e.id ?? i}
+                    onClick={() => openModal(e.symbol)}
+                    className="flex items-center gap-3 px-5 py-2.5 border-b border-border1/30 hover:bg-surface2/50 cursor-pointer transition-colors">
+                    <span className="font-mono text-[10px] text-text3 w-12 shrink-0">{fmtTime(e.ts)}</span>
+                    <div className="flex items-center gap-1.5 w-24 shrink-0">
+                      <CoinLogo symbol={pm?.symbol ?? (e.symbol+'-USD')} size={16}/>
+                      <span className="text-[12px] font-bold text-text1">{e.symbol}</span>
                     </div>
-                    <span className={`text-[10px] font-bold ${e.side === 'long' ? 'text-success' : 'text-danger'}`}>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                      e.side === 'long' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
                       {e.side === 'long' ? '▲ LONG' : '▼ SHORT'}
                     </span>
-                    <span className="text-[12px] font-mono font-semibold text-text1">{fmtV(e.notional)}</span>
-                    <span className="font-mono text-[10px] text-text2">
+                    <span className="text-[12px] font-mono font-bold text-text1 ml-auto">{fmtV(e.notional)}</span>
+                    <span className="font-mono text-[10px] text-text3 w-24 text-right shrink-0">
                       {e.price > 0 ? `$${e.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—'}
                     </span>
                   </div>
                 );
               })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Modal */}
       {modalSymbol && (
         <LiquidationHeatmapModal symbol={modalSymbol} onClose={() => setModalSymbol(null)} />
       )}
