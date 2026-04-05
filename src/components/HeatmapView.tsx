@@ -68,7 +68,9 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
     abortRef.current = ctrl;
     setLoading(true);
     try {
-      const res  = await fetch(`/api/liq-multi?hours=${hours}`, { signal: ctrl.signal });
+      // Pacifica'dan gelen gerçek market listesini API'ye gönder
+      const symbols = markets.map(m => m.symbol.replace(/-USD$/i,'')).join(',');
+      const res  = await fetch(`/api/liq-multi?hours=${hours}&symbols=${encodeURIComponent(symbols)}`, { signal: ctrl.signal });
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json();
       if (!ctrl.signal.aborted) {

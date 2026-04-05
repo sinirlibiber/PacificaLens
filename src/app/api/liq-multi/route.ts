@@ -1,5 +1,6 @@
 /**
- * GET /api/liq-multi?hours=24
+ * GET /api/liq-multi?hours=24&symbols=BTC,ETH,SOL,...
+ * symbols: HeatmapView'dan gelen Pacifica market listesi (gerçek, doğru)
  */
 import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 20;
@@ -20,8 +21,7 @@ export interface LiqSymbolData {
   count: number;
 }
 
-// HyperLiquid sembol → Pacifica sembol
-// HL'de bir sembolün USDT/USDC/USDH varyantları olabilir, hepsi aynı Pacifica sembolüne gider
+// HyperLiquid sembol adı → Pacifica sembol adı mapping
 const HL_TO_PAC: Record<string, string> = {
   'USA500-USDT':'SP500','USA500-USDC':'SP500','USA500-USDH':'SP500','USA500':'SP500',
   'GOLD-USDC':'XAU','GOLD-USDT':'XAU','GOLD-USDH':'XAU','GOLD':'XAU',
@@ -40,29 +40,6 @@ const HL_TO_PAC: Record<string, string> = {
   'CRCL-USDC':'CRCL','CRCL-USDT':'CRCL','CRCL-USDH':'CRCL',
   'HOOD-USDT':'HOOD','HOOD-USDC':'HOOD','HOOD-USDH':'HOOD',
 };
-
-// Pacifica'daki TÜM 61 market — sabit liste
-// BP ve PIPPIN: sadece Pacifica'da var (HL'de yok)
-// SP500,XAU,CL,TSLA,EURUSD,GOOGL,NVDA,USDJPY,PLTR,PLATINUM,URNM,COPPER,SILVER,NATGAS,HOOD: her iki yerde de var
-// CRCL: Pacifica'da var ama HL'de henüz yok
-const PACIFICA_ALL = new Set([
-  // Kripto
-  'BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','LINK','DOT',
-  'BNB','LTC','BCH','UNI','ATOM','NEAR','APT','ARB','OP',
-  'SUI','TRX','HYPE','PEPE','WIF','JUP','SEI','INJ','TIA',
-  'WLD','BLUR','PENDLE','GMX','DYDX','RUNE','RNDR','FET',
-  'MATIC','TON','BONK','PYTH','W','ALT','STRK','ZEC','ASTER',
-  'LIT','PAXG','ZRO','VIRTUAL','FARTCOIN','AI16Z','TRUMP',
-  'BP','PIPPIN',
-  // Hisse / Emtia / Forex
-  'SP500','XAU','CL','TSLA','EURUSD','GOOGL',
-  'NVDA','USDJPY','PLTR','PLATINUM','URNM','COPPER',
-  'SILVER','NATGAS','HOOD','CRCL',
-]);
-
-function buildAllowedSet(): Set<string> {
-  return PACIFICA_ALL;
-}
 
 async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
   const events: LiqEvent[] = [];
@@ -87,17 +64,17 @@ async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promis
         ?? HL_TO_PAC[hlRaw.toUpperCase()]
         ?? hlRaw.toUpperCase().replace(/-(USDT|USDC|USDH|USD)$/i, '');
 
+      // Sadece Pacifica'dan gelen listede olanları al
       if (!allowed.has(pacSymbol)) continue;
 
       const openInt   = parseFloat(String(ctx.openInterest ?? '0'));
       const markPrice = parseFloat(String(ctx.markPx ?? '0'));
-      const dayVol    = parseFloat(String(ctx.dayNtlVlm ?? '0'));
-      if (!markPrice || openInt <= 0 || dayVol < 100) continue;
+      if (!markPrice || openInt <= 0) continue;
 
       const funding  = parseFloat(String(ctx.funding ?? '0'));
       const liqRate  = Math.min(Math.max(Math.abs(funding) * 600 + 0.0015, 0.0015), 0.01);
       const totalLiq = openInt * markPrice * liqRate * Math.min(hours / 24, 1);
-      if (totalLiq < 50) continue;
+      if (totalLiq <= 0) continue;
 
       const longBias = funding > 0 ? 0.65 : 0.35;
       const slices   = Math.max(1, Math.min(hours * 2, 48));
@@ -115,9 +92,7 @@ async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promis
 async function fetchPacificaLiqs(hours: number, allowed: Set<string>): Promise<LiqEvent[]> {
   const events: LiqEvent[] = [];
   const cutoff  = Date.now() - hours * 3600 * 1000;
-  const symbols = Array.from(allowed);
-
-  await Promise.all(symbols.map(async (coin) => {
+  await Promise.all(Array.from(allowed).map(async (coin) => {
     try {
       const res = await fetch(
         `https://api.pacifica.fi/api/v1/trades?symbol=${coin}-USD&limit=500`,
@@ -156,13 +131,29 @@ function buildSummary(events: LiqEvent[]): LiqSymbolData[] {
     s.total += e.notional;
     s.count++;
   }
-  return Array.from(map.values()).filter(s => s.total > 50).sort((a, b) => b.total - a.total);
+  return Array.from(map.values()).filter(s => s.total > 0).sort((a, b) => b.total - a.total);
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const hours   = Math.min(parseInt(searchParams.get('hours') || '24'), 168);
-  const allowed = buildAllowedSet();
+  // HeatmapView'dan gelen Pacifica market listesi — bu gerçek ve doğru
+  const symbolsParam = searchParams.get('symbols') || '';
+  const allowed = new Set(
+    symbolsParam
+      .split(',')
+      .map(s => s.trim().toUpperCase())
+      .filter(Boolean)
+  );
+
+  // symbols parametresi yoksa boş döndür — hatalı veri gösterme
+  if (allowed.size === 0) {
+    return NextResponse.json({
+      summary: [], recent: [], pacificaSymbols: [],
+      meta: { fetchedAt: Date.now(), hours, totalEvents: 0, sources: { hyperliquid: 0, pacifica: 0 } },
+    });
+  }
+
   try {
     const [hlEvents, pacEvents] = await Promise.all([
       fetchHyperliquidLiqs(hours, allowed),
