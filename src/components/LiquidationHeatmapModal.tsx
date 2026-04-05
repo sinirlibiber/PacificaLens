@@ -23,10 +23,9 @@ const fmtU = (v: number) =>
   : `$${v.toFixed(0)}`;
 
 const RANGES = [
-  { label: '12h', hours: 12,  interval: '15m' },
-  { label: '24h', hours: 24,  interval: '1h'  },
-  { label: '48h', hours: 48,  interval: '2h'  },
-  { label: '7d',  hours: 168, interval: '4h'  },
+  { label: '12h', hours: 12, interval: '15m' },
+  { label: '24h', hours: 24, interval: '1h'  },
+  { label: '48h', hours: 48, interval: '2h'  },
 ];
 
 async function fetchCandles(symbol: string, interval: string, hours: number): Promise<Candle[]> {
@@ -73,6 +72,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
   const [error,    setError   ] = useState('');
   const [stats,    setStats   ] = useState({ price: 0, totalLong: 0, totalShort: 0 });
   const [tooltip,  setTooltip ] = useState<{
+    clientX: number; clientY: number;
     x: number; y: number;
     date: string; o: string; h: string; l: string; c: string;
     liqLong: number; liqShort: number;
@@ -237,14 +237,18 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     // ── Alt panel: Liq leverage bar chart ──
     // X: fiyat (solda minP, sağda maxP) — fiyat ekseni yatay
     // Y: notional büyüklüğü (yukarı = büyük)
-    ctx.fillStyle = bgPanel;
+    // Alt panel bg - subtle gradient
+    const panelGrad = ctx.createLinearGradient(0, PRICE_H+2, 0, PRICE_H+2+LIQ_H);
+    panelGrad.addColorStop(0, isDark ? '#0a0d1a' : '#ffffff');
+    panelGrad.addColorStop(1, isDark ? '#06080f' : '#f4f6fa');
+    ctx.fillStyle = panelGrad;
     ctx.fillRect(0, PRICE_H + 2, CW, LIQ_H);
 
-    // Alt panel grid
-    ctx.strokeStyle = gridC;
+    // Alt panel grid - sadece 2 yatay çizgi, daha ince
+    ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
     ctx.lineWidth   = 1;
-    for (let i = 1; i < 4; i++) {
-      const y = PRICE_H + 2 + (i / 4) * LIQ_H;
+    for (let i = 1; i < 3; i++) {
+      const y = PRICE_H + 2 + (i / 3) * LIQ_H;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
     }
 
@@ -286,30 +290,56 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       for (let bi = 0; bi < BUCKETS; bi++) {
         const b     = buckets[bi];
         const total = b.long + b.short;
-        if (total < maxBucket * 0.015) continue;
+        if (total < maxBucket * 0.01) continue;
 
-        const x     = toX(minP + (bi + 0.5) * bucketW);
-        const normH = Math.pow(total / maxBucket, 0.55) * maxBarH;
+        const x      = toX(minP + (bi + 0.5) * bucketW);
+        const normH  = Math.pow(total / maxBucket, 0.5) * maxBarH;
+        const barW   = Math.max(3, barPixW);
+        const radius = Math.min(2, barW / 3);
 
-        // Long (teal) — altta
+        // Long (teal) — gradient bar altta
         const longH = total > 0 ? (b.long / total) * normH : 0;
-        if (longH > 0.5) {
-          ctx.fillStyle = isDark ? 'rgba(0,200,170,0.70)' : 'rgba(0,150,130,0.75)';
-          ctx.fillRect(x - barPixW/2, panelTop + LIQ_H - longH, barPixW, longH);
+        if (longH > 1) {
+          const gy = panelTop + LIQ_H - longH;
+          const grad = ctx.createLinearGradient(0, gy, 0, gy + longH);
+          grad.addColorStop(0, isDark ? 'rgba(0,230,190,0.90)' : 'rgba(0,160,130,0.90)');
+          grad.addColorStop(1, isDark ? 'rgba(0,180,150,0.30)' : 'rgba(0,120,100,0.25)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.roundRect(x - barW/2, gy, barW, longH, [radius, radius, 0, 0]);
+          ctx.fill();
         }
 
-        // Short (kırmızı) — long'un üstünde
+        // Short (red) — gradient bar long üstünde
         const shortH = total > 0 ? (b.short / total) * normH : 0;
-        if (shortH > 0.5) {
-          ctx.fillStyle = isDark ? 'rgba(255,80,80,0.60)' : 'rgba(210,50,50,0.65)';
-          ctx.fillRect(x - barPixW/2, panelTop + LIQ_H - longH - shortH, barPixW, shortH);
+        if (shortH > 1) {
+          const gy = panelTop + LIQ_H - longH - shortH;
+          const grad2 = ctx.createLinearGradient(0, gy, 0, gy + shortH);
+          grad2.addColorStop(0, isDark ? 'rgba(255,90,90,0.90)' : 'rgba(210,50,50,0.90)');
+          grad2.addColorStop(1, isDark ? 'rgba(220,60,60,0.25)' : 'rgba(180,40,40,0.20)');
+          ctx.fillStyle = grad2;
+          ctx.beginPath();
+          ctx.roundRect(x - barW/2, gy, barW, shortH, [radius, radius, 0, 0]);
+          ctx.fill();
+        }
+
+        // Glow on large bars
+        if (total > maxBucket * 0.4) {
+          ctx.shadowColor = b.long > b.short
+            ? (isDark ? 'rgba(0,230,190,0.4)' : 'rgba(0,160,130,0.3)')
+            : (isDark ? 'rgba(255,80,80,0.4)' : 'rgba(210,50,50,0.3)');
+          ctx.shadowBlur = 6;
+          ctx.fillStyle = 'transparent';
+          ctx.fillRect(x - barW/2, panelTop + LIQ_H - normH, barW, normH);
+          ctx.shadowBlur = 0;
+          ctx.shadowColor = 'transparent';
         }
       }
 
       // Cumulative Long line (teal)
       ctx.beginPath();
-      ctx.strokeStyle = isDark ? 'rgba(0,220,180,0.90)' : 'rgba(0,160,130,0.95)';
-      ctx.lineWidth   = 1.5;
+      ctx.strokeStyle = isDark ? 'rgba(0,240,200,0.95)' : 'rgba(0,160,130,0.95)';
+      ctx.lineWidth   = 2;
       ctx.lineJoin    = 'round';
       let cLStarted = false;
       for (let bi = 0; bi < BUCKETS; bi++) {
@@ -322,8 +352,8 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
 
       // Cumulative Short line (kırmızı)
       ctx.beginPath();
-      ctx.strokeStyle = isDark ? 'rgba(255,100,100,0.90)' : 'rgba(200,50,50,0.95)';
-      ctx.lineWidth   = 1.5;
+      ctx.strokeStyle = isDark ? 'rgba(255,100,100,0.95)' : 'rgba(200,50,50,0.95)';
+      ctx.lineWidth   = 2;
       let cSStarted = false;
       for (let bi = 0; bi < BUCKETS; bi++) {
         if (cumShortArr[bi] <= 0) continue;
@@ -468,6 +498,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     }
 
     setTooltip({
+      clientX: e.clientX, clientY: e.clientY,
       x: e.clientX - rect.left, y: e.clientY - rect.top,
       date: dl,
       o: parseFloat(candle.o).toFixed(1),
@@ -579,15 +610,16 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
             onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} />
 
           {tooltip && (
-            <div className="absolute pointer-events-none rounded-xl z-20"
+            <div className="fixed pointer-events-none rounded-xl z-[9999]"
               style={{
-                left: Math.min(tooltip.x + 16, 660),
-                top:  Math.max(tooltip.y - 10, 4),
-                background: isDark ? 'rgba(6,8,15,0.96)' : 'rgba(248,250,252,0.97)',
+                left: tooltip.clientX + 18,
+                top:  Math.max(tooltip.clientY - 80, 10),
+                background: isDark ? 'rgba(6,8,15,0.97)' : 'rgba(248,250,252,0.98)',
                 border: `1px solid ${bd}`,
                 padding: '10px 14px',
-                minWidth: 200,
-                boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                minWidth: 210,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                transform: tooltip.clientX > window.innerWidth - 260 ? 'translateX(-100%) translateX(-36px)' : 'none',
               }}>
               {tooltip.inLiqPanel ? (
                 // Alt panel tooltip — 2. görsel gibi

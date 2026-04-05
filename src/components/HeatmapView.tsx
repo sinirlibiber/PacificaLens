@@ -95,7 +95,7 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
         <div className="flex items-center gap-3">
           <div>
             <h2 className="text-[14px] font-bold text-text1 leading-none">Liquidation Monitor</h2>
-            <p className="text-[10px] text-text3 mt-0.5">HyperLiquid · Pacifica</p>
+            <p className="text-[10px] text-text3 mt-0.5">2 Perp DEX data</p>
           </div>
           {/* Live dot */}
           <div className="flex items-center gap-1.5 text-[10px] text-text3">
@@ -175,21 +175,9 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
             </div>
           </div>
           <div className="ml-auto text-[10px] text-text3">
-            <span className="font-semibold text-text2">{filtered.length}</span> markets
-            <span className="ml-2 opacity-60">· click for heatmap</span>
+            <span className="opacity-60">Click row for heatmap</span>
           </div>
-          {/* Sort (for list/grid) */}
-          {tab !== 'feed' && (
-            <div className="flex items-center gap-1 ml-2">
-              {(['total','long','short'] as const).map(s => (
-                <button key={s} onClick={() => setSortBy(s)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors capitalize ${
-                    sortBy === s ? 'bg-accent/15 text-accent' : 'text-text3 hover:text-text2'}`}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
+
         </div>
       )}
 
