@@ -65,7 +65,7 @@ async function fetchPacificaSymbols(): Promise<Set<string>> {
       if (m.symbol) set.add(m.symbol.replace(/-USD$/i, '').toUpperCase());
     }
     // Her zaman yeni marketleri ekle
-    for (const s of PACIFICA_FALLBACK) set.add(s);
+    PACIFICA_FALLBACK.forEach(s => set.add(s));
     return set.size > 5 ? set : PACIFICA_FALLBACK;
   } catch { return PACIFICA_FALLBACK; }
 }
