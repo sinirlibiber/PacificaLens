@@ -496,9 +496,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                 <span className="text-[12px] font-bold text-text1">Market Signals</span>
               </div>
               <div className="flex items-center gap-2 text-[10px] text-text3">
-                <span className="px-1.5 py-0.5 rounded-full bg-surface text-[9px] border border-border1">3h window</span>
                 {isScanning && <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />}
-                {lastScan ? `Updated ${lastScan.toLocaleTimeString()}` : 'Connecting...'}
               </div>
             </div>
             <div className="grid grid-cols-2 divide-x divide-border1">
@@ -518,7 +516,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                       </span>
                       <span className="text-[10px] text-text3">{new Date(a.ts).toLocaleTimeString()}</span>
                     </div>
-                  )) : <div className="py-6 text-center text-text3 text-[11px]">No OI spikes in last 3h</div>}
+                  )) : <div className="py-6 text-center text-text3 text-[11px]">No OI spikes</div>}
                 </div>
               </div>
               {/* Funding Spikes */}

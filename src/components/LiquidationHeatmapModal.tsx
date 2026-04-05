@@ -5,7 +5,7 @@
  * Alt panel: Liq leverage bar chart (long=teal, short=kırmızı) — fiyat seviyelerine göre
  * Tema: dark/light uyumlu
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CoinLogo } from './CoinLogo';
 
 interface Candle { t: number; o: string; h: string; l: string; c: string; v: string; }
@@ -23,9 +23,10 @@ const fmtU = (v: number) =>
   : `$${v.toFixed(0)}`;
 
 const RANGES = [
-  { label: '12h', hours: 12, interval: '15m' },
-  { label: '24h', hours: 24, interval: '1h'  },
-  { label: '48h', hours: 48, interval: '2h'  },
+  { label: '12h', hours: 12,  interval: '15m' },
+  { label: '24h', hours: 24,  interval: '1h'  },
+  { label: '48h', hours: 48,  interval: '2h'  },
+  { label: '7d',  hours: 168, interval: '4h'  },
 ];
 
 async function fetchCandles(symbol: string, interval: string, hours: number): Promise<Candle[]> {
@@ -81,6 +82,9 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     cumLong: number; cumShort: number;
   } | null>(null);
 
+  // Zoom/pan state: viewOffset=sola kaydırma (candle sayısı), viewZoom=görünen candle sayısı oranı
+  const zoomRef  = useRef({ offset: 0, zoom: 1.0 }); // offset: sağdan kaç candle atlandı, zoom: <1 = zoom in
+  const dragRef  = useRef({ dragging: false, startX: 0, startOffset: 0 });
   const coin = symbol.replace(/-USD$/i, '').replace(/-PERP$/i, '');
 
   const metaRef = useRef({
@@ -101,11 +105,21 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     liqLevels: LiqLevel[],
     markPrice: number,
     isDark: boolean,
+    offsetOverride?: number,
+    zoomOverride?: number,
   ) => {
     const canvas = canvasRef.current;
     if (!canvas || !candles.length) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // Zoom/pan uygula
+    const { offset, zoom } = { offset: offsetOverride ?? zoomRef.current.offset, zoom: zoomOverride ?? zoomRef.current.zoom };
+    const totalCandles = candles.length;
+    const visibleCount = Math.max(10, Math.round(totalCandles * zoom));
+    const startIdx = Math.max(0, Math.min(totalCandles - visibleCount, offset));
+    const sliced = candles.slice(startIdx, startIdx + visibleCount);
+    const displayCandles = sliced.length > 0 ? sliced : candles;
 
     const CW = canvas.width, CH = canvas.height;
     const PRICE_H = Math.round(CH * 0.78); // üst %78 fiyat
@@ -121,16 +135,16 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     const divC     = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
 
     // Fiyat aralığı
-    const allH = candles.map(c => parseFloat(c.h));
-    const allL = candles.map(c => parseFloat(c.l));
+    const allH = displayCandles.map(c => parseFloat(c.h));
+    const allL = displayCandles.map(c => parseFloat(c.l));
     let maxP = Math.max(...allH, markPrice);
     let minP = Math.min(...allL, markPrice);
     const pad = (maxP - minP) * 0.08;
     maxP += pad; minP = Math.max(0, minP - pad);
 
-    const times = candles.map(c => c.t > 1e12 ? c.t : c.t * 1000);
+    const times = displayCandles.map(c => c.t > 1e12 ? c.t : c.t * 1000);
     const minT  = Math.min(...times), maxT = Math.max(...times);
-    const COLS  = candles.length;
+    const COLS  = displayCandles.length;
     const cellW = CW / COLS;
 
     // Liq verilerini fiyat aralığında filtrele ve sırala
@@ -142,7 +156,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
 
     // Meta kaydet
     metaRef.current = {
-      candles, liqByPrice: visible.map(lv => ({ price: lv.price, long: lv.longLiq, short: lv.shortLiq })),
+      candles: displayCandles, liqByPrice: visible.map(lv => ({ price: lv.price, long: lv.longLiq, short: lv.shortLiq })),
       minP, maxP, minT, maxT, W: CW, H: CH, PRICE_H, LIQ_H, COLS, cellW, markPrice, isDark, cumLong: 0, cumShort: 0, buckets: [], bucketW: 0,
     };
 
@@ -169,7 +183,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
     }
 
     // ── Price area fill ──
-    const closes = candles.map(c => parseFloat(c.c));
+    const closes = displayCandles.map(c => parseFloat(c.c));
     ctx.beginPath();
     for (let i = 0; i < closes.length; i++) {
       const x = (i + 0.5) * cellW;
@@ -214,7 +228,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
       const y = toY(markPrice);
       if (y >= 0 && y <= PRICE_H) {
         ctx.setLineDash([5, 5]);
-        ctx.strokeStyle = isDark ? 'rgba(255,215,0,0.85)' : 'rgba(180,120,0,1)';
+        ctx.strokeStyle = isDark ? 'rgba(255,215,0,0.85)' : 'rgba(26,86,219,0.9)';
         ctx.lineWidth   = 1;
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
         ctx.setLineDash([]);
@@ -222,9 +236,9 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
         const lbl = fmtP(markPrice);
         ctx.font  = 'bold 10px ui-monospace,monospace';
         const tw  = ctx.measureText(lbl).width;
-        ctx.fillStyle = isDark ? '#FFD700' : '#b87800';
+        ctx.fillStyle = isDark ? '#FFD700' : '#1a56db';
         ctx.fillRect(CW - tw - 18, y - 9, tw + 14, 18);
-        ctx.fillStyle = isDark ? '#000' : '#fff';
+        ctx.fillStyle = '#fff';
         ctx.textAlign = 'right';
         ctx.fillText(lbl, CW - 5, y + 4);
       }
@@ -514,8 +528,54 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
 
   const onMouseLeave = useCallback(() => {
     setTooltip(null);
+    dragRef.current.dragging = false;
     overlayRef.current?.getContext('2d')?.clearRect(0, 0, 9999, 9999);
   }, []);
+
+  const allCandlesRef = useRef<Candle[]>([]);
+  const liqLevelsRef  = useRef<LiqLevel[]>([]);
+  const markPriceRef  = useRef(0);
+  const isDarkRef     = useRef(true);
+
+  const redraw = useCallback(() => {
+    if (!allCandlesRef.current.length) return;
+    draw(allCandlesRef.current, liqLevelsRef.current, markPriceRef.current, isDarkRef.current);
+  }, [draw]);
+
+  const onWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const z = zoomRef.current;
+    const delta = e.deltaY > 0 ? 1.15 : 0.87; // zoom out / in
+    const newZoom = Math.max(0.05, Math.min(1.0, z.zoom * delta));
+    const total = allCandlesRef.current.length;
+    const newVisible = Math.round(total * newZoom);
+    // Keep right edge fixed
+    z.zoom = newZoom;
+    z.offset = Math.max(0, Math.min(total - newVisible, z.offset));
+    redraw();
+  }, [redraw]);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    dragRef.current = { dragging: true, startX: e.clientX, startOffset: zoomRef.current.offset };
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    dragRef.current.dragging = false;
+  }, []);
+
+  const onDragMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!dragRef.current.dragging) return;
+    const oc = overlayRef.current;
+    if (!oc) return;
+    const rect = oc.getBoundingClientRect();
+    const dx = e.clientX - dragRef.current.startX;
+    const total = allCandlesRef.current.length;
+    const visible = Math.round(total * zoomRef.current.zoom);
+    const pxPerCandle = rect.width / visible;
+    const candleShift = Math.round(-dx / pxPerCandle);
+    zoomRef.current.offset = Math.max(0, Math.min(total - visible, dragRef.current.startOffset + candleShift));
+    redraw();
+  }, [redraw]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -607,7 +667,9 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
           )}
           <canvas ref={canvasRef}  width={960} height={440} className="absolute inset-0 w-full h-full" />
           <canvas ref={overlayRef} width={960} height={440} className="absolute inset-0 w-full h-full cursor-crosshair"
-            onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} />
+            onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}
+            onWheel={onWheel}
+            onMouseDown={onMouseDown} onMouseUp={onMouseUp} onMouseMoveCapture={onDragMove} />
 
           {tooltip && (
             <div className="fixed pointer-events-none rounded-xl z-[9999]"
@@ -679,7 +741,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
 
         {/* X-axis */}
         <div className="flex justify-between px-3 py-1.5" style={{ borderTop: `1px solid ${bd}`, background: bg2 }}>
-          {Array.from({ length: 8 }, (_, i) => {
+          {Array.from({ length: 8 }, (_: unknown, i: number) => {
             const { minT, maxT } = metaRef.current;
             const ts = minT && maxT ? minT + (i / 7) * (maxT - minT) : 0;
             return (
