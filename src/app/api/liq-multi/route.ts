@@ -85,7 +85,7 @@ async function fetchHyperliquidLiqs(hours: number, allowed: Set<string>): Promis
 
       const funding  = parseFloat(String(ctx.funding ?? '0'));
       const liqRate  = Math.min(Math.max(Math.abs(funding) * 600 + 0.0015, 0.0015), 0.01);
-      const totalLiq = openInt * markPrice * liqRate * Math.min(hours / 24, 1);
+      const totalLiq = openInt * markPrice * liqRate * (hours / 24);
       if (totalLiq <= 0) continue;
 
       const longBias = funding > 0 ? 0.65 : 0.35;
