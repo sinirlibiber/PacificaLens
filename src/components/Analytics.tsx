@@ -514,13 +514,16 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
                 const bg = isPos
                   ? `rgba(16,185,129,${0.1 + intensity * 0.7})`
                   : `rgba(239,68,68,${0.1 + intensity * 0.7})`;
+                // Yüksek intensity'de text beyaz olsun, okunabilirlik için
+                const textColor = intensity > 0.5 ? '#fff' : undefined;
+                const numColor  = intensity > 0.5 ? '#fff' : (isPos ? 'var(--success)' : 'var(--danger)');
                 return (
                   <div key={m.symbol} title={`${m.symbol}: ${m.funding.toFixed(4)}%/hr`}
                     className="flex flex-col items-center px-2 py-1.5 rounded-lg cursor-default transition-all hover:opacity-80"
                     style={{ background: bg, minWidth: 52 }}>
                     <CoinLogo symbol={m.symbol} size={14} />
-                    <span className="text-[9px] font-bold text-text1 mt-0.5">{m.symbol}</span>
-                    <span className={`text-[9px] font-mono font-bold ${isPos ? 'text-success' : 'text-danger'}`}>
+                    <span className="text-[9px] font-bold mt-0.5" style={{ color: textColor ?? 'var(--text1)' }}>{m.symbol}</span>
+                    <span className="text-[9px] font-mono font-bold" style={{ color: numColor }}>
                       {isPos ? '+' : ''}{m.funding.toFixed(4)}%
                     </span>
                   </div>

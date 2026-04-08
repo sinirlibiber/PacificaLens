@@ -1130,6 +1130,73 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
 
   return (
     <div className="flex h-full overflow-hidden">
+
+      {/* ─── LEFT: Info Sidebar ─── */}
+      <div className="w-52 shrink-0 border-r border-border1 bg-surface flex flex-col overflow-y-auto">
+        <div className="px-3 py-3 border-b border-border1">
+          <div className="text-[10px] font-bold text-text3 uppercase tracking-wider">Smart Money</div>
+        </div>
+
+        {activeTab === 'leaderboard' ? (
+          <div className="flex-1 px-3 py-4 space-y-4 text-[11px]">
+            <div>
+              <div className="font-bold text-text1 mb-1">📊 Leaderboard</div>
+              <div className="text-text3 leading-relaxed text-[10px]">
+                Top traders on Pacifica ranked by our scoring system. Each trader is evaluated across 8 dimensions of trading quality.
+              </div>
+            </div>
+            <div className="border-t border-border1 pt-3">
+              <div className="font-semibold text-text2 mb-2 text-[10px] uppercase tracking-wide">Score Breakdown</div>
+              <div className="space-y-1.5 text-[10px] text-text3">
+                <div><span className="text-text2 font-semibold">PnL (20pts)</span> — Raw profit performance over 7d and 30d</div>
+                <div><span className="text-text2 font-semibold">Consistency (20pts)</span> — Steady gains vs erratic spikes</div>
+                <div><span className="text-text2 font-semibold">EPR (15pts)</span> — Profit relative to open interest</div>
+                <div><span className="text-text2 font-semibold">Win Rate (15pts)</span> — Long-term profitability ratio</div>
+                <div><span className="text-text2 font-semibold">Drawdown (10pts)</span> — Loss control quality</div>
+                <div><span className="text-text2 font-semibold">OI Risk (5pts)</span> — Leverage safety score</div>
+                <div><span className="text-text2 font-semibold">Track Record (10pts)</span> — All-time performance history</div>
+                <div><span className="text-text2 font-semibold">Cap. Efficiency (5pts)</span> — PnL vs account size ratio</div>
+              </div>
+            </div>
+            <div className="border-t border-border1 pt-3">
+              <div className="font-semibold text-text2 mb-1.5 text-[10px] uppercase tracking-wide">Tiers</div>
+              <div className="space-y-1 text-[10px]">
+                <div><span className="text-yellow-400 font-bold">S</span> <span className="text-text3">— Elite, Top 5%</span></div>
+                <div><span className="text-blue-400 font-bold">A</span> <span className="text-text3">— Strong, Top 20%</span></div>
+                <div><span className="text-green-400 font-bold">B</span> <span className="text-text3">— Average, Top 45%</span></div>
+                <div><span className="text-text3 font-bold">C</span> <span className="text-text3">— Weak, Bottom 55%</span></div>
+              </div>
+            </div>
+            <div className="border-t border-border1 pt-3 text-[10px] text-text3">
+              <div className="font-semibold text-text2 mb-1">💡 How to use</div>
+              <div className="leading-relaxed">Click any trader row to view their open positions, trade history, and copy their trades automatically with Pacifica Agent Keys.</div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 px-3 py-4 space-y-4 text-[11px]">
+            <div>
+              <div className="font-bold text-text1 mb-1">⭐ Watching</div>
+              <div className="text-text3 leading-relaxed text-[10px]">
+                Your personal watchlist of traders you want to monitor. Star any trader on the leaderboard to add them here.
+              </div>
+            </div>
+            <div className="border-t border-border1 pt-3">
+              <div className="font-semibold text-text2 mb-2 text-[10px] uppercase tracking-wide">What you can do</div>
+              <div className="space-y-2 text-[10px] text-text3">
+                <div>⭐ <span className="text-text2">Star traders</span> — click the star icon on any leaderboard row</div>
+                <div>👁️ <span className="text-text2">Monitor positions</span> — see their open trades in real time</div>
+                <div>📋 <span className="text-text2">Copy trades</span> — replicate their entries automatically</div>
+                <div>🔔 <span className="text-text2">Track PnL</span> — follow their 7d and 30d performance</div>
+              </div>
+            </div>
+            <div className="border-t border-border1 pt-3 text-[10px] text-text3">
+              <div className="font-semibold text-text2 mb-1">💡 Tip</div>
+              <div className="leading-relaxed">Focus on S and A tier traders with consistent PnL and low drawdown scores for the best copy trading results.</div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Main content — shrinks when drawer open */}
       <div className={`flex flex-col overflow-hidden transition-all duration-300 ${selectedTrader ? 'flex-1 min-w-0' : 'flex-1'}`}>
 

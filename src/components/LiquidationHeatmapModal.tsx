@@ -608,7 +608,9 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
           <div className="flex items-center gap-2.5">
             {stats.price > 0 && (
               <span className="font-mono text-[13px] font-bold px-2.5 py-1 rounded-lg"
-                style={{ background: 'rgba(255,215,0,0.12)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.25)' }}>
+                style={isDark
+                  ? { background: '#FFD700', color: '#000', border: '1px solid rgba(255,215,0,0.5)' }
+                  : { background: '#1a56db', color: '#fff', border: '1px solid rgba(26,86,219,0.4)' }}>
                 {fmtP(stats.price)}
               </span>
             )}

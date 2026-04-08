@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Market, Ticker, getOrderbook, getCandles, getRecentTrades, Orderbook, Candle, Trade } from '@/lib/pacifica';
 import { CoinLogo } from '@/components/CoinLogo';
 import { fmt, fmtPrice, getMarkPrice, get24hChange } from '@/lib/utils';
@@ -511,43 +511,24 @@ export function Overview({ markets, tickers }: OverviewProps) {
 
             {detailTab === 'trades' && (
               <div className="flex flex-col h-full overflow-hidden">
-                <div className="flex-1 overflow-y-auto">
-                  {liquidations.length > 0 ? (
-                    <table className="w-full">
-                      <thead className="sticky top-0 bg-surface2 border-b border-border1">
-                        <tr>{['Time', 'Side', 'Price', 'Size', 'Type'].map(h => <th key={h} className="px-3 py-1.5 text-[10px] text-text3 font-semibold uppercase text-left">{h}</th>)}</tr>
-                      </thead>
-                      <tbody>
-                        {liquidations.map((t, i) => {
-                          const isLong = t.side.includes('long');
-                          return (
-                            <tr key={i} className="border-b border-border1 hover:bg-surface2">
-                              <td className="px-3 py-1.5 text-[11px] text-text3 font-mono">{new Date(t.created_at).toLocaleTimeString()}</td>
-                              <td className={'px-3 py-1.5 text-[11px] font-bold ' + (isLong ? 'text-danger' : 'text-success')}>{isLong ? 'LONG LIQ' : 'SHORT LIQ'}</td>
-                              <td className="px-3 py-1.5 text-[11px] font-mono">${fmtPrice(t.price)}</td>
-                              <td className="px-3 py-1.5 text-[11px] font-mono">{fmt(Number(t.amount), 4)}</td>
-                              <td className="px-3 py-1.5 text-[10px] text-text3">{t.cause === 'backstop_liquidation' ? 'Backstop' : 'Market'}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-text3 gap-2">
-                      <span className="text-xl">✓</span><p className="text-sm">No liquidations</p>
-                    </div>
-                  )}
+                <div className="grid px-3 py-1.5 border-b border-border1 bg-surface2 text-[10px] text-text3 font-semibold uppercase shrink-0"
+                  style={{ gridTemplateColumns: '80px 1fr 1fr 1fr' }}>
+                  <span>Time</span><span>Side</span><span>Price</span><span className="text-right">Amount</span>
                 </div>
-                <div className="border-t border-border1 max-h-48 overflow-y-auto shrink-0">
-                  <div className="px-4 py-1.5 bg-surface2 border-b border-border1 sticky top-0">
-                    <span className="text-[10px] text-text3 font-semibold uppercase">Recent Trades</span>
-                  </div>
-                  {trades.slice(0, 30).map((t, i) => {
-                    const isLong = t.side.includes('long');
+                <div className="flex-1 overflow-y-auto">
+                  {trades.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-text3 gap-2">
+                      <span className="text-xl">📭</span><p className="text-sm">No recent trades</p>
+                    </div>
+                  ) : trades.slice(0, 50).map((t, i) => {
+                    const isBuy = t.side.includes('long') || t.side === 'buy';
                     return (
-                      <div key={i} className="grid px-3 py-1.5 border-b border-border1 hover:bg-surface2" style={{ gridTemplateColumns: '80px 1fr 1fr 1fr' }}>
+                      <div key={i} className="grid px-3 py-1.5 border-b border-border1/40 hover:bg-surface2/60 transition-colors"
+                        style={{ gridTemplateColumns: '80px 1fr 1fr 1fr' }}>
                         <span className="text-[10px] text-text3 font-mono">{new Date(t.created_at).toLocaleTimeString()}</span>
-                        <span className={'text-[11px] font-semibold ' + (isLong ? 'text-success' : 'text-danger')}>{t.side.replace('_', ' ').toUpperCase()}</span>
+                        <span className={'text-[11px] font-semibold ' + (isBuy ? 'text-success' : 'text-danger')}>
+                          {isBuy ? '▲ BUY' : '▼ SELL'}
+                        </span>
                         <span className="text-[11px] font-mono text-text1">${fmtPrice(t.price)}</span>
                         <span className="text-[11px] font-mono text-text2 text-right">{fmt(Number(t.amount), 4)}</span>
                       </div>
