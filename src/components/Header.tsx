@@ -96,8 +96,7 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
 
       {/* Tabs center */}
       <div className="flex-1 flex items-center justify-center">
-        {authenticated && (
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1">
 
             {/* Overview */}
             <button onClick={() => onTabChange('overview')}
@@ -172,7 +171,7 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
             </button>
 
           </div>
-        )}
+        </div>
       </div>
 
       {/* Wallet */}
