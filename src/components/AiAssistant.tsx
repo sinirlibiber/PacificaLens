@@ -1,4 +1,5 @@
 'use client';
+import { usePrivy } from '@privy-io/react-auth';
 
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Brain, ChevronDown } from 'lucide-react';
@@ -49,6 +50,7 @@ function buildPriceContext(tickers: Record<string, Ticker>): string {
 }
 
 export default function AiAssistant({ tickers = {} }: AiAssistantProps) {
+  const { authenticated } = usePrivy();
   const [messages, setMessages]   = useState<Message[]>([]);
   const [input, setInput]         = useState('');
   const [loading, setLoading]     = useState(false);
@@ -225,33 +227,40 @@ export default function AiAssistant({ tickers = {} }: AiAssistantProps) {
             </div>
 
             {/* Input */}
-            <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border1)', display: 'flex', gap: 7 }}>
-              <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask a question... (Enter to send)"
-                maxLength={500}
-                style={{
-                  flex: 1, padding: '8px 12px', fontSize: 12,
-                  background: 'var(--surface2)', border: '1px solid var(--border1)',
-                  borderRadius: 7, color: 'var(--text1)', outline: 'none',
-                }}
-              />
-              <button
-                onClick={() => sendMessage(input)}
-                disabled={loading || !input.trim()}
-                style={{
-                  padding: '8px 12px', borderRadius: 7,
-                  background: loading || !input.trim() ? 'var(--surface2)' : 'var(--accent)',
-                  border: '1px solid var(--border1)',
-                  cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center',
-                }}
-              >
-                <Send size={13} color={loading || !input.trim() ? 'var(--text3)' : '#fff'} />
-              </button>
-            </div>
+            {!authenticated ? (
+              <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>🔒 Connect wallet to use AI Assistant</span>
+                <a href="/" style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)' }}>Connect →</a>
+              </div>
+            ) : (
+              <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border1)', display: 'flex', gap: 7 }}>
+                <input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask a question... (Enter to send)"
+                  maxLength={500}
+                  style={{
+                    flex: 1, padding: '8px 12px', fontSize: 12,
+                    background: 'var(--surface2)', border: '1px solid var(--border1)',
+                    borderRadius: 7, color: 'var(--text1)', outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => sendMessage(input)}
+                  disabled={loading || !input.trim()}
+                  style={{
+                    padding: '8px 12px', borderRadius: 7,
+                    background: loading || !input.trim() ? 'var(--surface2)' : 'var(--accent)',
+                    border: '1px solid var(--border1)',
+                    cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center',
+                  }}
+                >
+                  <Send size={13} color={loading || !input.trim() ? 'var(--text3)' : '#fff'} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

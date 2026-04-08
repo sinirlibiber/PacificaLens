@@ -274,7 +274,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Pass shared state via context-like props — children use these via context
   return (
-    <AppShellContext.Provider value={{ markets, tickers, fundingRates, positions, accountInfo, accountSize, setAccountSize, wallet, error, handleExecute, loading, ensureBuilderApproved, builderApproved, walletSignFn, setToast }}>
+    <AppShellContext.Provider value={{ markets, tickers, fundingRates, positions, accountInfo, accountSize, setAccountSize, wallet, error, handleExecute, loading, ensureBuilderApproved, builderApproved, walletSignFn, setToast, authenticated }}>
       <div className="flex flex-col h-screen overflow-hidden bg-bg">
         <Header tab={currentTab} onTabChange={handleTabChange} accountInfo={accountInfo} />
         {loading && authenticated ? (
