@@ -172,7 +172,6 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
 
           </div>
         </div>
-      </div>
 
       {/* Wallet */}
       <div className="flex items-center gap-2 w-52 justify-end shrink-0">
