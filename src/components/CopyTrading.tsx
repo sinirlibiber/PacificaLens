@@ -1134,42 +1134,37 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
       {/* ─── LEFT: Info Sidebar ─── */}
       <div className="w-52 shrink-0 border-r border-border1 bg-surface flex flex-col overflow-y-auto">
         <div className="px-3 py-3 border-b border-border1">
-          <div className="text-[10px] font-bold text-text3 uppercase tracking-wider">Smart Money</div>
+          <div className="text-[10px] font-bold text-text3 uppercase tracking-wider">AlphaBoard</div>
         </div>
 
         {activeTab === 'leaderboard' ? (
           <div className="flex-1 px-3 py-4 space-y-4 text-[11px]">
             <div>
-              <div className="font-bold text-text1 mb-1">📊 Leaderboard</div>
+              <div className="font-bold text-text1 mb-1">🏆 AlphaBoard</div>
               <div className="text-text3 leading-relaxed text-[10px]">
-                Top traders on Pacifica ranked by our scoring system. Each trader is evaluated across 8 dimensions of trading quality.
+                Top traders on Pacifica ranked by a composite score across 8 performance dimensions.
               </div>
             </div>
+
             <div className="border-t border-border1 pt-3">
-              <div className="font-semibold text-text2 mb-2 text-[10px] uppercase tracking-wide">Score Breakdown</div>
-              <div className="space-y-1.5 text-[10px] text-text3">
-                <div><span className="text-text2 font-semibold">PnL (20pts)</span> — Raw profit performance over 7d and 30d</div>
-                <div><span className="text-text2 font-semibold">Consistency (20pts)</span> — Steady gains vs erratic spikes</div>
-                <div><span className="text-text2 font-semibold">EPR (15pts)</span> — Profit relative to open interest</div>
-                <div><span className="text-text2 font-semibold">Win Rate (15pts)</span> — Long-term profitability ratio</div>
-                <div><span className="text-text2 font-semibold">Drawdown (10pts)</span> — Loss control quality</div>
-                <div><span className="text-text2 font-semibold">OI Risk (5pts)</span> — Leverage safety score</div>
-                <div><span className="text-text2 font-semibold">Track Record (10pts)</span> — All-time performance history</div>
-                <div><span className="text-text2 font-semibold">Cap. Efficiency (5pts)</span> — PnL vs account size ratio</div>
+              <div className="font-semibold text-accent mb-2 text-[10px] uppercase tracking-wide">💡 Open Trade</div>
+              <div className="space-y-2 text-[10px] text-text3 leading-relaxed">
+                <div>Click any trader row to see their open positions. For each position you can click <span className="text-text2 font-semibold">Open Trade</span> to open the same trade yourself.</div>
+                <div>You set your own <span className="text-text2 font-semibold">margin, leverage, stop loss and take profit</span> — you stay in full control.</div>
+                <div>The trade direction (Long/Short) and asset are copied from the trader. Everything else is yours to configure.</div>
+                <div>Executed via your connected wallet with no Agent Key required.</div>
               </div>
             </div>
+
             <div className="border-t border-border1 pt-3">
-              <div className="font-semibold text-text2 mb-1.5 text-[10px] uppercase tracking-wide">Tiers</div>
-              <div className="space-y-1 text-[10px]">
-                <div><span className="text-yellow-400 font-bold">S</span> <span className="text-text3">— Elite, Top 5%</span></div>
-                <div><span className="text-blue-400 font-bold">A</span> <span className="text-text3">— Strong, Top 20%</span></div>
-                <div><span className="text-green-400 font-bold">B</span> <span className="text-text3">— Average, Top 45%</span></div>
-                <div><span className="text-text3 font-bold">C</span> <span className="text-text3">— Weak, Bottom 55%</span></div>
+              <div className="font-semibold text-accent mb-2 text-[10px] uppercase tracking-wide">🤖 Auto Copy Trade</div>
+              <div className="space-y-2 text-[10px] text-text3 leading-relaxed">
+                <div>Switch to the <span className="text-text2 font-semibold">Watching</span> tab to enable fully automatic copy trading.</div>
+                <div>PacificaLens scans the trader's positions <span className="text-text2 font-semibold">every 10 seconds</span>. When a new position is detected, it automatically opens the same trade on your account.</div>
+                <div>Uses the <span className="text-text2 font-semibold">same leverage</span> as the trader by default, or you can set a custom multiplier.</div>
+                <div>Requires a <span className="text-text2 font-semibold">Pacifica Agent Key</span> — a delegated signing key that lets PacificaLens trade on your behalf without exposing your main wallet.</div>
+                <div>Position exits are also mirrored automatically when the trader closes their trade.</div>
               </div>
-            </div>
-            <div className="border-t border-border1 pt-3 text-[10px] text-text3">
-              <div className="font-semibold text-text2 mb-1">💡 How to use</div>
-              <div className="leading-relaxed">Click any trader row to view their open positions, trade history, and copy their trades automatically with Pacifica Agent Keys.</div>
             </div>
           </div>
         ) : (
@@ -1177,21 +1172,24 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
             <div>
               <div className="font-bold text-text1 mb-1">⭐ Watching</div>
               <div className="text-text3 leading-relaxed text-[10px]">
-                Your personal watchlist of traders you want to monitor. Star any trader on the leaderboard to add them here.
+                Your watchlist for auto copy trading. Add traders from AlphaBoard by clicking the star icon.
               </div>
             </div>
+
             <div className="border-t border-border1 pt-3">
-              <div className="font-semibold text-text2 mb-2 text-[10px] uppercase tracking-wide">What you can do</div>
-              <div className="space-y-2 text-[10px] text-text3">
-                <div>⭐ <span className="text-text2">Star traders</span> — click the star icon on any leaderboard row</div>
-                <div>👁️ <span className="text-text2">Monitor positions</span> — see their open trades in real time</div>
-                <div>📋 <span className="text-text2">Copy trades</span> — replicate their entries automatically</div>
-                <div>🔔 <span className="text-text2">Track PnL</span> — follow their 7d and 30d performance</div>
+              <div className="font-semibold text-accent mb-2 text-[10px] uppercase tracking-wide">🤖 How Auto Copy Works</div>
+              <div className="space-y-2 text-[10px] text-text3 leading-relaxed">
+                <div><span className="text-text2 font-semibold">1. Add a trader</span> — star them on AlphaBoard, then click Copy Trade here.</div>
+                <div><span className="text-text2 font-semibold">2. Set your Agent Key</span> — a delegated key from Pacifica that signs trades on your behalf. Your main wallet stays safe.</div>
+                <div><span className="text-text2 font-semibold">3. Scanning starts</span> — PacificaLens checks the trader's positions every 10 seconds.</div>
+                <div><span className="text-text2 font-semibold">4. Auto open</span> — when a new position is detected, the same trade is opened on your account instantly with the same leverage.</div>
+                <div><span className="text-text2 font-semibold">5. Auto close</span> — when the trader exits, your position is closed automatically too.</div>
               </div>
             </div>
+
             <div className="border-t border-border1 pt-3 text-[10px] text-text3">
-              <div className="font-semibold text-text2 mb-1">💡 Tip</div>
-              <div className="leading-relaxed">Focus on S and A tier traders with consistent PnL and low drawdown scores for the best copy trading results.</div>
+              <div className="font-semibold text-text2 mb-1">💡 Best results</div>
+              <div className="leading-relaxed">Follow S and A tier traders with high Track Record and low Drawdown scores for the most consistent auto copy performance.</div>
             </div>
           </div>
         )}
@@ -1210,7 +1208,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
               className={`px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all ${
                 activeTab === 'leaderboard' ? 'bg-surface text-accent shadow-card border border-border1' : 'text-text3 hover:text-text2'
               }`}>
-              Leaderboard
+              AlphaBoard
             </button>
             <button
               onClick={() => setActiveTab('favorites')}
@@ -1531,7 +1529,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                 <div className="text-4xl mb-3"></div>
                 <div className="text-[14px] font-semibold text-text2 mb-1">No traders in watchlist</div>
                 <div className="text-[12px] text-text3">
-                  Go to the Leaderboard tab and click ☆ next to any trader to start watching.
+                  Go to AlphaBoard and click ☆ next to any trader to add them to your watchlist.
                 </div>
               </div>
             ) : (
@@ -1749,7 +1747,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                                 })()}
                                 <button onClick={() => setCopyModal({ trade: { symbol: pos.symbol, side: isLong ? 'open_long' : 'open_short', price: pos.entry_price, amount: pos.amount, created_at: pos.created_at }, traderAddress: selectedTrader!, fav: isCopyFav })}
                                   className="w-full py-1.5 bg-accent/10 text-accent border border-accent/20 rounded-lg text-[11px] font-semibold hover:bg-accent/20 transition-colors">
-                                  Copy this position
+                                  Open Trade
                                 </button>
                               </div>
                             );
