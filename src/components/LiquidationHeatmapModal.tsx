@@ -238,7 +238,7 @@ export default function LiquidationHeatmapModal({ symbol, onClose }: Props) {
         const tw  = ctx.measureText(lbl).width;
         ctx.fillStyle = isDark ? '#FFD700' : '#1a56db';
         ctx.fillRect(CW - tw - 18, y - 9, tw + 14, 18);
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = isDark ? '#000' : '#fff';
         ctx.textAlign = 'right';
         ctx.fillText(lbl, CW - 5, y + 4);
       }

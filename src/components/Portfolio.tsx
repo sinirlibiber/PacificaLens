@@ -43,35 +43,87 @@ function sideLabel(side: string) {
   return { label: side, isLong: true };
 }
 
-// ─── Sparkline ────────────────────────────────────────────────────────────────
+// ─── PnL Chart (trade history'den birikimli PnL) ──────────────────────────────
 
-function Sparkline({ data }: { data: EquityHistory[] }) {
-  if (data.length < 2) return (
-    <div className="h-16 flex flex-col items-center justify-center gap-1">
-      <div className="text-[11px] text-text3">No equity history available</div>
-      <div className="text-[10px] text-text3/60">Endpoint may not be supported on this account</div>
+interface PnlPoint { time: string; cumPnl: number; pnl: number; }
+
+function PnlChart({ trades }: { trades: TradeHistory[] }) {
+  if (trades.length === 0) return (
+    <div className="h-32 flex flex-col items-center justify-center gap-1">
+      <div className="text-[11px] text-text3">No trade history yet</div>
+      <div className="text-[10px] text-text3/60">Complete trades will appear here</div>
     </div>
   );
-  const vals = data.map(d => Number(d.equity));
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
+
+  // Trade history'den birikimli PnL hesapla (en eskiden yeniye)
+  const sorted = [...trades].sort((a, b) => {
+    const ta = new Date(a.created_at || 0).getTime();
+    const tb = new Date(b.created_at || 0).getTime();
+    return ta - tb;
+  });
+
+  let cumulative = 0;
+  const points: PnlPoint[] = sorted
+    .map(t => {
+      const pnlVal = Number((t as TradeHistory & {pnl?:string}).pnl ?? t.realized_pnl ?? 0);
+      if (pnlVal === 0) return null;
+      cumulative += pnlVal;
+      const d = new Date(t.created_at || 0);
+      return {
+        time: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        cumPnl: cumulative,
+        pnl: pnlVal,
+      };
+    })
+    .filter((p): p is PnlPoint => p !== null);
+
+  if (points.length < 2) return (
+    <div className="h-32 flex flex-col items-center justify-center gap-1">
+      <div className="text-[11px] text-text3">Not enough closed trades</div>
+      <div className="text-[10px] text-text3/60">Cumulative PnL will appear after more trades</div>
+    </div>
+  );
+
+  const vals  = points.map(p => p.cumPnl);
+  const min   = Math.min(0, ...vals);
+  const max   = Math.max(0, ...vals);
   const range = max - min || 1;
-  const w = 400, h = 60;
-  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`).join(' ');
-  const isUp = vals[vals.length - 1] >= vals[0];
-  const color = isUp ? 'var(--success)' : 'var(--danger)';
-  const areaId = `area-${Math.random().toString(36).slice(2)}`;
+  const w = 500, h = 80;
+  const toY = (v: number) => h - ((v - min) / range) * (h - 6) - 3;
+  const toX = (i: number) => (i / (points.length - 1)) * w;
+  const pts = points.map((p, i) => `${toX(i)},${toY(p.cumPnl)}`).join(' ');
+  const zeroY = toY(0);
+  const isUp  = vals[vals.length - 1] >= 0;
+  const color = isUp ? '#10b981' : '#ef4444';
+  const areaId = 'pnl-area';
+  const totalPnl = vals[vals.length - 1];
+
   return (
-    <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="overflow-visible">
-      <defs>
-        <linearGradient id={areaId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={`0,${h} ${pts} ${w},${h}`} fill={`url(#${areaId})`} />
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
+    <div>
+      <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="overflow-visible">
+        <defs>
+          <linearGradient id={areaId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {/* Zero line */}
+        <line x1="0" y1={zeroY} x2={w} y2={zeroY} stroke="rgba(255,255,255,0.08)" strokeWidth="1" strokeDasharray="4,4" />
+        {/* Area fill */}
+        <polygon points={`0,${zeroY} ${pts} ${w},${zeroY}`} fill={`url(#${areaId})`} />
+        {/* PnL line */}
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Last point dot */}
+        <circle cx={toX(points.length-1)} cy={toY(totalPnl)} r="3" fill={color} />
+      </svg>
+      <div className="flex justify-between mt-1.5 text-[9px] text-text3">
+        <span>{points[0]?.time}</span>
+        <span className={`font-semibold ${totalPnl >= 0 ? 'text-success' : 'text-danger'}`}>
+          {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)} USDC cumulative
+        </span>
+        <span>{points[points.length-1]?.time}</span>
+      </div>
+    </div>
   );
 }
 
@@ -358,20 +410,15 @@ export function Portfolio({ wallet, tickers, markets }: PortfolioProps) {
             {/* Chart */}
             <div className="col-span-2 bg-surface border border-border1 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-[12px] font-semibold text-text1">Equity History</span>
-                {equityHist.length > 0 && (
-                  <span className={`text-[12px] font-bold font-mono ${unrealizedPnl >= 0 ? 'text-success' : 'text-danger'}`}>
-                    {fmtUSD(unrealizedPnl, true)}
-                  </span>
-                )}
-              </div>
-              <Sparkline data={equityHist} />
-              {equityHist.length > 1 && (
-                <div className="flex justify-between mt-2">
-                  <span className="text-[10px] text-text3">{fmtUSD(Number(equityHist[0]?.equity || 0))}</span>
-                  <span className="text-[10px] text-text3">{fmtUSD(Number(equityHist[equityHist.length - 1]?.equity || 0))}</span>
+                <div>
+                  <span className="text-[12px] font-semibold text-text1">PnL History</span>
+                  <span className="text-[9px] text-text3 ml-2">Estimated · realized trades only</span>
                 </div>
-              )}
+                <span className={`text-[12px] font-bold font-mono ${realizedPnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                  {realizedPnl >= 0 ? '+' : ''}{realizedPnl.toFixed(2)} USDC
+                </span>
+              </div>
+              <PnlChart trades={tradeHist} />
             </div>
 
             {/* PacificaLens order log stats */}
