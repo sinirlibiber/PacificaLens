@@ -328,6 +328,7 @@ interface ShellCtx {
   builderApproved: boolean;
   walletSignFn: (msgBytes: Uint8Array) => Promise<string>;
   setToast: (t: { message: string; type: 'success' | 'error' | 'info' | 'loading'; duration?: number } | null) => void;
+  authenticated: boolean;
 }
 
 export const AppShellContext = createContext<ShellCtx>({
@@ -336,6 +337,7 @@ export const AppShellContext = createContext<ShellCtx>({
   handleExecute: () => {}, loading: false, ensureBuilderApproved: async () => false, builderApproved: false,
   walletSignFn: async () => { throw new Error('No wallet'); },
   setToast: () => {},
+  authenticated: false,
 });
 
 export function useShell() { return useContext(AppShellContext); }
