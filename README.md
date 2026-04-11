@@ -58,7 +58,7 @@ The entry point is a Three.js 3D globe rendered in WebGL with a deep-space nebul
 
 ### 📊 Market Overview
 
-Real-time intelligence for all **63 Pacifica perpetual markets** — including HIP-3 external assets (SP500, Gold, Oil, equities, forex).
+Real-time intelligence for all **63 Pacifica perpetual markets** 
 
 **Market Table:**
 - Live prices, 24h % change, funding rate, volume, open interest — updating every 30s
