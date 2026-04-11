@@ -569,8 +569,8 @@ function CopyTradePanel({
               <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Margin / Trade</label>
               <span className="relative inline-flex items-center group">
                 <span className="w-3 h-3 rounded-full border border-border2 text-text3 flex items-center justify-center text-[7px] font-bold cursor-help">?</span>
-                <span className="absolute bottom-full left-0 mb-1.5 w-52 bg-surface border border-border1 rounded-lg px-2 py-1.5 text-[10px] text-text2 leading-relaxed shadow-card-md z-[200] pointer-events-none whitespace-normal hidden group-hover:block">
-                  Minimum is $10. Your collateral per trade — position size = Margin × Leverage.
+                <span className="absolute bottom-full right-0 mb-1.5 w-56 bg-surface border border-border1 rounded-lg px-2 py-1.5 text-[10px] text-text2 leading-relaxed shadow-card-md z-[200] pointer-events-none whitespace-normal hidden group-hover:block">
+                  Minimum $10 required. We recommend at least $10.50 per trade. Your collateral per trade — position size = Margin × Leverage.
                 </span>
               </span>
             </div>
