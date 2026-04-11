@@ -475,7 +475,7 @@ function CopyTradePanel({
   })();
 
   const pubKeyMismatch = pkValid && pubValid && derivedPubKey !== null && derivedPubKey !== cfg.agentPublicKey;
-  const canStart = pkValid && pubValid && !!myAccount && !pubKeyMismatch;
+  const canStart = pkValid && pubValid && !!myAccount && !pubKeyMismatch && cfg.marginUsd >= 10;
 
   return (
     <div className="border-t border-border1 bg-surface2/30">
@@ -518,7 +518,7 @@ function CopyTradePanel({
               cfg.agentPrivateKey && !pkValid ? 'border-danger/60 bg-danger/5' : 'border-border1'
             }`} />
           {cfg.agentPrivateKey && !pkValid && (
-            <p className="text-[9px] text-danger px-1">⚠ Geçersiz Private Key — Base58 formatında ~88 karakter olmalı</p>
+            <p className="text-[9px] text-danger px-1">⚠ Invalid Private Key — must be ~88 characters in Base58 format</p>
           )}
           <input type="text" placeholder="Agent Public Key (Base58)"
             value={cfg.agentPublicKey}
@@ -527,10 +527,10 @@ function CopyTradePanel({
               cfg.agentPublicKey && !pubValid ? 'border-danger/60 bg-danger/5' : 'border-border1'
             }`} />
           {cfg.agentPublicKey && !pubValid && (
-            <p className="text-[9px] text-danger px-1">⚠ Geçersiz Public Key — Base58 formatında ~44 karakter olmalı</p>
+            <p className="text-[9px] text-danger px-1">⚠ Invalid Public Key — must be ~44 characters in Base58 format</p>
           )}
           {cfg.agentPrivateKey && pkValid && cfg.agentPublicKey && pubValid && !pubKeyMismatch && (
-            <p className="text-[9px] text-success px-1">✓ API Agent Keys geçerli görünüyor</p>
+            <p className="text-[9px] text-success px-1">✓ API Agent Keys appear valid</p>
           )}
           {pubKeyMismatch && (
             <p className="text-[9px] text-danger px-1">
@@ -569,17 +569,20 @@ function CopyTradePanel({
               <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Margin / Trade</label>
               <span className="relative inline-flex items-center group">
                 <span className="w-3 h-3 rounded-full border border-border2 text-text3 flex items-center justify-center text-[7px] font-bold cursor-help">?</span>
-                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-44 bg-surface border border-border1 rounded-lg px-2 py-1.5 text-[10px] text-text2 leading-relaxed shadow-card-md z-[200] pointer-events-none whitespace-normal hidden group-hover:block">
-                  Minimum is $10. Your margin per trade — position size = Margin × Leverage.
+                <span className="absolute bottom-full left-0 mb-1.5 w-52 bg-surface border border-border1 rounded-lg px-2 py-1.5 text-[10px] text-text2 leading-relaxed shadow-card-md z-[200] pointer-events-none whitespace-normal hidden group-hover:block">
+                  Minimum is $10. Your collateral per trade — position size = Margin × Leverage.
                 </span>
               </span>
             </div>
             <div className="relative">
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-text3">$</span>
               <input type="number" min={10} value={cfg.marginUsd}
-                onChange={e => setCfg(p => ({ ...p, marginUsd: Math.max(10, Number(e.target.value)) }))}
-                className="w-full bg-surface border border-border1 rounded-xl pl-5 pr-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-accent/60 transition-colors" />
+                onChange={e => setCfg(p => ({ ...p, marginUsd: Number(e.target.value) }))}
+                className={`w-full bg-surface border rounded-xl pl-5 pr-3 py-2 text-[12px] font-mono text-text1 outline-none focus:border-accent/60 transition-colors ${cfg.marginUsd < 10 ? 'border-danger/60' : 'border-border1'}`} />
             </div>
+            {cfg.marginUsd < 10 && (
+              <p className="text-[9px] text-danger px-0.5">Minimum $10 required. We recommend at least $10.50 per trade.</p>
+            )}
           </div>
           <div className="space-y-1">
             <label className="text-[9px] font-semibold text-text3 uppercase tracking-wide">Max Positions <span className="font-normal">(0 = ∞)</span></label>
@@ -635,7 +638,7 @@ function CopyTradePanel({
           }`}>
           {cfg.active
             ? <><div className="w-2 h-2 rounded-full bg-danger animate-pulse" /> Stop Copy Trade</>
-            : <>{canStart ? 'Start Copy Trade' : (cfg.agentPrivateKey || cfg.agentPublicKey) && (!pkValid || !pubValid) ? 'Geçersiz Key formatı' : 'Enter Agent Keys to activate'}</>
+            : <>{canStart ? 'Start Copy Trade' : cfg.marginUsd < 10 ? 'Minimum $10 margin required' : (cfg.agentPrivateKey || cfg.agentPublicKey) && (!pkValid || !pubValid) ? 'Invalid Key format' : 'Enter Agent Keys to activate'}</>
           }
         </button>
 

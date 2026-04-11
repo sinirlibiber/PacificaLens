@@ -180,7 +180,10 @@ function CopyModal({
               ))}
             </div>
             <input type="number" value={usdcAmount} onChange={e => setUsdcAmount(Number(e.target.value))}
-              className="w-full bg-surface2 border border-border1 rounded-xl px-3 py-2.5 text-[13px] font-mono text-text1 outline-none focus:border-accent" />
+              className={`w-full bg-surface2 border rounded-xl px-3 py-2.5 text-[13px] font-mono text-text1 outline-none focus:border-accent ${usdcAmount < 10 ? 'border-danger/60' : 'border-border1'}`} />
+            {usdcAmount < 10 && (
+              <p className="text-[9px] text-danger mt-1">Minimum $10 required. We recommend at least $10.50 per trade.</p>
+            )}
           </div>
 
           {/* Leverage */}
@@ -216,7 +219,7 @@ function CopyModal({
           </div>
 
           {/* Execute */}
-          <button onClick={handleCopy} disabled={!myWallet || placing || usdcAmount <= 0}
+          <button onClick={handleCopy} disabled={!myWallet || placing || usdcAmount <= 0 || usdcAmount < 10}
             className={'w-full py-3.5 rounded-xl font-bold text-[14px] transition-all disabled:opacity-40 ' +
               (isLong ? 'bg-success text-white hover:opacity-90' : 'bg-danger text-white hover:opacity-90')}>
             {placing ? 'Opening Position...' : !myWallet ? 'Connect Wallet' :
