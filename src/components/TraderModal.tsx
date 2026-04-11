@@ -51,7 +51,7 @@ function CopyModal({
     traderMargin > 0 ? Math.round((Number(pos.amount) * traderEntry) / traderMargin) : 10;
   const clampedLeverage = Math.max(1, Math.min(traderLeverage, market?.max_leverage || 50));
 
-  const [usdcAmount, setUsdcAmount] = useState(Math.min(100, myBalance));
+  const [usdcAmount, setUsdcAmount] = useState(Math.max(10, Math.min(100, myBalance)));
   const [leverage, setLeverage] = useState(clampedLeverage);
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [limitPrice, setLimitPrice] = useState(String(traderEntry));
@@ -169,7 +169,15 @@ function CopyModal({
 
           {/* USDC Amount */}
           <div>
-            <label className="text-[10px] text-text3 uppercase font-semibold block mb-1.5">Margin (USDC)</label>
+            <div className="flex items-center gap-1 mb-1.5">
+              <label className="text-[10px] text-text3 uppercase font-semibold">Margin (USDC)</label>
+              <span className="relative inline-flex items-center group">
+                <span className="w-3.5 h-3.5 rounded-full border border-border2 text-text3 flex items-center justify-center text-[8px] font-bold cursor-help select-none">?</span>
+                <span className="absolute bottom-full right-0 mb-2 w-56 bg-surface border border-border1 rounded-lg px-2.5 py-2 text-[10px] text-text2 leading-relaxed shadow-lg z-[300] pointer-events-none whitespace-normal hidden group-hover:block">
+                  Minimum is $10. Your collateral in USDC — position size = Margin × Leverage. We recommend at least $10.50 per trade.
+                </span>
+              </span>
+            </div>
             <div className="flex gap-1.5 mb-2 flex-wrap">
               {presets.map(p => (
                 <button key={p} onClick={() => setUsdcAmount(p)}
