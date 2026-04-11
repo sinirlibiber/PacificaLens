@@ -8,7 +8,6 @@
 
 <p>
   <a href="https://www.pacificalens.xyz">🌐 Live App</a> ·
-  <a href="https://app.pacifica.fi">Pacifica DEX</a> ·
   <a href="https://pacifica.fi">Pacifica Hackathon 2026</a>
 </p>
 
