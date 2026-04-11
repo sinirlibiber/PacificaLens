@@ -241,24 +241,6 @@ Real-time and estimated liquidation data across all 63 markets — the most tech
 
 **Time ranges:** 1h / 6h / 24h / 7d
 
-**Data sources:**
-- Crypto markets: standard metaAndAssetCtxs endpoint from external DEX
-- HIP-3 external markets: same endpoint with `dex:"xyz"` parameter — returns symbols like `xyz:SP500`, `xyz:GOLD`, `xyz:CL`, etc.
-
-**HIP-3 Market Mapping:**
-
-| External DEX Symbol | Pacifica Name |
-|---------------------|---------------|
-| xyz:SP500 | SP500 (S&P 500) |
-| xyz:GOLD | XAU (Gold) |
-| xyz:CL | CL (Crude Oil WTI) |
-| xyz:TSLA / xyz:NVDA / xyz:GOOGL | TSLA / NVDA / GOOGL |
-| xyz:SILVER / xyz:COPPER / xyz:PLATINUM | SILVER / COPPER / PLATINUM |
-| xyz:NATGAS / xyz:URNM | NATGAS / URNM |
-| xyz:EUR / xyz:JPY | EURUSD / USDJPY |
-| xyz:CRCL / xyz:HOOD / xyz:PLTR | CRCL / HOOD / PLTR |
-
----
 
 ### 📉 Liquidation Leverage Map
 
@@ -266,11 +248,8 @@ Click any market in the Liquidation Monitor for a Coinglass-style canvas chart.
 
 - **Upper panel (78%):** Price line chart with mark price dashed overlay
 - **Lower panel (22%):** Liq leverage bars split by long (teal) and short (red) at each price level, with gradient fills and cumulative overlay lines
-- **Zoom:** Mouse wheel to zoom in/out
-- **Pan:** Click and drag to scroll through history
 - **Tooltip:** OHLC on upper panel, liq notional + cumulative on lower panel
 - **Ranges:** 12h / 24h / 48h / 7d
-- **HIP-3 support:** Candlestick data fetched via external DEX `candleSnapshot` with `xyz:` prefix mapping
 
 ---
 
