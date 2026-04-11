@@ -1930,7 +1930,8 @@ function CopyTradeModal({
         onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
         <span className="w-3.5 h-3.5 rounded-full border border-border2 text-text3 flex items-center justify-center text-[8px] font-bold cursor-help hover:border-accent hover:text-accent transition-colors">?</span>
         {show && (
-          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-52 bg-surface border border-border1 rounded-lg px-2.5 py-2 text-[10px] text-text2 leading-relaxed shadow-card-md z-[200] pointer-events-none whitespace-normal">
+          <span className="absolute bottom-full left-0 mb-1.5 w-64 max-w-[calc(100vw-2rem)] bg-surface border border-border1 rounded-lg px-2.5 py-2 text-[10px] text-text2 leading-relaxed shadow-card-md z-[200] pointer-events-none whitespace-normal"
+            style={{ left: 'auto', right: 'auto', transform: 'none', maxWidth: '260px' }}>
             {text}
           </span>
         )}
@@ -1981,7 +1982,7 @@ function CopyTradeModal({
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] font-semibold text-text1">Margin</span>
-                <TipIcon text="Minimum is $10. Your collateral in USDC — position size = Margin × Leverage." />
+                <TipIcon text="Minimum $10 required. We recommend at least $10.50 per trade. Your collateral in USDC — position size = Margin × Leverage." />
               </div>
               {myBalance > 0 && (
                 <span className="text-[10px] text-text3">
@@ -2001,11 +2002,14 @@ function CopyTradeModal({
             </div>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-text3">$</span>
-              <input type="number" value={amount} min={10}
-                onChange={e => setAmount(Math.max(10, Number(e.target.value)))}
-                className="w-full bg-surface2 border border-border1 rounded-xl pl-6 pr-14 py-2.5 text-[13px] font-mono text-text1 outline-none focus:border-accent transition-colors" />
+              <input type="number" value={amount}
+                onChange={e => setAmount(Number(e.target.value))}
+                className={`w-full bg-surface2 border rounded-xl pl-6 pr-14 py-2.5 text-[13px] font-mono text-text1 outline-none focus:border-accent transition-colors ${amount < 10 ? 'border-danger/60' : 'border-border1'}`} />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-text3">USDC</span>
             </div>
+            {amount < 10 && (
+              <p className="text-[9px] text-danger mt-1 px-0.5">Minimum $10 required. We recommend at least $10.50 per trade.</p>
+            )}
           </div>
 
           {/* Leverage slider */}
@@ -2180,7 +2184,7 @@ function CopyTradeModal({
           })()}
 
           {/* CTA */}
-          <button onClick={handleConfirm} disabled={placing || amount <= 0}
+          <button onClick={handleConfirm} disabled={placing || amount < 10}
             className={`w-full py-3 rounded-xl font-bold text-[13px] transition-all flex items-center justify-center gap-2 ${
               isLong
                 ? 'bg-success text-white hover:bg-success/90 disabled:bg-success/40'
@@ -2191,6 +2195,8 @@ function CopyTradeModal({
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 Placing Order...
               </>
+            ) : amount < 10 ? (
+              'Minimum $10 margin required'
             ) : (
               `Copy ${label} · $${amount} · ${leverage}×${slEnabled ? ` · SL ${slPct}%` : ''}${tpEnabled ? ` · TP ${tpPct}%` : ''}`
             )}
