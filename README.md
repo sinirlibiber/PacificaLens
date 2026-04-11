@@ -142,27 +142,6 @@ Find and exploit funding rate differentials across perpetual exchanges for delta
 
 ---
 
-### 🐋 Whale Watcher
-
-Monitor large trades and liquidation events across all Pacifica markets in real time.
-
-**Whale Trade Feed:**
-- WebSocket scan every 5 seconds across all 63 markets
-- Displays every trade above your threshold (default $10K notional)
-- Shows: symbol, side (long/short open/close), notional, price, timestamp
-- Liquidation events tagged separately with ⚡
-
-**Symbol Pressure Map:**
-- Per-symbol bull/bear score (0–100) based on aggregated whale flow
-- Long vs short notional comparison bar
-- Liquidation count split (long liq vs short liq)
-- OI change % and funding spike flags
-
-**Wallet Lookup:**
-- Enter any Solana address → see their Pacifica trade history, active positions, and PnL
-
----
-
 ### 🏆 AlphaBoard & Copy Trading
 
 **AlphaBoard (7,800+ tracked traders):**
