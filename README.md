@@ -538,7 +538,7 @@ PacificaLens uses Pacifica's Builder Code system (`PACIFICALENS`) for all order 
 
 <div align="center">
 
-MIT © PacificaLens — Built for the Pacifica Hackathon 2026
+[MIT](./LICENSE) © PacificaLens — Built for the Pacifica Hackathon 2026
 
 [pacificalens.xyz](https://pacificalens.xyz)
 
