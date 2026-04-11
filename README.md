@@ -1,24 +1,26 @@
 <div align="center">
-  <img src="public/logo.png" alt="PacificaLens Logo" width="90" />
 
-  <h1>PacificaLens</h1>
+<img src="public/logo.png" alt="PacificaLens Logo" width="90" />
 
-  <p><strong>The all-in-one analytics & trading intelligence platform for <a href="https://app.pacifica.fi">Pacifica.fi</a></strong></p>
+# PacificaLens
 
-  <p>
-    <a href="https://www.pacificalens.xyz">🌐 Live App</a> ·
-    <a href="https://app.pacifica.fi">Pacifica DEX</a> ·
-    <a href="https://pacifica.fi">Pacifica Hackathon 2026</a>
-  </p>
+**The all-in-one analytics & trading intelligence platform for [Pacifica.fi](https://app.pacifica.fi)**
 
-  <p>
-    <img src="https://img.shields.io/badge/Next.js-14-black?logo=next.js" />
-    <img src="https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript" />
-    <img src="https://img.shields.io/badge/Tailwind-3-38bdf8?logo=tailwindcss" />
-    <img src="https://img.shields.io/badge/Solana-Privy-9945FF?logo=solana" />
-    <img src="https://img.shields.io/badge/Supabase-Postgres-3ecf8e?logo=supabase" />
-    <img src="https://img.shields.io/badge/Deployed-Vercel-black?logo=vercel" />
-  </p>
+<p>
+  <a href="https://www.pacificalens.xyz">🌐 Live App</a> ·
+  <a href="https://app.pacifica.fi">Pacifica DEX</a> ·
+  <a href="https://pacifica.fi">Pacifica Hackathon 2026</a>
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/Next.js-14-black?logo=next.js" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript" />
+  <img src="https://img.shields.io/badge/Tailwind-3-38bdf8?logo=tailwindcss" />
+  <img src="https://img.shields.io/badge/Solana-Privy-9945FF?logo=solana" />
+  <img src="https://img.shields.io/badge/Supabase-Postgres-3ecf8e?logo=supabase" />
+  <img src="https://img.shields.io/badge/Deployed-Vercel-black?logo=vercel" />
+</p>
+
 </div>
 
 ---
@@ -50,16 +52,17 @@ The entry point is a Three.js 3D globe rendered in WebGL with a deep-space nebul
 - Drag to rotate, scroll to zoom
 - Click anywhere on the globe to **drop a location pin** — stored in Supabase, visible to all users worldwide
 - Connect Solana wallet directly from the landing page via Privy (Phantom, Solflare, Backpack)
-- Feature strip and Hackathon 2026 badge before entering the dashboard
+- **Continue as Guest** — access all market data without a wallet. Trade execution, AI Assistant, and personal account data require connection.
+- 5-slide onboarding modal on first visit — explains each feature, shown once per browser
 
 ---
 
 ### 📊 Market Overview
 
-Real-time intelligence for all **63 Pacifica perpetual markets**.
+Real-time intelligence for all **63 Pacifica perpetual markets** — including HIP-3 external assets (SP500, Gold, Oil, equities, forex).
 
 **Market Table:**
-- Live prices, 24h % change, funding rate, volume, open interest — updating via WebSocket every 30s
+- Live prices, 24h % change, funding rate, volume, open interest — updating every 30s
 - Color-coded funding rates: positive = shorts paid, negative = longs paid
 - Sparkline mini-charts (4h candles, 4-day window) per row
 - Sortable and filterable by any column
@@ -68,8 +71,8 @@ Real-time intelligence for all **63 Pacifica perpetual markets**.
 
 **Market Detail Panel:**
 - Full bid/ask orderbook with depth visualization
-- Recent trades feed (liquidations tagged separately)
-- Interactive candlestick chart (1m → 1d)
+- Recent trades feed (buy/sell with price, size, time)
+- Interactive price chart (1m → 1d intervals)
 - One-click trade execution directly from the panel
 
 **Top Stats Bar:**
@@ -81,7 +84,7 @@ Real-time intelligence for all **63 Pacifica perpetual markets**.
 
 ### ⚖️ Risk Manager
 
-A professional position sizing calculator built for disciplined perpetuals trading.
+A professional position sizing calculator built for disciplined perpetuals trading. Calculator is available to guests; live position data requires wallet.
 
 **Inputs:**
 - Account size (auto-fills from wallet equity)
@@ -93,8 +96,7 @@ A professional position sizing calculator built for disciplined perpetuals tradi
 - Long / Short toggle
 
 **Outputs:**
-- Exact position size in contracts
-- Position value in USD
+- Exact position size in contracts and USD
 - Required margin
 - Estimated liquidation price
 - Max loss in USD and %
@@ -103,10 +105,9 @@ A professional position sizing calculator built for disciplined perpetuals tradi
 - Daily and weekly funding cost estimate
 - Visual price level diagram (Liq → SL → Entry → TP)
 
-**Portfolio Risk Tab:**
+**Portfolio Risk Tab (wallet required):**
 - Aggregates all open positions
 - Total margin used, combined risk %, unrealized PnL
-- Bubble chart by symbol and position size
 - Long/short ratio bar across the portfolio
 
 **Execute:** Places a real order on Pacifica via Builder Code with one click, straight from the calculator results.
@@ -123,9 +124,7 @@ Find and exploit funding rate differentials across perpetual exchanges for delta
 3. Price risk cancels out — collect the spread 3× per day (every 8h)
 
 **Cross-exchange comparison:**
-- Pacifica vs Hyperliquid
-- Pacifica vs dYdX
-- Pacifica vs Aster
+- Pacifica vs external DEXes (dYdX, Aster, others)
 - All combinations at once
 
 **Opportunity display:**
@@ -158,16 +157,15 @@ Monitor large trades and liquidation events across all Pacifica markets in real 
 - Long vs short notional comparison bar
 - Liquidation count split (long liq vs short liq)
 - OI change % and funding spike flags
-- Sort by: total flow, bull score, trade count, liquidations
 
 **Wallet Lookup:**
 - Enter any Solana address → see their Pacifica trade history, active positions, and PnL
 
 ---
 
-### 👥 Smart Money Leaderboard & Copy Trading
+### 🏆 AlphaBoard & Copy Trading
 
-**Leaderboard (7,800+ tracked traders):**
+**AlphaBoard (7,800+ tracked traders):**
 
 | Column | Description |
 |--------|-------------|
@@ -204,83 +202,130 @@ Composite 0–100 score calculated from 8 weighted components:
 - 📈 Swing Trader — moderate churn, positive 30d PnL
 - ⚖️ Balanced — everything else
 
-**Trader Modal (click any row):**
+**Trader Detail Drawer (click any row):**
 - Full trade history with PnL per trade
-- Active positions
-- Equity sparkline over time
-- Score breakdown bar chart with tooltips explaining each metric
+- Active positions with entry, mark price, PnL, liquidation price
+- Score breakdown bar chart with tooltips
+- **Open Trade** button — open the same position manually with your own margin/leverage settings
 
-**Copy Trading:**
-- Watch a trader → automatically mirror their positions in real time
-- Configure: copy ratio (% of their size), max position size, allowed symbols, delay
-- Supports partial close mirroring (trader reduces 30%+ → your position reduces proportionally)
-- Stop copying at any time without auto-closing your positions
-- Watching tab filters to only your followed traders
+**Watching Tab:**
+Filters to only your starred traders. Enables Auto Copy Trade.
 
 ---
 
-### 🔥 Liquidation Heatmap
+### ✋ Open Trade (Manual Copy)
 
-A real-time and historical liquidation visualization system, unique to PacificaLens.
+From any trader's position in the AlphaBoard drawer, click **Open Trade** to mirror it manually:
 
-**Grid View (in Analytics tab):**
-- All 63 coins as clickable tiles
-- Tiles with real liquidations: **red** = long liq dominant, **green** = short liq dominant
-- Tiles with no liquidations: **blue tint** scaled by Open Interest — potential risk zones
-- Refreshes every 2 minutes from Supabase; cached in localStorage
+- **Trader Entry** — price they opened at
+- **Mark Price** — current market price
+- **Price Drift** — % difference between trader entry and now (staleness warning)
+- Set your own margin, leverage, stop loss, take profit
+- Order type: Market or Limit
+- Estimated liquidation price shown in real time
+- Executed via connected wallet with PACIFICALENS builder code
 
-**Detail Modal (click any tile):**
-- Coinglass-style canvas heatmap: X = time buckets, Y = price levels
-- Short liq zones: red/orange/yellow heat above price line
-- Long liq zones: cyan/green heat below price line
-- **Real liquidation dots** from Supabase — size = notional, color = side
-- Price line overlay (actual price movement)
-- Crosshair + rich tooltip on hover
-- Range filter: 12h / 24h / 48h / 7d
-- Side filter: All / Long / Short
+---
 
-**Data Infrastructure:**
-- A persistent Node.js worker on Render.com connects to `wss://ws.pacifica.fi/ws` 24/7
-- Every `market_liquidation` and `backstop_liquidation` event is batched and upserted to Supabase within 5 seconds
-- Supabase maintains a 24-hour rolling window (rows older than 24h auto-deleted hourly)
-- Site visitors also contribute: their WebSocket connection writes liquidations while the app is open
+### 🤖 Auto Copy Trade (Automated Mirroring)
+
+Fully automated position mirroring using Pacifica Agent Keys — no manual intervention required.
+
+**How it works:**
+1. Star a trader on AlphaBoard → add to Watching
+2. Configure your Pacifica Agent Key in the copy panel
+3. PacificaLens scans the trader's positions **every 10 seconds**
+4. New position detected → same trade automatically opened on your account
+5. Trader closes → your position closes automatically
+6. Trader partially reduces → your position reduces proportionally
+
+**Configuration:**
+- Copy open / copy close — toggle each independently
+- Size mode: fixed USDC per trade OR proportional % of your equity
+- Leverage: mirror the trader's leverage OR set a custom fixed multiplier
+- Max leverage cap for safety
+- Min/max trade size filters
+
+**Order Log:**
+Every auto-copy action is logged with status (Success / Failed / Pending), symbol, side, size, price, source trader, and timestamp. Visible in Portfolio → PacificaLens Orders.
+
+---
+
+### 💧 Liquidation Monitor
+
+Real-time and estimated liquidation data across all 63 markets — the most technically unique feature of PacificaLens.
+
+**Three view modes:**
+- **⊞ Grid** — card per market with intensity bar, long/short breakdown, color-coded by dominant side
+- **☰ List** — compact sortable table with L/S ratio bar
+- **⚡ Feed** — chronological event stream of individual liquidation events
+
+**Time ranges:** 1h / 6h / 24h / 7d
+
+**Data sources:**
+- Crypto markets: standard metaAndAssetCtxs endpoint from external DEX
+- HIP-3 external markets: same endpoint with `dex:"xyz"` parameter — returns symbols like `xyz:SP500`, `xyz:GOLD`, `xyz:CL`, etc.
+
+**HIP-3 Market Mapping:**
+
+| External DEX Symbol | Pacifica Name |
+|---------------------|---------------|
+| xyz:SP500 | SP500 (S&P 500) |
+| xyz:GOLD | XAU (Gold) |
+| xyz:CL | CL (Crude Oil WTI) |
+| xyz:TSLA / xyz:NVDA / xyz:GOOGL | TSLA / NVDA / GOOGL |
+| xyz:SILVER / xyz:COPPER / xyz:PLATINUM | SILVER / COPPER / PLATINUM |
+| xyz:NATGAS / xyz:URNM | NATGAS / URNM |
+| xyz:EUR / xyz:JPY | EURUSD / USDJPY |
+| xyz:CRCL / xyz:HOOD / xyz:PLTR | CRCL / HOOD / PLTR |
+
+---
+
+### 📉 Liquidation Leverage Map
+
+Click any market in the Liquidation Monitor for a Coinglass-style canvas chart.
+
+- **Upper panel (78%):** Price line chart with mark price dashed overlay
+- **Lower panel (22%):** Liq leverage bars split by long (teal) and short (red) at each price level, with gradient fills and cumulative overlay lines
+- **Zoom:** Mouse wheel to zoom in/out
+- **Pan:** Click and drag to scroll through history
+- **Tooltip:** OHLC on upper panel, liq notional + cumulative on lower panel
+- **Ranges:** 12h / 24h / 48h / 7d
+- **HIP-3 support:** Candlestick data fetched via external DEX `candleSnapshot` with `xyz:` prefix mapping
 
 ---
 
 ### 🤖 AI Assistant
 
-An intelligent market assistant powered by a dual-model routing architecture.
+Intelligent market assistant with a dual-model routing architecture. Requires wallet connection.
 
 **Routing logic:**
-- **Elfa AI** → social/sentiment queries: trending tokens, Twitter buzz, whale narratives (15-min cache)
-- **Groq (Llama 3.3 70B)** → everything else: market analysis, DeFi concepts, risk calculations (30-min cache)
+- **Elfa AI** → social/sentiment queries (trending tokens, Twitter buzz, whale narratives) — 15-min cache
+- **Groq (Llama 3.3 70B)** → everything else (market analysis, DeFi concepts, risk) — 30-min cache
 
-**Live context:** Current Pacifica mark prices are injected into every query — the AI always answers with real market data, never stale training data.
+**Live context:** Current Pacifica mark prices are injected into every query — always answers with real market data.
 
-**What you can ask:**
-- "What's the current funding rate on SOL?"
-- "Explain how perpetual funding works"
-- "What's my liquidation price if I long BTC at $66,000 with 10x leverage and $500 margin?"
+**Example questions:**
+- "What's the funding rate on SOL right now?"
 - "Which tokens are whales accumulating?"
 - "Is 2% risk per trade too much for a $1,000 account?"
+- "Analyze BTC technically"
 
 ---
 
-### 📈 Analytics Tab
+### 📊 Analytics & AI
 
-Deep market analytics for the entire Pacifica ecosystem.
+Deep market analytics navigable via a left sidebar.
 
-- AI Assistant panel (collapsible)
-- Funding Rate Heatmap — all markets, color-coded, live
-- Market Signals — OI spike alerts (≥2% change) and funding spike alerts
-- Volume by Market — top 10 horizontal bar chart
-- OI Distribution — donut chart with center label showing total
-- Long/Short Ratio — per-symbol bias bar
-- 24h Volume Dominance — percentage breakdown
-- Recent Liquidations — live WebSocket feed, filterable by size
-- Liquidation Heatmap grid
-- Global News — aggregated crypto news with category filter
-- Economic Calendar — ForexFactory events for current + next week
+- AI Assistant (see above)
+- **Funding Rates — Most Extreme:** Bar chart of top 10 most extreme rates, color-coded
+- **Long/Short Ratio:** Per-market bias bars estimated from funding rate direction
+- **OI Distribution:** Donut chart with total OI center label + volume dominance bars
+- **All Markets Funding Rate:** Color heatmap of all 63 markets — high-intensity cells show white text for readability
+- **Market Signals:** Real-time OI spike (≥2% change) and funding anomaly alerts
+- **Liquidation Monitor:** Full liquidation section (see above)
+- **Global News:** Aggregated crypto news with All / Crypto / Macro filter
+- **Economic Calendar:** ForexFactory events for current + next week
 
 ---
 
@@ -288,22 +333,20 @@ Deep market analytics for the entire Pacifica ecosystem.
 
 Full account management for the connected wallet.
 
-**Positions tab:**
-- All open perpetual positions with live mark price, unrealized PnL, ROI%, entry price, liquidation price
-- **Close button** per row — places a reduce-only market order instantly
+**Summary cards:** Account Equity · Available Balance · Unrealized PnL · Margin Used
 
-**Open Orders tab:**
-- All pending limit orders
-- **Cancel button** per row — cancels via signed Pacifica API call
+**PnL History Chart:** Cumulative realized PnL built from trade history — sorted chronologically, zero baseline shown, colors by profitability. Labeled "Estimated · realized trades only".
 
-**Other tabs:**
-- Trade History — full execution history with realized PnL per trade
-- Funding History — all funding payments with rate and timestamp
-- Order Log — all orders placed through PacificaLens
-- Copy Performance — copy trading activity summary
-- Price Alerts — manage all active alerts
-- Journal — personal trade journal (symbol, side, notes, result, PnL) stored locally
-- Performance — aggregated stats: win rate, profit factor, average win/loss, daily/weekly PnL
+**Tabs:**
+- **Positions** — live open positions with mark price, unrealized PnL, ROI%, liquidation price, close button
+- **Open Orders** — active limit orders with cancel button
+- **Trade History** — full execution history with realized PnL per trade
+- **Funding History** — all funding payments with rate and timestamp
+- **PacificaLens Orders** — full auto-copy order log with status, source trader, timestamp
+- **Copy Performance** — copy trading win rate, total P&L, best/worst trade
+- **Price Alerts** — manage all active alerts
+- **Journal** — personal trade journal (symbol, side, notes, result, PnL) stored locally
+- **Performance** — win rate, profit factor, average win/loss, daily/weekly PnL charts
 
 ---
 
@@ -311,8 +354,56 @@ Full account management for the connected wallet.
 
 - Set trigger above/below for any of the 63 markets
 - Browser push notification support
-- Alerts persist in localStorage
+- Persist in localStorage across sessions
 - Enable/disable without deleting
+
+---
+
+## Pacifica.fi API Integration
+
+All calls proxied through `/api/proxy` → `https://api.pacifica.fi/api/v1/`
+
+### Public Endpoints
+
+| Endpoint | Used For |
+|----------|----------|
+| `GET /info` | All 63 markets — tick size, leverage, funding rates, isolated margin |
+| `GET /info/prices` | Live tickers — mark price, OI, funding, 24h volume |
+| `GET /leaderboard?limit=25000` | Full trader list for AlphaBoard |
+| `GET /orderbook?symbol=BTC-USD` | Live bid/ask levels with depth |
+| `GET /kline?symbol=BTC-USD&interval=1h` | OHLCV candlestick data |
+| `GET /trades?symbol=BTC-USD&limit=500` | Recent trades + liquidation events via `cause` field |
+
+### Authenticated Endpoints
+
+| Endpoint | Used For |
+|----------|----------|
+| `GET /account?account=WALLET` | Equity, balance, margin, fee tiers |
+| `GET /positions?account=WALLET` | Open positions with PnL, liq price, leverage |
+| `GET /trades/history?account=WALLET` | Trade history for PnL chart |
+| `GET /funding/history?account=WALLET` | Funding payments |
+| `GET /leaderboard/positions?account=WALLET` | A trader's positions for copy trading |
+| `POST /order` | Place market/limit orders |
+
+### Order Signing (Ed25519)
+
+Follows [Pacifica's signing spec](https://pacifica.gitbook.io/docs/api-documentation/api/signing/implementation):
+
+1. Build payload with `builder_code: "PACIFICALENS"`
+2. Sort all JSON keys alphabetically
+3. SHA-256 hash → Ed25519 sign via Privy wallet or Agent Key
+4. POST with `timestamp` + `signature`
+
+Builder fee: **0.1%** — tagged to PACIFICALENS automatically on every order.
+
+### Agent Key System
+
+Agent Keys are delegated signing keys that allow PacificaLens to trade on behalf of users without manual wallet approval per trade:
+
+- User generates an Agent Key pair on Pacifica.fi → Account Settings
+- Private key stored in browser localStorage only — never sent to any server
+- PacificaLens signs orders using TweetNaCl Ed25519 with the agent key
+- Main wallet approves the relationship once — all subsequent auto-copy trades are instant
 
 ---
 
@@ -353,12 +444,12 @@ Full account management for the connected wallet.
 | Auth | Privy (`@privy-io/react-auth`) |
 | Blockchain | Solana (`@solana/web3.js`, `bs58`, `tweetnacl`) |
 | Market Data | Pacifica REST API + WebSocket |
-| Charts | Recharts, Canvas 2D (heatmap), Three.js (globe) |
+| Charts | Recharts, Canvas 2D (custom), Three.js (globe) |
 | AI Social | Elfa AI v2 |
 | AI General | Groq API (Llama 3.3 70B Versatile) |
 | Database | Supabase (PostgreSQL) |
 | Worker | Node.js on Render.com |
-| Deployment | Vercel (Hobby) |
+| Deployment | Vercel |
 
 ---
 
@@ -368,58 +459,58 @@ Full account management for the connected wallet.
 PacificaLens/
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx                      # Landing — globe + wallet connect
-│   │   ├── layout.tsx                    # Root layout — Privy provider
-│   │   ├── globals.css                   # Theme variables (dark/light)
-│   │   ├── overview/page.tsx
-│   │   ├── analytics/page.tsx
-│   │   ├── risk/page.tsx
-│   │   ├── arbitrage/page.tsx
-│   │   ├── arbitrage/bot/page.tsx
-│   │   ├── smart-money/page.tsx
-│   │   ├── portfolio/page.tsx
+│   │   ├── page.tsx                      # Landing — globe + wallet connect + guest mode
+│   │   ├── overview/page.tsx             # Market overview + onboarding modal
+│   │   ├── analytics/page.tsx            # Analytics & AI dashboard
+│   │   ├── risk/page.tsx                 # Risk manager (partial guest access)
+│   │   ├── arbitrage/page.tsx            # Arbitrage scanner
+│   │   ├── arbitrage/bot/page.tsx        # Alert bot config
+│   │   ├── smart-money/page.tsx          # AlphaBoard + copy trading
+│   │   ├── portfolio/page.tsx            # Portfolio management
 │   │   └── api/
-│   │       ├── ai/route.ts               # Groq/Elfa router
-│   │       ├── calendar/route.ts         # Economic calendar proxy
-│   │       ├── hyperliquid/route.ts      # Hyperliquid funding proxy
+│   │       ├── proxy/route.ts            # Pacifica API CORS proxy
+│   │       ├── liq-multi/route.ts        # Liquidation aggregator (crypto + HIP-3)
+│   │       ├── liq-leverage/route.ts     # Liquidation leverage map levels
+│   │       ├── liquidations/recent/      # Recent liq events
+│   │       ├── trader-score/route.ts     # Batch trader scoring (force-dynamic)
+│   │       ├── ai/route.ts               # Groq/Elfa router with live price context
+│   │       ├── order/route.ts            # Order placement proxy
+│   │       ├── hyperliquid/route.ts      # External DEX funding proxy
 │   │       ├── dydx/route.ts             # dYdX funding proxy
 │   │       ├── aster/route.ts            # Aster exchange proxy
 │   │       ├── news/route.ts             # Crypto news aggregator
-│   │       ├── pins/route.ts             # Globe pins (Supabase)
-│   │       ├── proxy/route.ts            # Pacifica API CORS proxy
-│   │       └── liquidations/
-│   │           ├── route.ts              # GET aggregated + POST write
-│   │           └── recent/route.ts       # GET individual events (heatmap modal)
+│   │       ├── calendar/route.ts         # Economic calendar proxy
+│   │       └── pins/route.ts             # Globe pins (Supabase)
 │   ├── components/
-│   │   ├── AppShell.tsx                  # Global state, routing, order execution
+│   │   ├── AppShell.tsx                  # Global state, routing, auth context
 │   │   ├── Header.tsx                    # Navigation + wallet info
 │   │   ├── Overview.tsx                  # Market table + detail panel
+│   │   ├── Analytics.tsx                 # All analytics sections + sidebar nav
+│   │   ├── HeatmapView.tsx               # Liquidation Monitor (grid/list/feed)
+│   │   ├── LiquidationHeatmapModal.tsx   # Liquidation Leverage Map (canvas)
+│   │   ├── CopyTrading.tsx               # AlphaBoard + auto copy settings
+│   │   ├── TraderModal.tsx               # Trader detail drawer
+│   │   ├── ScoreBadge.tsx                # Score badge + breakdown card
+│   │   ├── TradingPanel.tsx              # Trade execution (wallet required)
 │   │   ├── RiskManager.tsx               # Position calculator + portfolio risk
 │   │   ├── Calculator.tsx                # Risk calc form
-│   │   ├── Results.tsx                   # Calc output + execute
-│   │   ├── Arbitrage.tsx                 # Arbitrage scanner
-│   │   ├── ArbitrageScanner.tsx          # Multi-exchange scanner + glossary
+│   │   ├── Results.tsx                   # Calc output + execute button
+│   │   ├── Arbitrage.tsx                 # Arbitrage scanner UI
+│   │   ├── ArbitrageScanner.tsx          # Multi-exchange comparison
 │   │   ├── WhaleWatcher.tsx              # Whale feed + pressure map
-│   │   ├── CopyTrading.tsx               # Leaderboard + copy settings
-│   │   ├── TraderModal.tsx               # Trader deep-dive drawer
-│   │   ├── Analytics.tsx                 # All analytics + heatmap grid
-│   │   ├── LiquidationHeatmapModal.tsx   # Coinglass-style heatmap modal
-│   │   ├── AiAssistant.tsx               # AI chat component
-│   │   ├── Portfolio.tsx                 # Portfolio + close/cancel + journal
+│   │   ├── AiAssistant.tsx               # AI chat (locked for guests)
+│   │   ├── Portfolio.tsx                 # Portfolio + tabs
+│   │   ├── PriceAlerts.tsx               # Alert management
+│   │   ├── OnboardingModal.tsx           # 5-slide first-visit onboarding
 │   │   ├── GlobeMap.tsx                  # Three.js interactive globe
-│   │   ├── ScoreBadge.tsx                # Trader score badge + score card
-│   │   ├── PriceAlerts.tsx               # Alert management UI
-│   │   ├── TradingPanel.tsx              # Trade execution panel
 │   │   ├── CoinLogo.tsx                  # Coin icon with fallback
-│   │   ├── ConnectScreen.tsx             # Pre-auth landing content
-│   │   ├── ConnectWalletButton.tsx       # Privy connect button
-│   │   ├── EarlyAccessGate.tsx           # Whitelist gate
+│   │   ├── ConnectWalletButton.tsx       # Privy connect + Continue as Guest
 │   │   └── Toast.tsx                     # Toast notifications
 │   ├── hooks/
 │   │   ├── useWhaleWatcher.ts            # Real-time whale WebSocket hook
-│   │   ├── useLiquidationHeatmap.ts      # 24h liq data from Supabase
-│   │   ├── useCopyTrading.ts             # Leaderboard + copy state
-│   │   ├── usePositionMirror.ts          # Auto-copy mirroring engine
+│   │   ├── useLiquidationHeatmap.ts      # Liq data aggregation hook
+│   │   ├── useCopyTrading.ts             # AlphaBoard + copy state
+│   │   ├── usePositionMirror.ts          # Auto-copy mirroring engine (10s poll)
 │   │   ├── useArbitrage.ts               # Multi-exchange funding fetcher
 │   │   ├── useAccount.ts                 # Account info + positions
 │   │   ├── useMarkets.ts                 # Market list cache
@@ -428,17 +519,14 @@ PacificaLens/
 │   │   └── useTheme.ts                   # Dark/light theme toggle
 │   └── lib/
 │       ├── pacifica.ts                   # Pacifica REST API client
-│       ├── pacificaSigning.ts            # Signing + Builder Code + cancel/close
+│       ├── pacificaSigning.ts            # Ed25519 signing + Builder Code
 │       ├── traderScore.ts                # Trader scoring algorithm v3
 │       ├── utils.ts                      # Formatters (price, PnL, time)
 │       └── ai/
 │           ├── router.ts                 # Groq/Elfa routing logic
 │           ├── elfa.ts                   # Elfa AI client
 │           ├── groq.ts                   # Groq client (Llama 3.3)
-│           └── cache.ts                  # Upstash Redis cache
-├── pacifica-liq-worker/
-│   ├── index.js                          # Render.com liquidation worker
-│   └── package.json
+│           └── cache.ts                  # Response cache
 ├── .env.example
 ├── next.config.js
 └── tsconfig.json
@@ -453,10 +541,6 @@ PacificaLens/
 NEXT_PUBLIC_PRIVY_APP_ID=
 NEXT_PUBLIC_PRIVY_CLIENT_ID=
 
-# Pacifica
-NEXT_PUBLIC_PACIFICA_API=https://api.pacifica.fi/api/v1
-NEXT_PUBLIC_PACIFICA_WS=wss://ws.pacifica.fi/ws
-
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
@@ -464,18 +548,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 # AI
 GROQ_API_KEY=
 ELFA_API_KEY=
-
-# Response cache (optional — Upstash Redis)
-UPSTASH_REDIS_REST_URL=
-UPSTASH_REDIS_REST_TOKEN=
-```
-
-**Render Worker:**
-```env
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-RENDER_EXTERNAL_URL=https://your-worker.onrender.com
-PORT=10000
 ```
 
 ---
@@ -483,28 +555,6 @@ PORT=10000
 ## Supabase Setup
 
 ```sql
--- Liquidations table (24h rolling window)
-create table if not exists liquidations (
-  id         bigserial primary key,
-  trade_id   text unique not null,
-  symbol     text not null,
-  side       text not null,
-  price      numeric not null,
-  amount     numeric not null,
-  notional   numeric not null,
-  cause      text not null,
-  ts         timestamptz not null,
-  created_at timestamptz default now()
-);
-
-create index if not exists idx_liq_ts     on liquidations (ts desc);
-create index if not exists idx_liq_symbol on liquidations (symbol, ts desc);
-
-alter table liquidations enable row level security;
-create policy "allow_select" on liquidations for select using (true);
-create policy "allow_insert" on liquidations for insert with check (true);
-create policy "allow_delete" on liquidations for delete using (true);
-
 -- Globe pins
 create table if not exists pins (
   id         bigserial primary key,
@@ -526,43 +576,12 @@ create policy "allow_insert" on pins for insert with check (true);
 ```bash
 git clone https://github.com/sinirlibiber/PacificaLens.git
 cd PacificaLens
-
 npm install
-
 cp .env.example .env.local
 # Fill in your environment variables
-
 npm run dev
 # → http://localhost:3000
 ```
-
----
-
-## Liquidation Worker (Render.com)
-
-The worker in `pacifica-liq-worker/` is a standalone Node.js service:
-
-```bash
-cd pacifica-liq-worker
-npm install
-node index.js
-```
-
-**Deploy to Render.com:**
-1. Connect your GitHub repo
-2. Root Directory: `pacifica-liq-worker`
-3. Build Command: `npm install`
-4. Start Command: `node index.js`
-5. Instance Type: Free
-6. Add environment variables
-
-The worker:
-- Connects to Pacifica WebSocket on startup and stays connected 24/7
-- Subscribes to all 63 markets
-- Detects `market_liquidation` and `backstop_liquidation` events
-- Batches and upserts to Supabase every 5 seconds (deduplication via `trade_id`)
-- Deletes rows older than 24h every hour
-- Self-pings every 10 minutes to prevent Render free-tier sleep
 
 ---
 
@@ -573,17 +592,30 @@ The worker:
 | Phantom | Browser extension |
 | Solflare | Browser extension |
 | Backpack | Browser extension |
-| OKX Wallet | Browser extension |
-| All Solana wallets | WalletConnect |
+| Privy embedded | In-app (no extension needed) |
+
+---
+
+## Security Notes
+
+- Agent Key private keys stored in browser localStorage only — never transmitted to any server
+- Order signing happens client-side using TweetNaCl Ed25519
+- All Pacifica API calls proxied server-side via `/api/proxy` to avoid CORS and hide direct API patterns
+- Builder admin functions require a specific wallet address (BUILDER_WALLET constant)
+- Guest mode exposes only public market data — no wallet or account data accessible without connection
 
 ---
 
 ## Builder Code Integration
 
-PacificaLens uses Pacifica's Builder Code system for all order submission. Users sign a one-time approval transaction before their first order. This enables builder attribution, fee rebate eligibility, and seamless order flow without leaving the platform. The signing flow supports all wallet types (Privy embedded, Phantom, Solflare, Backpack) with automatic provider fallback.
+PacificaLens uses Pacifica's Builder Code system (`PACIFICALENS`) for all order submission. Users sign a one-time approval transaction before their first order. This enables builder attribution and fee rebate eligibility. The signing flow supports all wallet types (Privy embedded, Phantom, Solflare, Backpack) with automatic provider fallback.
 
 ---
 
-## License
+<div align="center">
 
 MIT © PacificaLens — Built for the Pacifica Hackathon 2026
+
+[pacificalens.xyz](https://pacificalens.xyz)
+
+</div>
