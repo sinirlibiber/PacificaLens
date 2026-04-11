@@ -2,7 +2,7 @@
 
 <img src="public/logo.png" alt="PacificaLens Logo" width="90" />
 
-# PacificaLens
+# PACIFICALENS
 
 **The all-in-one analytics & trading intelligence platform for [Pacifica.fi](https://app.pacifica.fi)**
 
