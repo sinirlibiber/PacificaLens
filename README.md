@@ -18,7 +18,6 @@
   <img src="https://img.shields.io/badge/Tailwind-3-38bdf8?logo=tailwindcss" />
   <img src="https://img.shields.io/badge/Solana-Privy-9945FF?logo=solana" />
   <img src="https://img.shields.io/badge/Supabase-Postgres-3ecf8e?logo=supabase" />
-  <img src="https://img.shields.io/badge/Deployed-Vercel-black?logo=vercel" />
 </p>
 
 </div>
@@ -405,7 +404,7 @@ Agent Keys are delegated signing keys that allow PacificaLens to trade on behalf
 | Charts | Recharts, Canvas 2D (custom), Three.js (globe) |
 | AI Social | Elfa AI v2 |
 | AI General | Groq API (Llama 3.3 70B Versatile) |
-| Database | Supabase (PostgreSQL) |
+| Database | Supabase |
 | Worker | Node.js on Render.com |
 | Deployment | Vercel |
 
@@ -510,38 +509,6 @@ ELFA_API_KEY=
 
 ---
 
-## Supabase Setup
-
-```sql
--- Globe pins
-create table if not exists pins (
-  id         bigserial primary key,
-  label      text not null,
-  lat        numeric not null,
-  lng        numeric not null,
-  created_at timestamptz default now()
-);
-
-alter table pins enable row level security;
-create policy "allow_select" on pins for select using (true);
-create policy "allow_insert" on pins for insert with check (true);
-```
-
----
-
-## Local Development
-
-```bash
-git clone https://github.com/sinirlibiber/PacificaLens.git
-cd PacificaLens
-npm install
-cp .env.example .env.local
-# Fill in your environment variables
-npm run dev
-# → http://localhost:3000
-```
-
----
 
 ## Supported Wallets
 
