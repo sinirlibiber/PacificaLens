@@ -15,8 +15,8 @@ const SLIDES = [
   {
     icon: '💧',
     title: 'Liquidation Monitor',
-    subtitle: 'Track liquidations across 60+ markets',
-    body: 'Monitor estimated liquidation volumes from HyperLiquid and Pacifica DEX in real time. Includes HIP-3 external markets like SP500, Gold, Crude Oil, TSLA, NVDA and more — unique to PacificaLens.',
+    subtitle: 'Track liquidations across',
+    body: 'Monitor estimated liquidation volumes real time. Unique to PacificaLens',
     badge: 'NEW',
   },
   {
@@ -31,6 +31,13 @@ const SLIDES = [
     title: 'Analytics & AI',
     subtitle: 'Market signals, funding rates, OI distribution',
     body: 'Real-time market signals detect OI spikes and funding anomalies. The AI Assistant answers your market questions. Track funding rates, long/short ratios, and liquidation heatmaps across all Pacifica markets.',
+    badge: null,
+  },
+  {
+    icon: '🛡️',
+    title: 'Risk Manager',
+    subtitle: 'Calculate position size, risk & liquidation price',
+    body: 'Enter your account size, leverage, and entry price to instantly calculate position size, liquidation price, risk/reward ratio and recommended stop-loss. Trade with confidence, never over-expose yourself.',
     badge: null,
   },
   {
@@ -140,23 +147,8 @@ export default function OnboardingModal() {
             </p>
           </div>
 
-          {/* Last slide CTA buttons */}
-          {isLast && (
-            <div className="flex gap-3 mt-6 justify-center">
-              <a href="/"
-                className="px-5 py-2.5 rounded-xl text-[12px] font-bold transition-all hover:opacity-90"
-                style={{ background: '#00b4d8', color: '#fff', boxShadow: '0 0 20px rgba(0,180,216,0.3)' }}
-                onClick={() => close(true)}>
-                Connect Wallet
-              </a>
-              <a href="/overview"
-                className="px-5 py-2.5 rounded-xl text-[12px] font-semibold transition-all hover:opacity-80"
-                style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)' }}
-                onClick={() => close(true)}>
-                Continue as Guest →
-              </a>
-            </div>
-          )}
+          {/* Last slide — no extra CTA buttons */}
+        
         </div>
 
         {/* Footer */}
@@ -167,7 +159,7 @@ export default function OnboardingModal() {
           <button onClick={() => close(true)}
             className="text-[11px] transition-opacity hover:opacity-80 flex items-center gap-1.5"
             style={{ color: 'rgba(255,255,255,0.3)' }}>
-            Skip ⏭
+            Don't show again
           </button>
 
           {/* Dots */}
