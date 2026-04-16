@@ -17,8 +17,8 @@ const GlobeMap = dynamic(() => import('@/components/GlobeMap'), {
 });
 
 const FEATURES = [
-  { label: 'Analytics & AI' },
-  { label: 'Whale Tracker' },
+  { label: 'Analytics' },
+  { label: 'Smart Money' },
   { label: 'Copy Trading' },
   { label: 'Arbitrage' },
   { label: 'Risk Manager' },
@@ -83,7 +83,29 @@ export default function Home() {
 
         {/* CTA Buttons */}
         <ConnectWalletButton />
-        
+
+        {/* Legal disclaimer */}
+        <p className="mt-3 text-[10px] text-center" style={{ color: 'rgba(120,150,170,0.6)', maxWidth: '320px', lineHeight: '1.5' }}>
+          By connecting your wallet, you agree to our{' '}
+          <a
+            href="https://docs.pacificalens.xyz/terms-of-service"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'rgba(0,180,216,0.8)', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+          >
+            Terms of Service
+          </a>{' '}
+          and{' '}
+          <a
+            href="https://docs.pacificalens.xyz/untitled-page"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'rgba(0,180,216,0.8)', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+          >
+            Privacy Policy
+          </a>
+          .
+        </p>
 
 
       </div>
