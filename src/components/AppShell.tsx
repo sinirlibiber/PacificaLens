@@ -9,6 +9,7 @@ import { useAccount } from '@/hooks/useAccount';
 import { Header, getSolanaAddress } from '@/components/Header';
 
 import { Toast } from '@/components/Toast';
+import { Footer } from '@/components/Footer';
 import { getMarkPrice } from '@/lib/utils';
 import { submitLimitOrder, submitMarketOrder, updateLeverage, checkBuilderApproval, approveBuilderCode, toBase58, roundToTick } from '@/lib/pacificaSigning';
 import { CalcResult } from '@/components/Calculator';
@@ -298,6 +299,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {children}
           </>
         )}
+        <Footer />
         <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-2 items-end">
           {toasts.map(t => (
             <Toast key={t.id} message={t.message} type={t.type} duration={t.duration} action={t.action} onClose={() => removeToast(t.id)} />
