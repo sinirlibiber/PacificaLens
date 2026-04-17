@@ -90,7 +90,7 @@ export async function approveBuilderCode(
     const timestamp = Date.now();
     const dataToSign = {
       builder_code: BUILDER_CODE,
-      max_fee_rate: '0.0002', // must be >= builder's fee_rate
+      max_fee_rate: '0.0001', // must be >= builder's fee_rate
     };
     const header = { timestamp, expiry_window: 60000, type: 'approve_builder_code' };
     const combined = { ...header, data: dataToSign };
@@ -108,7 +108,7 @@ export async function approveBuilderCode(
       timestamp,
       expiry_window: 60000,
       builder_code: BUILDER_CODE,
-      max_fee_rate: '0.0002',
+      max_fee_rate: '0.0001',
     };
 
     const res = await fetch('https://api.pacifica.fi/api/v1/account/builder_codes/approve', {
