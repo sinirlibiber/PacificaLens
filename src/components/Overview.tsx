@@ -61,30 +61,66 @@ function HeatCell({ value, suffix = '%', decimals = 2 }: { value: number; suffix
 
 function FearGreedGauge({ data }: { data: FearGreed | null }) {
   if (!data) return (
-    <div className="flex items-center gap-3">
-      <div className="w-8 h-8 border-2 border-border2 border-t-accent rounded-full animate-spin" />
+    <div className="flex items-center justify-center py-4">
+      <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
     </div>
   );
   const v = data.value;
-  const color = v <= 25 ? '#dc2626' : v <= 45 ? '#f97316' : v <= 55 ? '#f59e0b' : v <= 75 ? '#84cc16' : '#10b981';
-  const rotation = -90 + (v / 100) * 180;
+  // Segment colors: Extreme Fear, Fear, Neutral, Greed, Extreme Greed
+  const segments = [
+    { color: '#dc2626', from: 0, to: 20 },
+    { color: '#f97316', from: 20, to: 40 },
+    { color: '#f59e0b', from: 40, to: 60 },
+    { color: '#84cc16', from: 60, to: 80 },
+    { color: '#10b981', from: 80, to: 100 },
+  ];
+  const labelColor = v <= 20 ? '#dc2626' : v <= 40 ? '#f97316' : v <= 60 ? '#f59e0b' : v <= 80 ? '#84cc16' : '#10b981';
+  const classification = data.classification || (v <= 20 ? 'Extreme Fear' : v <= 40 ? 'Fear' : v <= 60 ? 'Neutral' : v <= 80 ? 'Greed' : 'Extreme Greed');
+
+  // SVG arc helpers — semicircle: cx=60, cy=60, r=50
+  const cx = 60, cy = 60, r = 50;
+  function polarToXY(deg: number) {
+    const rad = ((deg - 180) * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+  function arcPath(fromPct: number, toPct: number) {
+    const fromDeg = fromPct * 1.8; // 0-100 → 0-180 degrees
+    const toDeg = toPct * 1.8;
+    const s = polarToXY(fromDeg);
+    const e = polarToXY(toDeg);
+    const large = toDeg - fromDeg > 90 ? 1 : 0;
+    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
+  }
+
+  // Needle
+  const needleDeg = v * 1.8;
+  const needleRad = ((needleDeg - 180) * Math.PI) / 180;
+  const needleLen = 38;
+  const nx = cx + needleLen * Math.cos(needleRad);
+  const ny = cy + needleLen * Math.sin(needleRad);
+
   return (
-    <div className="flex items-center gap-3">
-      <div className="relative w-12 h-7 overflow-hidden">
-        <svg viewBox="0 0 60 34" className="w-full h-full">
-          <path d="M5,30 A25,25 0 0,1 55,30" fill="none" stroke="#e2e8f0" strokeWidth="6" />
-          <path d="M5,30 A25,25 0 0,1 55,30" fill="none" stroke={color} strokeWidth="6"
-            strokeDasharray={`${(v / 100) * 78.5} 78.5`} />
-          <g transform={`translate(30,30) rotate(${rotation})`}>
-            <line x1="0" y1="0" x2="0" y2="-16" stroke="#374151" strokeWidth="1.5" strokeLinecap="round" />
-            <circle cx="0" cy="0" r="2" fill="#374151" />
-          </g>
-        </svg>
-      </div>
-      <div>
-        <div className="text-[20px] font-bold leading-none" style={{ color }}>{v}</div>
-        <div className="text-[10px] text-text3 mt-0.5">{data.classification || (v <= 25 ? 'Extreme Fear' : v <= 45 ? 'Fear' : v <= 55 ? 'Neutral' : v <= 75 ? 'Greed' : 'Extreme Greed')}</div>
-      </div>
+    <div className="flex flex-col items-center w-full">
+      <svg viewBox="0 0 120 68" className="w-full" style={{ maxHeight: 110 }}>
+        {/* Segments */}
+        {segments.map((seg, i) => (
+          <path
+            key={i}
+            d={arcPath(seg.from, seg.to)}
+            fill="none"
+            stroke={seg.color}
+            strokeWidth="10"
+            strokeLinecap={i === 0 ? 'round' : i === segments.length - 1 ? 'round' : 'butt'}
+            opacity="0.85"
+          />
+        ))}
+        {/* Needle */}
+        <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
+        <circle cx={cx} cy={cy} r="4" fill="white" opacity="0.95" />
+        {/* Value */}
+        <text x={cx} y={cy - 8} textAnchor="middle" fontSize="18" fontWeight="700" fill={labelColor}>{v}</text>
+        <text x={cx} y={cy + 6} textAnchor="middle" fontSize="7" fill="rgba(150,180,200,0.8)">{classification}</text>
+      </svg>
     </div>
   );
 }
@@ -109,24 +145,16 @@ export function Overview({ markets, tickers }: OverviewProps) {
 
   useEffect(() => {
     async function load() {
-      // Try multiple CORS proxies
-      const urls = [
-        'https://api.alternative.me/fng/?limit=1',
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.alternative.me/fng/?limit=1'),
-        '/api/external?url=' + encodeURIComponent('https://api.alternative.me/fng/?limit=1'),
-      ];
-      for (const url of urls) {
-        try {
-          const res = await fetch(url, { cache: 'no-store' });
-          if (!res.ok) continue;
+      try {
+        const res = await fetch('/api/feargreed', { cache: 'no-store' });
+        if (res.ok) {
           const json = await res.json();
-          if (json.data?.[0]) {
-            setFearGreed({ value: Number(json.data[0].value), classification: json.data[0].value_classification });
+          if (json.value !== undefined) {
+            setFearGreed({ value: Number(json.value), classification: json.classification });
             return;
           }
-        } catch {}
-      }
-      // Last resort: use a static fallback from known value
+        }
+      } catch {}
     }
     load();
     const iv = window.setInterval(load, 600000);
