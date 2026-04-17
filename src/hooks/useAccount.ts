@@ -41,7 +41,7 @@ export function useAccount(wallet: string | null) {
     }
 
     load();
-    const iv = setInterval(load, 10000);
+    const iv = setInterval(load, 8000);
     return () => {
       cancelled = true;
       clearInterval(iv);

@@ -1,3 +1,6 @@
+export const runtime = 'edge';
+export const revalidate = 10;
+
 import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
@@ -6,7 +9,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      cache: 'no-store',
+      next: { revalidate: 10 },
     });
     const data = await res.json();
     return NextResponse.json(data);

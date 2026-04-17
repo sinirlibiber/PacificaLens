@@ -84,7 +84,7 @@ export function Analytics({ markets: propMarkets, tickers: propTickers }: Analyt
       finally { setDataLoading(false); }
     }
     load();
-    const iv = setInterval(load, 5000);
+    const iv = setInterval(load, 15000);
     return () => clearInterval(iv);
   }, [propMarkets, propTickers]);
 

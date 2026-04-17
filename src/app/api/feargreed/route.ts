@@ -1,3 +1,6 @@
+export const runtime = 'edge';
+export const revalidate = 600;
+
 import { NextResponse } from 'next/server';
 
 export async function GET() {
@@ -9,7 +12,7 @@ export async function GET() {
       const res = await fetch(
         'https://pro-api.coinmarketcap.com/v3/fear-and-greed/historical?limit=1',
         {
-          cache: 'no-store',
+          next: { revalidate: 600 },
           headers: {
             'X-CMC_PRO_API_KEY': CMC_KEY,
             'Accept': 'application/json',
@@ -32,7 +35,7 @@ export async function GET() {
   // Fallback: alternative.me (no key needed)
   try {
     const res = await fetch('https://api.alternative.me/fng/?limit=1', {
-      cache: 'no-store',
+      next: { revalidate: 600 },
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
     });
     if (res.ok) {

@@ -1,3 +1,6 @@
+export const runtime = 'edge';
+export const revalidate = 10;
+
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -12,7 +15,7 @@ export async function GET(request: NextRequest) {
     if (origin) headers['Referer'] = origin;
 
     const res = await fetch(url, {
-      cache: 'no-store',
+      next: { revalidate: 10 },
       headers,
     });
 

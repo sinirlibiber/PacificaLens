@@ -1,3 +1,6 @@
+export const runtime = 'edge';
+export const revalidate = 30;
+
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -5,7 +8,7 @@ export async function GET(request: NextRequest) {
   if (!url) return NextResponse.json({ error: 'Missing url' }, { status: 400 });
   try {
     const res = await fetch(url, {
-      cache: 'no-store',
+      next: { revalidate: 30 },
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
     });
     const data = await res.json();

@@ -1,3 +1,6 @@
+export const runtime = 'edge';
+export const revalidate = 300;
+
 import { NextResponse } from 'next/server';
 
 interface NewsResult {
@@ -41,7 +44,7 @@ function parseRSS(xml: string, sourceName: string, category = 'Crypto'): NewsRes
 
 async function fetchRSS(url: string, sourceName: string, category = 'Crypto'): Promise<NewsResult[]> {
   const res = await fetch(url, {
-    cache: 'no-store',
+    next: { revalidate: 300 },
     headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/rss+xml, application/xml, text/xml' },
     signal: AbortSignal.timeout(5000),
   });
@@ -80,7 +83,7 @@ export async function GET() {
   try {
     const proxyRes = await fetch(
       'https://api.allorigins.win/get?url=' + encodeURIComponent('https://cointelegraph.com/rss'),
-      { cache: 'no-store', signal: AbortSignal.timeout(6000) }
+      { next: { revalidate: 300 }, signal: AbortSignal.timeout(6000) }
     );
     if (proxyRes.ok) {
       const json = await proxyRes.json();

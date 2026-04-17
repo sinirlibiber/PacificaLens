@@ -60,7 +60,7 @@ export function useMarkets() {
         const t = await getTickers();
         if (Object.keys(t).length > 0) setTickersIfChanged(t);
       } catch {}
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(iv);
   // eslint-disable-next-line react-hooks/exhaustive-deps
