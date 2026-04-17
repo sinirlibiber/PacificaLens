@@ -61,22 +61,22 @@ function HeatCell({ value, suffix = '%', decimals = 2 }: { value: number; suffix
 
 function FearGreedGauge({ data }: { data: FearGreed | null }) {
   if (!data) return (
-    <div className="flex items-center justify-center py-2">
+    <div className="flex items-center justify-center py-4">
       <div className="w-5 h-5 border-2 border-border2 border-t-accent rounded-full animate-spin" />
     </div>
   );
   const v = data.value;
   const segments = [
-    { color: '#dc2626', from: 0, to: 20 },
+    { color: '#ef4444', from: 0, to: 20 },
     { color: '#f97316', from: 20, to: 40 },
-    { color: '#f59e0b', from: 40, to: 60 },
+    { color: '#eab308', from: 40, to: 60 },
     { color: '#84cc16', from: 60, to: 80 },
-    { color: '#10b981', from: 80, to: 100 },
+    { color: '#22c55e', from: 80, to: 100 },
   ];
-  const labelColor = v <= 20 ? '#dc2626' : v <= 40 ? '#f97316' : v <= 60 ? '#f59e0b' : v <= 80 ? '#84cc16' : '#10b981';
+  const labelColor = v <= 20 ? '#ef4444' : v <= 40 ? '#f97316' : v <= 60 ? '#eab308' : v <= 80 ? '#84cc16' : '#22c55e';
   const classification = data.classification || (v <= 20 ? 'Extreme Fear' : v <= 40 ? 'Fear' : v <= 60 ? 'Neutral' : v <= 80 ? 'Greed' : 'Extreme Greed');
 
-  const cx = 60, cy = 58, r = 44;
+  const cx = 100, cy = 90, r = 70;
   function polarToXY(deg: number) {
     const rad = ((deg - 180) * Math.PI) / 180;
     return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
@@ -90,31 +90,27 @@ function FearGreedGauge({ data }: { data: FearGreed | null }) {
     return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
   }
 
-  // Dot indicator on arc
   const dotDeg = v * 1.8;
   const dotRad = ((dotDeg - 180) * Math.PI) / 180;
   const dx = cx + r * Math.cos(dotRad);
   const dy = cy + r * Math.sin(dotRad);
 
   return (
-    <div className="flex flex-col items-center" style={{ width: 140 }}>
-      <svg viewBox="0 0 120 68" style={{ width: 140, height: 80 }}>
+    <div className="flex flex-col items-center w-full">
+      <svg viewBox="0 0 200 105" style={{ width: '100%', maxWidth: 200 }}>
         {segments.map((seg, i) => (
           <path
             key={i}
             d={arcPath(seg.from, seg.to)}
             fill="none"
             stroke={seg.color}
-            strokeWidth="9"
+            strokeWidth="13"
             strokeLinecap={i === 0 ? 'round' : i === segments.length - 1 ? 'round' : 'butt'}
-            opacity="0.9"
           />
         ))}
-        {/* White dot on arc at current value */}
-        <circle cx={dx} cy={dy} r="5" fill="white" />
-        {/* Value */}
-        <text x={cx} y={cy + 2} textAnchor="middle" fontSize="20" fontWeight="700" fill={labelColor}>{v}</text>
-        <text x={cx} y={cy + 14} textAnchor="middle" fontSize="7.5" fill="rgba(150,180,200,0.75)">{classification}</text>
+        <circle cx={dx} cy={dy} r="7" fill="white" />
+        <text x={cx} y={cy + 4} textAnchor="middle" fontSize="28" fontWeight="800" fill={labelColor}>{v}</text>
+        <text x={cx} y={cy + 20} textAnchor="middle" fontSize="11" fontWeight="500" fill="rgba(180,210,230,0.9)">{classification}</text>
       </svg>
     </div>
   );
