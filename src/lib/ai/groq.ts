@@ -1,7 +1,5 @@
 /**
- * groq.ts — Groq API client (Llama 3.3 70B)
- * Genel kripto soruları, analiz, hesaplama vb. için kullanılır.
- * Ücretsiz tier: dakikada 30 istek, günde 14.400 istek.
+ * groq.ts — Groq API client
  *
  * Env var: GROQ_API_KEY
  */
@@ -10,7 +8,7 @@ import { cacheGet, cacheSet, makeCacheKey } from './cache';
 
 const GROQ_KEY = process.env.GROQ_API_KEY!;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const CACHE_TTL = 1800; // 30 dakika
+const CACHE_TTL = 1800; // 30 
 
 export interface GroqResult {
   answer: string;
@@ -19,7 +17,9 @@ export interface GroqResult {
 }
 
 export async function queryGroq(userQuestion: string, priceContext = ''): Promise<GroqResult> {
-  const cacheKey = makeCacheKey('groq', userQuestion);
+  // Detect language to include in cache key — prevents Turkish cache returning for English questions
+  const lang = /[çğışöüÇĞİŞÖÜ]/.test(userQuestion) || /\b(neden|nasıl|nedir|ne|bu|bir|için|var|mı|mi|mu|mü)\b/i.test(userQuestion) ? 'tr' : 'en';
+  const cacheKey = makeCacheKey('groq', `${lang}:${userQuestion}`);
 
   // 1. Cache'de var mı?
   const cached = await cacheGet(cacheKey);
@@ -74,7 +74,7 @@ CRITICAL: Always respond in the exact same language the user writes in. Turkish 
   const answer: string =
     data?.choices?.[0]?.message?.content ?? 'Groq yanıt vermedi.';
 
-  // 3. Cache'e yaz
+  // 3. 
   await cacheSet(cacheKey, answer, CACHE_TTL);
 
   return { answer, source: 'groq', cached: false };
