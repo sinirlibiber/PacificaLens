@@ -61,12 +61,11 @@ function HeatCell({ value, suffix = '%', decimals = 2 }: { value: number; suffix
 
 function FearGreedGauge({ data }: { data: FearGreed | null }) {
   if (!data) return (
-    <div className="flex items-center justify-center py-4">
-      <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
+    <div className="flex items-center justify-center py-2">
+      <div className="w-5 h-5 border-2 border-border2 border-t-accent rounded-full animate-spin" />
     </div>
   );
   const v = data.value;
-  // Segment colors: Extreme Fear, Fear, Neutral, Greed, Extreme Greed
   const segments = [
     { color: '#dc2626', from: 0, to: 20 },
     { color: '#f97316', from: 20, to: 40 },
@@ -77,14 +76,13 @@ function FearGreedGauge({ data }: { data: FearGreed | null }) {
   const labelColor = v <= 20 ? '#dc2626' : v <= 40 ? '#f97316' : v <= 60 ? '#f59e0b' : v <= 80 ? '#84cc16' : '#10b981';
   const classification = data.classification || (v <= 20 ? 'Extreme Fear' : v <= 40 ? 'Fear' : v <= 60 ? 'Neutral' : v <= 80 ? 'Greed' : 'Extreme Greed');
 
-  // SVG arc helpers — semicircle: cx=60, cy=60, r=50
-  const cx = 60, cy = 60, r = 50;
+  const cx = 60, cy = 58, r = 44;
   function polarToXY(deg: number) {
     const rad = ((deg - 180) * Math.PI) / 180;
     return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
   }
   function arcPath(fromPct: number, toPct: number) {
-    const fromDeg = fromPct * 1.8; // 0-100 → 0-180 degrees
+    const fromDeg = fromPct * 1.8;
     const toDeg = toPct * 1.8;
     const s = polarToXY(fromDeg);
     const e = polarToXY(toDeg);
@@ -92,34 +90,31 @@ function FearGreedGauge({ data }: { data: FearGreed | null }) {
     return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
   }
 
-  // Needle
-  const needleDeg = v * 1.8;
-  const needleRad = ((needleDeg - 180) * Math.PI) / 180;
-  const needleLen = 38;
-  const nx = cx + needleLen * Math.cos(needleRad);
-  const ny = cy + needleLen * Math.sin(needleRad);
+  // Dot indicator on arc
+  const dotDeg = v * 1.8;
+  const dotRad = ((dotDeg - 180) * Math.PI) / 180;
+  const dx = cx + r * Math.cos(dotRad);
+  const dy = cy + r * Math.sin(dotRad);
 
   return (
-    <div className="flex flex-col items-center w-full">
-      <svg viewBox="0 0 120 68" className="w-full" style={{ maxHeight: 110 }}>
-        {/* Segments */}
+    <div className="flex flex-col items-center" style={{ width: 140 }}>
+      <svg viewBox="0 0 120 68" style={{ width: 140, height: 80 }}>
         {segments.map((seg, i) => (
           <path
             key={i}
             d={arcPath(seg.from, seg.to)}
             fill="none"
             stroke={seg.color}
-            strokeWidth="10"
+            strokeWidth="9"
             strokeLinecap={i === 0 ? 'round' : i === segments.length - 1 ? 'round' : 'butt'}
-            opacity="0.85"
+            opacity="0.9"
           />
         ))}
-        {/* Needle */}
-        <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
-        <circle cx={cx} cy={cy} r="4" fill="white" opacity="0.95" />
+        {/* White dot on arc at current value */}
+        <circle cx={dx} cy={dy} r="5" fill="white" />
         {/* Value */}
-        <text x={cx} y={cy - 8} textAnchor="middle" fontSize="18" fontWeight="700" fill={labelColor}>{v}</text>
-        <text x={cx} y={cy + 6} textAnchor="middle" fontSize="7" fill="rgba(150,180,200,0.8)">{classification}</text>
+        <text x={cx} y={cy + 2} textAnchor="middle" fontSize="20" fontWeight="700" fill={labelColor}>{v}</text>
+        <text x={cx} y={cy + 14} textAnchor="middle" fontSize="7.5" fill="rgba(150,180,200,0.75)">{classification}</text>
       </svg>
     </div>
   );
