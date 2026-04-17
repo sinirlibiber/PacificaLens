@@ -97,7 +97,7 @@ function FearGreedGauge({ data }: { data: FearGreed | null }) {
 
   return (
     <div className="flex flex-col items-center w-full">
-      <svg viewBox="0 0 200 105" style={{ width: '100%', maxWidth: 200 }}>
+      <svg viewBox="0 0 200 125" style={{ width: '100%', maxWidth: 200 }}>
         {segments.map((seg, i) => (
           <path
             key={i}
