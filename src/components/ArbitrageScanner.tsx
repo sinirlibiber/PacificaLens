@@ -304,7 +304,7 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                 { label: '🔥 High Yield (≥50%)', value: String(highCount), color: 'text-success' },
                 { label: '⚡ Medium (20-50%)', value: String(medCount), color: 'text-warn' },
                 { label: 'Best APR', value: opportunities[0] ? fmt(opportunities[0].spreadAPR, 1) + '%' : '—', color: 'text-success' },
-                { label: 'Exchanges Live', value: String(5 - Object.keys(errors).length) + '/5', color: 'text-text1' },
+                { label: 'Perp DEX Live', value: String(4 - Object.keys(errors).length) + '/4', color: 'text-text1' },
               ].map(s => (
                 <div key={s.label} className="bg-surface rounded-xl border border-border1 shadow-card p-3.5">
                   <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-1">{s.label}</div>
