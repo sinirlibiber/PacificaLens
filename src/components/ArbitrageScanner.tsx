@@ -111,27 +111,41 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
   }, []);
 
   // Send Telegram alert
-  const sendTelegram = useCallback(async (msg: string) => {
-    if (!config.telegramToken || !config.telegramChatId || !config.telegramActive) return;
+  const sendTelegram = useCallback(async (msg: string, isTest = false) => {
+    if (!config.telegramToken || !config.telegramChatId) return;
+    if (!isTest && !config.telegramActive) return;
     try {
-      await fetch(`https://api.telegram.org/bot${config.telegramToken}/sendMessage`, {
+      const res = await fetch(`https://api.telegram.org/bot${config.telegramToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: config.telegramChatId, text: msg, parse_mode: 'HTML' }),
       });
-    } catch {}
-  }, [config.telegramToken, config.telegramChatId]);
+      if (isTest) {
+        const data = await res.json();
+        if (data.ok) {
+          setBotLog(prev => [{ ts: Date.now(), msg: '✓ Telegram test message sent successfully', type: 'info' as const }, ...prev]);
+        } else {
+          setBotLog(prev => [{ ts: Date.now(), msg: `✗ Telegram error: ${data.description || 'Check your token and chat ID'}`, type: 'error' as const }, ...prev]);
+        }
+      }
+    } catch (e) {
+      if (isTest) {
+        setBotLog(prev => [{ ts: Date.now(), msg: `✗ Telegram connection failed: ${String(e)}`, type: 'error' as const }, ...prev]);
+      }
+    }
+  }, [config.telegramToken, config.telegramChatId, config.telegramActive]);
 
   // Send Discord alert
-  const sendDiscord = useCallback(async (msg: string, apr: number) => {
-    if (!config.discordWebhook || !config.discordActive) return;
+  const sendDiscord = useCallback(async (msg: string, apr: number, isTest = false) => {
+    if (!config.discordWebhook) return;
+    if (!isTest && !config.discordActive) return;
     try {
-      await fetch(config.discordWebhook, {
+      const res = await fetch(config.discordWebhook, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           embeds: [{
-            title: '🚨 Arbitrage Opportunity Detected',
+            title: '\u{1F6A8} Arbitrage Opportunity Detected',
             description: msg,
             color: apr >= 50 ? 0x10b981 : 0xf59e0b,
             timestamp: new Date().toISOString(),
@@ -139,10 +153,21 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
           }],
         }),
       });
-    } catch {}
-  }, [config.discordWebhook]);
+      if (isTest) {
+        if (res.ok) {
+          setBotLog(prev => [{ ts: Date.now(), msg: '✓ Discord test message sent successfully', type: 'info' as const }, ...prev]);
+        } else {
+          setBotLog(prev => [{ ts: Date.now(), msg: `✗ Discord error: ${res.status} — Check your webhook URL`, type: 'error' as const }, ...prev]);
+        }
+      }
+    } catch (e) {
+      if (isTest) {
+        setBotLog(prev => [{ ts: Date.now(), msg: `✗ Discord connection failed: ${String(e)}`, type: 'error' as const }, ...prev]);
+      }
+    }
+  }, [config.discordWebhook, config.discordActive]);
 
-  // Bot monitoring
+    // Bot monitoring
   useEffect(() => {
     if (!config.active || !opportunities.length) return;
 
@@ -586,7 +611,7 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => sendTelegram('✅ PacificaLens Arb Bot test message!\n\nConnection successful.')}
+                        onClick={() => sendTelegram('✅ PacificaLens Arb Bot test message!\n\nConnection successful.', true)}
                         disabled={!config.telegramToken || !config.telegramChatId}
                         className="flex-1 py-2 text-[12px] font-semibold bg-blue-500/10 border border-blue-500/30 text-blue-500 rounded-lg hover:bg-blue-500/20 transition-colors disabled:opacity-40">
                         Test
@@ -632,7 +657,7 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => sendDiscord('✅ PacificaLens Arb Bot test message!\n\nConnection successful.', 100)}
+                        onClick={() => sendDiscord('✅ PacificaLens Arb Bot test message!\n\nConnection successful.', 100, true)}
                         disabled={!config.discordWebhook}
                         className="flex-1 py-2 text-[12px] font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 rounded-lg hover:bg-indigo-500/20 transition-colors disabled:opacity-40">
                         Test
