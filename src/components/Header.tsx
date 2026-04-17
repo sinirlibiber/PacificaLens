@@ -222,7 +222,7 @@ export function Header({ tab, onTabChange, accountInfo }: HeaderProps) {
                 <div className="px-4 py-3">
                   <div className="text-[10px] text-text3 uppercase font-semibold tracking-wide mb-2">Update Fee Rate</div>
                   <div className="text-[10px] text-text3 mb-3 leading-relaxed">
-                    Your builder config fee_rate: <span className="text-text1 font-mono">{adminOverview?.fee_rate ?? '0.0002'}</span> ({adminOverview?.fee_rate ? (Number(adminOverview.fee_rate) * 100).toFixed(2) : '0.02'}%).<br/>
+                    Your builder config fee_rate: <span className="text-text1 font-mono">{String(adminOverview?.fee_rate ?? '0.0002')}</span> ({adminOverview?.fee_rate ? (Number(String(adminOverview.fee_rate)) * 100).toFixed(2) : '0.02'}%).<br/>
                     Users must set <span className="font-mono text-accent">max_fee_rate ≥ fee_rate</span> when approving.
                   </div>
                   <div className="flex gap-2">
