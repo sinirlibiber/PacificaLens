@@ -12,8 +12,6 @@ interface Message {
 
 const SUGGESTIONS = [
   'How can I use PacificaLens to optimize my trades?',
-  'Analyze BTC technically',
-  'Analyze ETH technically',
   'Where is smart money now?',
   'What are the best altcoins to watch?',
   'Most talked coin on Twitter?',
