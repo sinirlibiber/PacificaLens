@@ -518,7 +518,7 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                 <div className="bg-surface rounded-xl border border-border1 shadow-card p-4">
                   <h3 className="text-[12px] font-bold text-text1 mb-3">📖 How It Works</h3>
                   <div className="space-y-3">
-                    [
+                    {[
                       { title: '1. Spot the Spread', body: 'Same asset, different funding rates — earn the difference delta-neutral.' },
                       { title: '2. Open Opposite Positions', body: 'LONG where funding is lower (receive), SHORT where higher (pay more).' },
                       { title: '3. Collect Every 1h / 4h', body: 'APR = |spread| × 24 × 365. Frequency badge shows each exchange\'s interval.' },
