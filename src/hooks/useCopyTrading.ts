@@ -149,7 +149,7 @@ export function useCopyTrading() {
               .map(v => String(v || ''))
               .filter(v => v.length > 0);
             const full = candidates.find(v => !v.includes('...'));
-            return (full || candidates[0] || '').toLowerCase();
+            return (full || candidates[0] || ''); // Solana addresses are case-sensitive — do NOT toLowerCase
           })(),
           pnl_7d:         Number(d.pnl_7d ?? 0),
           pnl_30d:        Number(d.pnl_30d ?? 0),
