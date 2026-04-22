@@ -7,7 +7,7 @@ function RiskPage() {
   
   // Guest: position-based features kilitli ama calculator açık
   return (
-    <div className="relative h-full">
+    <div className="relative flex-1 h-full flex flex-col">
       <RiskManager
         markets={markets} tickers={tickers} fundingRates={fundingRates}
         positions={positions} accountInfo={accountInfo}
