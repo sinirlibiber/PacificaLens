@@ -119,24 +119,31 @@ Find and exploit funding rate differentials across perpetual exchanges for delta
 **How it works:**
 1. Go LONG on the exchange with lower (or negative) funding
 2. Go SHORT on the exchange with higher funding
-3. Price risk cancels out — collect the spread 3× per day (every 8h)
+3. Price risk cancels out — collect the spread every 1h or 4h depending on the exchange
 
 **Cross-exchange comparison:**
-- Pacifica vs external DEXes (dYdX, Aster, others)
-- All combinations at once
+- Pacifica vs Hyperliquid, dYdX, Aster, and others
+- All combinations scanned simultaneously
 
-**Opportunity display:**
-- Spread per 8h and annualized APR
-- Tier badges: 🔥 HIGH (≥50% APR) / MEDIUM (20–50%) / LOW (<20%)
-- Exact LONG/SHORT exchange per strategy
-- Sort by APR, symbol, or spread
+**Card layout (redesigned):**
+- **3-column design** — LONG side | APR center (largest, most prominent) | SHORT side
+- **Exchange pills** with ⟷ arrow between them — replaces plain text header
+- **Frequency badge** per exchange — green `1h` or amber `4h` — shows each exchange's funding interval at a glance
+- **BBO Spread bar** — visual bar instead of raw number: red fill = entry costs you, green fill = entry earns you
+- **Net hourly** row — combined receive rate from both sides in one line (replaces verbose Real P&L section)
+- **Tier pill** — HIGH / MED / LOW as a rounded badge, color-coded by APR
+
+**Filtering & sorting:**
+- Filter by tier: All / High / Medium / Low
+- Filter by exchange: All / Hyperliquid / Aster / dYdX
+- Sort by APR or Symbol (toggle asc/desc)
 
 **Arbitrage Alert Bot:**
-- Set minimum APR threshold
+- Set minimum APR threshold (slider)
 - Connect Telegram bot or Discord webhook
-- Receive alerts when new opportunities cross your threshold
-- Check interval: 5 / 10 / 30 minutes
-- Activity log of the last 20 sent alerts
+- Receive alerts the moment new opportunities cross your threshold
+- Browser push notifications + sound alerts
+- Activity log of the last 50 sent alerts with timestamps
 
 ---
 
