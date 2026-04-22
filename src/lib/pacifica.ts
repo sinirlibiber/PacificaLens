@@ -128,16 +128,10 @@ export async function getAccountInfo(wallet: string): Promise<AccountInfo | null
 }
 
 // GET /api/v1/positions?account=WALLET
-// Also tries /leaderboard/positions which is the correct endpoint for other traders
 export async function getPositions(wallet: string): Promise<Position[]> {
   try {
-    // Primary: leaderboard/positions (correct endpoint for viewing other traders' positions)
-    const res = await proxyGet<PacificaRes<Position[]>>(`leaderboard/positions?account=${wallet}`);
-    if (res.success && Array.isArray(res.data) && res.data.length > 0) return res.data;
-
-    // Fallback: standard positions endpoint (works for own wallet)
-    const res2 = await proxyGet<PacificaRes<Position[]>>(`positions?account=${wallet}`);
-    if (res2.success && Array.isArray(res2.data)) return res2.data;
+    const res = await proxyGet<PacificaRes<Position[]>>(`positions?account=${wallet}`);
+    if (res.success && Array.isArray(res.data)) return res.data;
     return [];
   } catch { return []; }
 }
@@ -344,40 +338,12 @@ export async function getPortfolioStats(wallet: string): Promise<PortfolioStats 
 // Note: this is different from account/trade_history — newer endpoint
 export async function getTradesHistory(wallet: string, limit = 30): Promise<TradeHistory[]> {
   try {
-    // Primary: newer trades/history endpoint
     const res = await fetch(
       `/api/proxy?path=${encodeURIComponent(`trades/history?account=${wallet}&limit=${limit}`)}`,
       { cache: 'no-store' }
     );
     const json = await res.json();
-    if (json.success && Array.isArray(json.data) && json.data.length > 0) return json.data as TradeHistory[];
-    
-    // Fallback 1: account/trade_history (legacy)
-    const res2 = await fetch(
-      `/api/proxy?path=${encodeURIComponent(`account/trade_history?account=${wallet}&limit=${limit}`)}`,
-      { cache: 'no-store' }
-    );
-    const json2 = await res2.json();
-    if (json2.success && Array.isArray(json2.data) && json2.data.length > 0) return json2.data as TradeHistory[];
-
-    // Fallback 2: positions/history — map to TradeHistory shape
-    const res3 = await fetch(
-      `/api/proxy?path=${encodeURIComponent(`positions/history?account=${wallet}&limit=${limit}`)}`,
-      { cache: 'no-store' }
-    );
-    const json3 = await res3.json();
-    if (json3.success && Array.isArray(json3.data) && json3.data.length > 0) {
-      return json3.data.map((p: PositionHistory) => ({
-        symbol: p.symbol,
-        side: p.side,
-        price: p.price,
-        amount: p.amount,
-        realized_pnl: p.pnl,
-        fee: p.fee,
-        created_at: new Date(p.created_at).toISOString(),
-      } as TradeHistory));
-    }
-
+    if (json.success && Array.isArray(json.data)) return json.data as TradeHistory[];
     return [];
   } catch { return []; }
 }
