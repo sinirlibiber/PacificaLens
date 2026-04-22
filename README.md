@@ -357,7 +357,7 @@ Follows [Pacifica's signing spec](https://pacifica.gitbook.io/docs/api-documenta
 3. SHA-256 hash → Ed25519 sign via Privy wallet or Agent Key
 4. POST with `timestamp` + `signature`
 
-Builder fee: **0.1%** — tagged to PACIFICALENS automatically on every order.
+Builder fee: **0.02%** — tagged to PACIFICALENS automatically on every order.
 
 ### Agent Key System
 
