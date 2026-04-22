@@ -131,12 +131,7 @@ export async function getAccountInfo(wallet: string): Promise<AccountInfo | null
 export async function getPositions(wallet: string): Promise<Position[]> {
   try {
     const res = await proxyGet<PacificaRes<Position[]>>(`positions?account=${wallet}`);
-    if (res.success && Array.isArray(res.data)) {
-      // Spot marketleri filtrele (SOL-USDC, BTC-USDC vb.) — sadece perpetual'lar kalsın
-      return res.data.filter((m: Market) => 
-        m.instrument_type ? m.instrument_type === "perpetual" : !m.symbol.includes("-")
-      );
-    }
+    if (res.success && Array.isArray(res.data)) return res.data;
     return [];
   } catch { return []; }
 }
