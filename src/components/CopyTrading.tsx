@@ -983,22 +983,26 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
     setDrawerOpenOrders([]);
     setDrawerOrderHistory([]);
     setDrawerFundingHistory([]);
-    const [acct, pos, eq, trades, allOrders] = await Promise.all([
+    const [acct, pos, eq, trades, openOrders, allOrders] = await Promise.all([
       getAccountInfo(account),
       getPositions(account),
       getEquityHistory(account),
       getTradesHistory(account, 50),
+      getOpenOrders(account),
       getOrderHistory(account, 100),
     ]);
-    const portfolio = null; // portfolio endpoint not available for other accounts
     setDrawerAccount(acct);
     setDrawerPositions(pos);
     setDrawerEquityHist(eq);
+    // getTradesHistory already includes multi-level fallback
     setDrawerTradeHist(trades);
-    setDrawerPortfolio(null); // portfolio endpoint unavailable
-    // Open orders = order_status === 'open' from orders/history
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setDrawerOpenOrders(allOrders.filter((o: any) => (o.order_status ?? o.status) === 'open'));
+    setDrawerPortfolio(null);
+    // Prefer dedicated open orders endpoint; fallback to filtering order history
+    const resolvedOpenOrders = openOrders.length > 0
+      ? openOrders
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      : allOrders.filter((o: any) => (o.order_status ?? o.status) === 'open');
+    setDrawerOpenOrders(resolvedOpenOrders);
     setDrawerOrderHistory([]);
     setDrawerFundingHistory([]);
     setDrawerLoading(false);
@@ -1696,7 +1700,11 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                   {/* POSITIONS */}
                   {drawerTab === 'positions' && (
                     drawerPositions.length === 0
-                      ? <div className="text-center py-8 text-[12px] text-text3">No open positions</div>
+                      ? <div className="text-center py-8 text-[12px] text-text3">
+                          <div className="text-2xl mb-2">◎</div>
+                          <div className="font-semibold text-text2 mb-1">No open positions</div>
+                          <div className="text-[11px] text-text3">This trader has no active positions right now</div>
+                        </div>
                       : <div className="space-y-2">
                           {drawerPositions.map((pos, i) => {
                             const isLong = pos.side === 'bid';
@@ -1761,7 +1769,11 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                   {/* OPEN ORDERS */}
                   {drawerTab === 'open_orders' && (
                     drawerOpenOrders.length === 0
-                      ? <div className="text-center py-8 text-[12px] text-text3">No open orders</div>
+                      ? <div className="text-center py-8 text-[12px] text-text3">
+                          <div className="text-2xl mb-2">📋</div>
+                          <div className="font-semibold text-text2 mb-1">No open orders</div>
+                          <div className="text-[11px] text-text3">This trader has no pending limit orders</div>
+                        </div>
                       : <div>
                           <div className="grid grid-cols-5 gap-2 px-2 py-1.5 border-b border-border1 bg-surface2">
                             {[['oo_sym','Symbol'],['oo_side','Side'],['oo_type','Type'],['oo_price','Price'],['oo_amt','Amount']].map(([k,l]) => (
@@ -1800,7 +1812,11 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
                   {/* TRADE HISTORY */}
                   {drawerTab === 'trade_history' && (
                     drawerTradeHist.length === 0
-                      ? <div className="text-center py-8 text-[12px] text-text3">No trade history</div>
+                      ? <div className="text-center py-8 text-[12px] text-text3">
+                          <div className="text-2xl mb-2">📊</div>
+                          <div className="font-semibold text-text2 mb-1">No trade history</div>
+                          <div className="text-[11px] text-text3">No recent trades found for this trader</div>
+                        </div>
                       : <div>
                           <div className="grid grid-cols-5 gap-2 px-2 py-1.5 border-b border-border1 bg-surface2">
                             {[['th_sym','Symbol'],['th_side','Side'],['th_price','Price'],['th_size','Size'],['th_pnl','Realized PnL']].map(([k,l]) => (
@@ -1842,11 +1858,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
 
                 </div>
 
-                {!drawerLoading && !drawerAccount && !drawerPortfolio && (
-                  <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-                    <div className="text-[12px] text-text3">No portfolio data available for this trader.</div>
-                  </div>
-                )}
+{/* Portfolio data loaded; account info unavailable for some traders — tabs still shown above */}
 
               </div>
             )}
