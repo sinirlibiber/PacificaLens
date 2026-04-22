@@ -146,28 +146,45 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
 
       {/* Stats strip */}
       {grandTotal > 0 && (
-        <div className="flex items-center gap-4 px-4 py-2 border-b border-border1 bg-surface2/30">
-          <div className="flex items-center gap-3 text-[11px]">
-            <div><span className="text-text3 text-[9px] uppercase font-semibold mr-1.5">Total Liq</span><span className="font-bold text-text1">{fmtV(grandTotal)}</span></div>
-            <div><span className="text-text3 text-[9px] uppercase font-semibold mr-1.5">Long</span><span className="font-bold text-success">{fmtV(grandLong)}</span></div>
-            <div><span className="text-text3 text-[9px] uppercase font-semibold mr-1.5">Short</span><span className="font-bold text-danger">{fmtV(grandShort)}</span></div>
+        <div className="flex items-stretch border-b border-border1">
+          {/* Total */}
+          <div className="flex flex-col justify-center px-4 py-2.5 border-r border-border1 min-w-[110px]">
+            <span className="text-[9px] uppercase tracking-wide font-semibold text-text3 mb-0.5">Total Liq</span>
+            <span className="text-[14px] font-bold text-text1">{fmtV(grandTotal)}</span>
           </div>
-          <div className="flex flex-col gap-0.5 w-28">
-            <div className="flex h-1.5 rounded-full overflow-hidden">
+          {/* Long */}
+          <div className="flex flex-col justify-center px-4 py-2.5 border-r border-border1 min-w-[100px]">
+            <span className="text-[9px] uppercase tracking-wide font-semibold text-text3 mb-0.5">Long Liq</span>
+            <span className="text-[14px] font-bold text-success">{fmtV(grandLong)}</span>
+            <span className="text-[9px] text-success/70">{longPct.toFixed(0)}%</span>
+          </div>
+          {/* Short */}
+          <div className="flex flex-col justify-center px-4 py-2.5 border-r border-border1 min-w-[100px]">
+            <span className="text-[9px] uppercase tracking-wide font-semibold text-text3 mb-0.5">Short Liq</span>
+            <span className="text-[14px] font-bold text-danger">{fmtV(grandShort)}</span>
+            <span className="text-[9px] text-danger/70">{(100-longPct).toFixed(0)}%</span>
+          </div>
+          {/* L/S Bar */}
+          <div className="flex flex-col justify-center px-4 py-2.5 border-r border-border1 flex-1 min-w-[130px]">
+            <div className="flex h-2 rounded-full overflow-hidden mb-1">
               <div className="bg-success transition-all" style={{ width: `${longPct}%` }}/>
               <div className="bg-danger flex-1"/>
             </div>
-            <div className="flex justify-between text-[8px] text-text3">
-              <span>Long {longPct.toFixed(0)}%</span><span>Short {(100-longPct).toFixed(0)}%</span>
+            <div className="flex justify-between text-[9px]">
+              <span className="text-success">Long {longPct.toFixed(0)}%</span>
+              <span className="text-danger">Short {(100-longPct).toFixed(0)}%</span>
             </div>
           </div>
-          <span className="ml-auto text-[9px] text-text3 opacity-60">click for heatmap</span>
+          {/* Hint */}
+          <div className="flex items-center px-4 py-2.5 ml-auto">
+            <span className="text-[9px] text-text3 opacity-60">click card for heatmap ↗</span>
+          </div>
         </div>
       )}
 
       {/* GRID */}
       {tab === 'grid' && (
-        <div className="p-3 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))' }}>
+        <div className="p-3 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
           {loading && filtered.length === 0 && (
             <div className="col-span-full flex items-center justify-center py-12 text-text3 text-[11px] gap-2">
               <span className="animate-spin text-accent">↻</span> Fetching...
@@ -178,20 +195,18 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
           )}
           {filtered.map((s: LiqSymbolData) => {
             const lp = s.total > 0 ? (s.longLiq / s.total) * 100 : 50;
-            const intensity = Math.pow(s.total / maxTotal, 0.4);
             const pm = getPacMarket(s.symbol);
             return (
               <div key={s.symbol} onClick={() => openModal(s.symbol)}
-                className="group relative bg-surface border border-border1 rounded-xl p-3 cursor-pointer hover:border-accent/40 hover:bg-surface2/60 transition-all">
-                <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl overflow-hidden">
-                  <div className="h-full transition-all" style={{
-                    width: `${intensity * 100}%`,
-                    background: lp >= 50 ? `rgba(52,211,153,${0.4+intensity*0.6})` : `rgba(239,68,68,${0.4+intensity*0.6})`,
-                  }}/>
+                className="group relative bg-surface border border-border1 rounded-xl p-3 cursor-pointer hover:border-accent/40 hover:bg-surface2/60 transition-all overflow-hidden">
+                {/* Full-width top color strip split by L/S ratio */}
+                <div className="absolute top-0 left-0 right-0 h-[3px] flex">
+                  <div className="h-full bg-success/80 transition-all" style={{ width: `${lp}%` }}/>
+                  <div className="h-full bg-danger/80 flex-1"/>
                 </div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 mt-0.5">
                   <div className="flex items-center gap-1.5">
-                    <CoinLogo symbol={pm?.symbol ?? (s.symbol+'-USD')} size={18}/>
+                    <CoinLogo symbol={pm?.symbol ?? (s.symbol+'-USD')} size={16}/>
                     <span className="text-[12px] font-bold text-text1">{s.symbol}</span>
                   </div>
                   <span className="text-[8px] text-text3 opacity-0 group-hover:opacity-100 transition-opacity">↗ map</span>
@@ -204,7 +219,7 @@ export default function HeatmapView({ markets }: { markets: Market[] }) {
                   <span className="text-success font-semibold">{fmtV(s.longLiq)}</span>
                   <span className="text-danger font-semibold">{fmtV(s.shortLiq)}</span>
                 </div>
-                <div className="flex justify-between text-[8px] text-text3 mt-0.5">
+                <div className="flex justify-between text-[9px] text-text3 mt-0.5">
                   <span>Long {lp.toFixed(0)}%</span><span>Short {(100-lp).toFixed(0)}%</span>
                 </div>
               </div>
