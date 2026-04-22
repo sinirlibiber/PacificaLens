@@ -37,6 +37,177 @@ const DEFAULT_CONFIG: BotConfig = {
   active: false,
 };
 
+// ── Countdown to next funding ────────────────────────────────────────────────
+function Countdown({ targetMs }: { targetMs: number }) {
+  const [remaining, setRemaining] = useState(Math.max(0, targetMs - Date.now()));
+  useEffect(() => {
+    const iv = setInterval(() => setRemaining(Math.max(0, targetMs - Date.now())), 1000);
+    return () => clearInterval(iv);
+  }, [targetMs]);
+  const h = Math.floor(remaining / 3600000);
+  const m = Math.floor((remaining % 3600000) / 60000);
+  const s = Math.floor((remaining % 60000) / 1000);
+  return <span>{h > 0 ? `${h}:` : ''}{String(m).padStart(2,'0')}:{String(s).padStart(2,'0')}</span>;
+}
+
+// ── Exchange badge ────────────────────────────────────────────────────────────
+function ExBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <span className="text-[9px] font-bold px-2 py-0.5 rounded border"
+      style={{ color, borderColor: color + '50', background: color + '18' }}>
+      {label}
+    </span>
+  );
+}
+
+// ── Individual arbitrage card ─────────────────────────────────────────────────
+function ArbCard({ opp }: { opp: ArbitrageOpportunity }) {
+  const tierColor = opp.tier === 'high' ? '#10b981' : opp.tier === 'medium' ? '#f59e0b' : '#94a3b8';
+  const tierLabel = opp.tier === 'high' ? 'HIGH' : opp.tier === 'medium' ? 'MEDIUM' : 'LOW';
+
+  const fmtFR = (rate: number, isLong: boolean) => {
+    // For long side: negative FR = you receive (good), positive = you pay
+    // For short side: positive FR = you receive (good), negative = you pay
+    const youReceive = isLong ? rate <= 0 : rate >= 0;
+    const label = youReceive ? 'Recv' : 'Pay';
+    const color = youReceive ? '#10b981' : '#ef4444';
+    const pct = (Math.abs(rate) * 100).toFixed(4);
+    return { label, color, pct };
+  };
+
+  const longFR = fmtFR(opp.long.fundingRate, true);
+  const shortFR = fmtFR(opp.short.fundingRate, false);
+
+  const bboColor = opp.bboSpread >= 0 ? '#10b981' : '#ef4444';
+  const bboLabel = opp.bboSpread >= 0 ? '+' : '';
+  const nextFundingMs = Math.min(opp.long.nextFundingTime, opp.short.nextFundingTime);
+
+  const fmtPrice = (p: number) => {
+    if (p >= 1000) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (p >= 1) return p.toFixed(4);
+    return p.toFixed(6);
+  };
+
+  return (
+    <div className="bg-surface border border-border1 rounded-xl overflow-hidden shadow-card hover:border-border2 transition-colors">
+      {/* Card header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border1 bg-surface2">
+        <div className="flex items-center gap-2">
+          <CoinLogo symbol={opp.symbol} size={20} />
+          <span className="text-[13px] font-bold text-text1">{opp.symbol}/USDT</span>
+          <span className="text-[9px] text-text3 font-medium">{opp.long.exchange.toUpperCase()} - {opp.short.exchange.toUpperCase()}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ color: tierColor, background: tierColor + '18', border: `1px solid ${tierColor}50` }}>
+            {tierLabel}
+          </span>
+          <span className="text-[9px] text-text3">
+            Pacifica 1h / {opp.long.exchange === 'Pacifica' ? opp.short.exchange : opp.long.exchange} 1h
+          </span>
+        </div>
+      </div>
+
+      {/* Long / Short columns */}
+      <div className="grid grid-cols-2 divide-x divide-border1">
+        {/* LONG side */}
+        <div className="p-3.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-success tracking-wide">LONG</span>
+            <ExBadge label={opp.long.exchange.toUpperCase()} color={opp.long.color} />
+          </div>
+          <div>
+            <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide">ASK (ENTRY)</div>
+            <div className="text-[16px] font-bold text-text1 font-mono">${fmtPrice(opp.long.askPrice)}</div>
+            <div className="text-[10px] text-text3 font-mono">Bid ${fmtPrice(opp.long.bidPrice)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold font-mono" style={{ color: longFR.color }}>
+              {longFR.label} {longFR.color === '#10b981' ? '+' : '-'}{longFR.pct}% / 1h
+            </div>
+            <div className="text-[9px] text-text3 flex items-center gap-1 mt-0.5">
+              ⏱ {opp.long.exchange} 1h·<Countdown targetMs={opp.long.nextFundingTime} />
+            </div>
+          </div>
+        </div>
+
+        {/* SHORT side */}
+        <div className="p-3.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-danger tracking-wide">SHORT</span>
+            <ExBadge label={opp.short.exchange.toUpperCase()} color={opp.short.color} />
+          </div>
+          <div>
+            <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide">BID (ENTRY)</div>
+            <div className="text-[16px] font-bold text-text1 font-mono">${fmtPrice(opp.short.bidPrice)}</div>
+            <div className="text-[10px] text-text3 font-mono">Ask ${fmtPrice(opp.short.askPrice)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold font-mono" style={{ color: shortFR.color }}>
+              {shortFR.label} {shortFR.color === '#10b981' ? '+' : '-'}{shortFR.pct}% / 1h
+            </div>
+            <div className="text-[9px] text-text3 flex items-center gap-1 mt-0.5">
+              ⏱ {opp.short.exchange} 1h·<Countdown targetMs={opp.short.nextFundingTime} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BBO Spread row */}
+      <div className="px-4 py-2 border-t border-border1 bg-surface2 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] text-text3 font-semibold uppercase tracking-wide">BBO SPREAD</span>
+          <span className="text-[11px] font-bold font-mono" style={{ color: bboColor }}>
+            {bboLabel}{(opp.bboSpread * 100).toFixed(3)}%
+          </span>
+          <span className="text-[9px] text-text3">
+            ({opp.long.exchange === 'Pacifica' ? 'Pacifica' : opp.short.exchange} bid / {opp.short.exchange === 'Pacifica' ? 'Pacifica' : opp.long.exchange} ask − 1)
+          </span>
+        </div>
+        <div className="text-[9px] text-text3">
+          live <span className="text-text2 font-mono">{new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
+        </div>
+      </div>
+
+      {/* Real P&L section */}
+      <div className="px-4 py-3 border-t border-border1 space-y-1.5">
+        <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-2">REAL P&amp;L</div>
+        <div className="text-[11px] text-text2">
+          Next:{' '}
+          <span className="font-bold" style={{ color: longFR.color }}>
+            {longFR.label === 'Recv' ? 'receive' : 'pay'} {longFR.pct}%
+          </span>
+          {' '}in{' '}
+          <span className="font-mono text-text1"><Countdown targetMs={opp.long.nextFundingTime} /></span>
+          {' '}({opp.long.exchange} long)
+        </div>
+        <div className="text-[11px] text-text2">
+          Then:{' '}
+          <span className="font-bold" style={{ color: shortFR.color }}>
+            {shortFR.label === 'Recv' ? 'receive' : 'pay'} {shortFR.pct}%
+          </span>
+          {' '}in{' '}
+          <span className="font-mono text-text1"><Countdown targetMs={opp.short.nextFundingTime} /></span>
+          {' '}({opp.short.exchange} short)
+        </div>
+      </div>
+
+      {/* APR footer */}
+      <div className="px-4 py-2.5 border-t border-border1 flex items-center justify-between bg-surface2/50">
+        <div>
+          <div className="text-[9px] text-text3 uppercase font-semibold">Spread APR (est.)</div>
+          <div className="text-[18px] font-bold font-mono" style={{ color: tierColor }}>
+            {fmt(opp.spreadAPR, 1)}%
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[9px] text-text3 uppercase font-semibold">1h Spread</div>
+          <div className="text-[13px] font-mono text-text2">{(opp.spreadRate * 100).toFixed(4)}%</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TierBadge({ tier }: { tier: 'high' | 'medium' | 'low' }) {
   const styles = {
     high: 'bg-success/15 text-success border border-success/30',
@@ -45,28 +216,6 @@ function TierBadge({ tier }: { tier: 'high' | 'medium' | 'low' }) {
   };
   const labels = { high: '🔥 HIGH', medium: '⚡ MED', low: '○ LOW' };
   return <span className={'text-[10px] font-bold px-2 py-0.5 rounded-full ' + styles[tier]}>{labels[tier]}</span>;
-}
-
-function ExchangeBadge({ exchange, color }: { exchange: string; color: string }) {
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border"
-      style={{ background: color + '18', color, borderColor: color + '40' }}>
-      {exchange}
-    </span>
-  );
-}
-
-function SpreadBar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  const color = value >= 50 ? '#10b981' : value >= 20 ? '#f59e0b' : '#94a3b8';
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-surface2 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: pct + '%', background: color }} />
-      </div>
-      <span className="text-[11px] font-bold font-mono w-16 text-right" style={{ color }}>{fmt(value, 1)}%</span>
-    </div>
-  );
 }
 
 export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage = "scanner" }: ArbitrageScannerProps) {
@@ -87,12 +236,10 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
 
   const { opportunities, loading, lastUpdate, errors, refetch } = useArbitrage(pacificaRates, pacificaPrices);
 
-  // Save config
   useEffect(() => {
     try { localStorage.setItem('arb_bot_config', JSON.stringify(config)); } catch {}
   }, [config]);
 
-  // Play alert sound
   const playSound = useCallback(() => {
     try {
       if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -110,7 +257,6 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
     } catch {}
   }, []);
 
-  // Send Telegram alert
   const sendTelegram = useCallback(async (msg: string, isTest = false) => {
     if (!config.telegramToken || !config.telegramChatId) return;
     if (!isTest && !config.telegramActive) return;
@@ -122,20 +268,14 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
       });
       if (isTest) {
         const data = await res.json();
-        if (data.ok) {
-          setBotLog(prev => [{ ts: Date.now(), msg: '✓ Telegram test message sent successfully', type: 'info' as const }, ...prev]);
-        } else {
-          setBotLog(prev => [{ ts: Date.now(), msg: `✗ Telegram error: ${data.description || 'Check your token and chat ID'}`, type: 'error' as const }, ...prev]);
-        }
+        if (data.ok) setBotLog(prev => [{ ts: Date.now(), msg: '✓ Telegram test message sent successfully', type: 'info' as const }, ...prev]);
+        else setBotLog(prev => [{ ts: Date.now(), msg: `✗ Telegram error: ${data.description || 'Check your token and chat ID'}`, type: 'error' as const }, ...prev]);
       }
     } catch (e) {
-      if (isTest) {
-        setBotLog(prev => [{ ts: Date.now(), msg: `✗ Telegram connection failed: ${String(e)}`, type: 'error' as const }, ...prev]);
-      }
+      if (isTest) setBotLog(prev => [{ ts: Date.now(), msg: `✗ Telegram connection failed: ${String(e)}`, type: 'error' as const }, ...prev]);
     }
   }, [config.telegramToken, config.telegramChatId, config.telegramActive]);
 
-  // Send Discord alert
   const sendDiscord = useCallback(async (msg: string, apr: number, isTest = false) => {
     if (!config.discordWebhook) return;
     if (!isTest && !config.discordActive) return;
@@ -154,58 +294,36 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
         }),
       });
       if (isTest) {
-        if (res.ok) {
-          setBotLog(prev => [{ ts: Date.now(), msg: '✓ Discord test message sent successfully', type: 'info' as const }, ...prev]);
-        } else {
-          setBotLog(prev => [{ ts: Date.now(), msg: `✗ Discord error: ${res.status} — Check your webhook URL`, type: 'error' as const }, ...prev]);
-        }
+        if (res.ok) setBotLog(prev => [{ ts: Date.now(), msg: '✓ Discord test message sent successfully', type: 'info' as const }, ...prev]);
+        else setBotLog(prev => [{ ts: Date.now(), msg: `✗ Discord error: ${res.status} — Check your webhook URL`, type: 'error' as const }, ...prev]);
       }
     } catch (e) {
-      if (isTest) {
-        setBotLog(prev => [{ ts: Date.now(), msg: `✗ Discord connection failed: ${String(e)}`, type: 'error' as const }, ...prev]);
-      }
+      if (isTest) setBotLog(prev => [{ ts: Date.now(), msg: `✗ Discord connection failed: ${String(e)}`, type: 'error' as const }, ...prev]);
     }
   }, [config.discordWebhook, config.discordActive]);
 
-    // Bot monitoring
   useEffect(() => {
     if (!config.active || !opportunities.length) return;
-
     const newOpps = opportunities.filter(o => {
       if (o.spreadAPR < config.minAPR) return false;
       if (!config.exchanges.includes(o.long.exchange) || !config.exchanges.includes(o.short.exchange)) return false;
       const key = `${o.symbol}-${o.long.exchange}-${o.short.exchange}`;
       return !prevOppsRef.current.has(key);
     });
-
     for (const opp of newOpps) {
       const key = `${opp.symbol}-${opp.long.exchange}-${opp.short.exchange}`;
       prevOppsRef.current.add(key);
-
-      const msg = [
-        `🚨 <b>Arbitrage Alert: ${opp.symbol}</b>`,
-        `📈 LONG: ${opp.long.exchange} @ ${fmt(opp.long.fundingRate * 100, 4)}%`,
-        `📉 SHORT: ${opp.short.exchange} @ ${fmt(opp.short.fundingRate * 100, 4)}%`,
-        `💰 Spread APR: <b>${fmt(opp.spreadAPR, 1)}%</b>`,
-        `⏱ ${new Date().toLocaleTimeString()}`,
-      ].join('\n');
-
+      const msg = [`🚨 <b>Arbitrage Alert: ${opp.symbol}</b>`, `📈 LONG: ${opp.long.exchange} @ ${fmt(opp.long.fundingRate * 100, 4)}%`, `📉 SHORT: ${opp.short.exchange} @ ${fmt(opp.short.fundingRate * 100, 4)}%`, `💰 Spread APR: <b>${fmt(opp.spreadAPR, 1)}%</b>`, `⏱ ${new Date().toLocaleTimeString()}`].join('\n');
       const plainMsg = msg.replace(/<[^>]+>/g, '');
-
       if (config.soundEnabled) playSound();
       if (config.browserNotif && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification('⚡ Arb Opportunity: ' + opp.symbol, {
-          body: `${opp.long.exchange} vs ${opp.short.exchange} — ${fmt(opp.spreadAPR, 1)}% APR`,
-        });
+        new Notification('⚡ Arb Opportunity: ' + opp.symbol, { body: `${opp.long.exchange} vs ${opp.short.exchange} — ${fmt(opp.spreadAPR, 1)}% APR` });
       }
-
       sendTelegram(msg);
       sendDiscord(plainMsg, opp.spreadAPR);
       setSentCount(c => c + 1);
-      setBotLog(prev => [{ ts: Date.now(), msg: `NEW: ${opp.symbol} | ${opp.long.exchange}↗ vs ${opp.short.exchange}↘ | ${fmt(opp.spreadAPR, 1)}% APR (Pacifica side)`, type: 'alert' as const }, ...prev].slice(0, 50));
+      setBotLog(prev => [{ ts: Date.now(), msg: `NEW: ${opp.symbol} | ${opp.long.exchange}↗ vs ${opp.short.exchange}↘ | ${fmt(opp.spreadAPR, 1)}% APR`, type: 'alert' as const }, ...prev].slice(0, 50));
     }
-
-    // Clear stale keys
     setTimeout(() => {
       for (const opp of opportunities) {
         const key = `${opp.symbol}-${opp.long.exchange}-${opp.short.exchange}`;
@@ -214,7 +332,6 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
     }, 60000);
   }, [opportunities, config, playSound, sendTelegram, sendDiscord]);
 
-  // Request notif permission
   const requestNotifPermission = () => {
     if ('Notification' in window) Notification.requestPermission().then(p => {
       if (p === 'granted') setBotLog(prev => [{ ts: Date.now(), msg: 'Browser notifications enabled ✓', type: 'info' }, ...prev]);
@@ -222,21 +339,16 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
   };
 
   const [sortDir, setSortDir] = useState<Record<string, 'asc' | 'desc'>>({});
-
   function toggleSort(key: 'apr' | 'spread' | 'symbol' | 'tier') {
-    if (sortBy === key) {
-      setSortDir(prev => ({ ...prev, [key]: prev[key] === 'asc' ? 'desc' : 'asc' }));
-    } else {
-      setSortBy(key);
-      setSortDir(prev => ({ ...prev, [key]: 'desc' }));
-    }
+    if (sortBy === key) setSortDir(prev => ({ ...prev, [key]: prev[key] === 'asc' ? 'desc' : 'asc' }));
+    else { setSortBy(key); setSortDir(prev => ({ ...prev, [key]: 'desc' })); }
   }
-
   const currentDir = sortDir[sortBy] ?? 'desc';
+
+  const exchanges = ['all', 'Hyperliquid', 'Aster', 'dYdX'];
 
   const filtered = opportunities
     .filter(o => {
-      // Pacifica must be on one side
       if (o.long.exchange !== 'Pacifica' && o.short.exchange !== 'Pacifica') return false;
       if (filterTier !== 'all' && o.tier !== filterTier) return false;
       if (filterExchange !== 'all' && o.long.exchange !== filterExchange && o.short.exchange !== filterExchange) return false;
@@ -247,249 +359,163 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
       if (sortBy === 'apr') return (b.spreadAPR - a.spreadAPR) * dir;
       if (sortBy === 'spread') return (b.spreadRate - a.spreadRate) * dir;
       if (sortBy === 'symbol') return a.symbol.localeCompare(b.symbol) * dir;
-      if (sortBy === 'tier') {
-        const order = { high: 0, medium: 1, low: 2 };
-        return (order[a.tier] - order[b.tier]) * dir;
-      }
+      if (sortBy === 'tier') { const order = { high: 0, medium: 1, low: 2 }; return (order[a.tier] - order[b.tier]) * dir; }
       return 0;
     });
 
-  const maxAPR = Math.max(...filtered.map(o => o.spreadAPR), 1);
   const highCount = opportunities.filter(o => o.tier === 'high').length;
   const medCount = opportunities.filter(o => o.tier === 'medium').length;
 
-  const exchanges = ['all', 'Pacifica', 'Hyperliquid', 'Aster', 'dYdX'];
-
   return (
-    <div className="flex flex-col flex-1 overflow-hidden bg-bg">
-      {/* Sub nav */}
-      <div className="flex border-b border-border1 bg-surface shrink-0 px-6 gap-6">
-        {[
-          { key: 'scanner', label: '📡 Arbitrage Scanner' },
-          { key: 'bot', label: '🤖 Arbitrage Bot' },
-        ].map(t => (
-          <button key={t.key} onClick={() => setSubPage(t.key as 'scanner' | 'bot')}
-            className={'py-3 text-[12px] font-semibold border-b-2 transition-all ' +
-              (subPage === t.key ? 'border-accent text-accent' : 'border-transparent text-text3 hover:text-text2')}>
-            {t.label}
+    <div className="flex flex-col h-full bg-bg">
+      {/* Sub-navigation */}
+      <div className="flex items-center gap-1 px-6 pt-4 pb-0 border-b border-border1 bg-surface shrink-0">
+        {([['scanner', '📡 Scanner'], ['bot', '🤖 Alert Bot']] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setSubPage(key)}
+            className={'px-4 py-2.5 text-[12px] font-semibold border-b-2 transition-all ' +
+              (subPage === key ? 'border-accent text-accent' : 'border-transparent text-text3 hover:text-text2')}>
+            {label}
+            {key === 'bot' && config.active && <span className="ml-1.5 w-2 h-2 rounded-full bg-success inline-block animate-pulse" />}
           </button>
         ))}
-        <div className="ml-auto flex items-center gap-3 py-2">
-          {lastUpdate && (
-            <span className="text-[10px] text-text3">Updated {lastUpdate.toLocaleTimeString()}</span>
-          )}
-          <button onClick={refetch} className="px-3 py-1.5 text-[11px] bg-surface2 border border-border1 rounded-lg hover:border-accent text-text2 transition-all">
-            ↻ Refresh
+        <div className="ml-auto flex items-center gap-3 pb-2">
+          {lastUpdate && <span className="text-[10px] text-text3">Updated {lastUpdate.toLocaleTimeString()}</span>}
+          <button onClick={refetch} className="px-3 py-1.5 bg-surface2 border border-border1 rounded-lg text-[11px] font-semibold text-text2 hover:text-text1 transition-colors">
+            {loading ? '⟳ Scanning...' : '⟳ Refresh'}
           </button>
-          {config.active && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-success/10 border border-success/30 rounded-full">
-              <div className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
-              <span className="text-[10px] text-success font-semibold">Bot Active · {sentCount} alerts sent</span>
-            </div>
-          )}
         </div>
       </div>
 
       {subPage === 'scanner' && (
         <div className="flex-1 overflow-auto">
-          <div className="max-w-[1400px] mx-auto px-8 py-5">
-            <div className="flex gap-5 items-start">
-            {/* LEFT: main content */}
-            <div className="flex-1 min-w-0 space-y-5">
+          <div className="max-w-[1600px] mx-auto px-6 py-5">
+            <div className="flex gap-5">
+              {/* Main content */}
+              <div className="flex-1 min-w-0 space-y-4">
 
-            {/* Stats row */}
-            <div className="grid grid-cols-5 gap-3">
-              {[
-                { label: 'Total Opportunities', value: String(opportunities.length), color: 'text-accent' },
-                { label: '🔥 High Yield (≥50%)', value: String(highCount), color: 'text-success' },
-                { label: '⚡ Medium (20-50%)', value: String(medCount), color: 'text-warn' },
-                { label: 'Best APR', value: opportunities[0] ? fmt(opportunities[0].spreadAPR, 1) + '%' : '—', color: 'text-success' },
-                { label: 'Perp DEX Live', value: String(4 - Object.keys(errors).length) + '/4', color: 'text-text1' },
-              ].map(s => (
-                <div key={s.label} className="bg-surface rounded-xl border border-border1 shadow-card p-3.5">
-                  <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-1">{s.label}</div>
-                  <div className={'text-[18px] font-bold ' + s.color}>{s.value}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Exchange status */}
-            {Object.keys(errors).length > 0 && (
-              <div className="flex gap-2 flex-wrap">
-                {Object.entries(errors).map(([ex, err]) => (
-                  <div key={ex} className="flex items-center gap-1.5 px-3 py-1.5 bg-danger/5 border border-danger/20 rounded-lg text-[11px] text-danger">
-                    <span>⚠</span> {ex}: {err}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Filters */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5 bg-surface border border-border1 rounded-lg p-1">
-                {(['all', 'high', 'medium', 'low'] as const).map(t => (
-                  <button key={t} onClick={() => setFilterTier(t)}
-                    className={'px-3 py-1 rounded text-[11px] font-semibold transition-all ' +
-                      (filterTier === t ? 'bg-accent text-white shadow-sm' : 'text-text3 hover:text-text2')}>
-                    {t === 'all' ? 'All Tiers' : t.charAt(0).toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-1.5 bg-surface border border-border1 rounded-lg p-1">
-                {exchanges.map(ex => (
-                  <button key={ex} onClick={() => setFilterExchange(ex)}
-                    className={'px-2.5 py-1 rounded text-[11px] font-semibold transition-all ' +
-                      (filterExchange === ex ? 'bg-accent text-white shadow-sm' : 'text-text3 hover:text-text2')}>
-                    {ex === 'all' ? 'All' : ex}
-                  </button>
-                ))}
-              </div>
-
-            </div>
-
-            {/* Results count */}
-            <div className="text-[11px] text-text3">
-              Showing <span className="font-semibold text-text1">{filtered.length}</span> opportunities across <span className="font-semibold text-text1">4</span> perps
-            </div>
-
-            {/* Table */}
-            {loading ? (
-              <div className="flex items-center justify-center py-20 gap-3">
-                <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-                <span className="text-text3 text-sm">Scanning exchanges...</span>
-              </div>
-            ) : filtered.length > 0 ? (
-              <div className="bg-surface rounded-xl border border-border1 shadow-card overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-surface2 border-b border-border1">
-                      {([
-                        ['symbol', 'Symbol'],
-                        ['tier', 'Tier'],
-                        [null, 'Long Position'],
-                        [null, 'Short Position'],
-                        ['spread', 'Spread Rate'],
-                        ['apr', 'Annualized APR'],
-                        [null, 'Strategy'],
-                      ] as [string | null, string][]).map(([key, label]) => (
-                        <th key={label}
-                          onClick={() => key && toggleSort(key as typeof sortBy)}
-                          className={'px-4 py-3 text-[10px] font-semibold text-text3 uppercase tracking-wide text-left whitespace-nowrap ' + (key ? 'cursor-pointer hover:text-text1 select-none' : '')}>
-                          {label}
-                          {key && sortBy === key ? (currentDir === 'desc' ? ' ↓' : ' ↑') : key ? ' ↕' : ''}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((opp, i) => (
-                      <tr key={i} className={'border-b border-border1 transition-colors ' + (opp.tier === 'high' ? 'hover:bg-success/3' : opp.tier === 'medium' ? 'hover:bg-warn/3' : 'hover:bg-surface2')}>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <CoinLogo symbol={opp.symbol} size={26} />
-                            <div>
-                              <div className="text-[13px] font-bold text-text1">{opp.symbol}</div>
-                              <div className="text-[10px] text-text3">Perp</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3"><TierBadge tier={opp.tier} /></td>
-                        <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            <ExchangeBadge exchange={opp.long.exchange} color={opp.long.color} />
-                            <div className="text-[11px] font-mono text-success">{opp.long.fundingRate >= 0 ? '+' : ''}{fmt(opp.long.fundingRate * 100, 4)}%</div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            <ExchangeBadge exchange={opp.short.exchange} color={opp.short.color} />
-                            <div className="text-[11px] font-mono text-danger">{opp.short.fundingRate >= 0 ? '+' : ''}{fmt(opp.short.fundingRate * 100, 4)}%</div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <SpreadBar value={opp.spreadAPR} max={maxAPR} />
-                          <div className="text-[10px] text-text3 mt-0.5">{fmt(opp.spreadRate * 100, 4)}% per 8h</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className={'text-[18px] font-bold ' + (opp.tier === 'high' ? 'text-success' : opp.tier === 'medium' ? 'text-warn' : 'text-text2')}>
-                            {fmt(opp.spreadAPR, 1)}%
-                          </div>
-                          <div className="text-[10px] text-text3">APR (est.)</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] px-1.5 py-0.5 bg-success/10 text-success rounded font-bold">↑ LONG</span>
-                              <span className="text-[11px] text-text2">{opp.long.exchange}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] px-1.5 py-0.5 bg-danger/10 text-danger rounded font-bold">↓ SHORT</span>
-                              <span className="text-[11px] text-text2">{opp.short.exchange}</span>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="bg-surface rounded-xl border border-border1 p-16 text-center">
-                <div className="text-3xl mb-3">🔍</div>
-                <div className="text-text2 font-semibold">No opportunities found</div>
-                <div className="text-text3 text-sm mt-1">Try lowering the tier filter or wait for the next refresh</div>
-              </div>
-            )}
-
-            </div>{/* end flex-1 */}
-
-            {/* RIGHT: How it works card - scrollable */}
-            <div className="w-64 shrink-0 overflow-y-auto" style={{ maxHeight: "calc(100vh - 120px)" }}>
-              <div className="bg-surface rounded-xl border border-border1 shadow-card p-4">
-                <h3 className="text-[12px] font-bold text-text1 mb-3">📖 How It Works</h3>
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-[11px] font-semibold text-text1 mb-1">1. Spot the Spread</div>
-                    <p className="text-text3 text-[10px] leading-relaxed">Same asset, different funding rates on two exchanges — earn the difference delta-neutral.</p>
-                  </div>
-                  <div className="h-px bg-border1" />
-                  <div>
-                    <div className="text-[11px] font-semibold text-text1 mb-1">2. Open Opposite Positions</div>
-                    <p className="text-text3 text-[10px] leading-relaxed">LONG where funding is lower, SHORT where funding is higher. Price risk cancels out.</p>
-                  </div>
-                  <div className="h-px bg-border1" />
-                  <div>
-                    <div className="text-[11px] font-semibold text-text1 mb-1">3. Collect Every 8h</div>
-                    <p className="text-text3 text-[10px] leading-relaxed">Earn funding spread 3× per day.<br/><span className="font-mono text-accent text-[10px]">APR = spread × 3 × 365</span></p>
-                  </div>
-                  <div className="h-px bg-border1" />
-
-                </div>
-              </div>
-              {/* Glossary */}
-              <div className="bg-surface rounded-xl border border-border1 shadow-card p-4 mt-4">
-                <h3 className="text-[12px] font-bold text-text1 mb-3">📘 Glossary</h3>
-                <div className="space-y-2.5">
+                {/* Stats row */}
+                <div className="grid grid-cols-5 gap-3">
                   {[
-                    { term: 'Funding Rate', def: 'A periodic payment between longs and shorts to keep perp price close to spot. Positive = longs pay shorts. Paid every 8h.' },
-                    { term: 'Spread Rate', def: 'The difference in funding rates between two exchanges for the same asset. Larger spread = more profit potential.' },
-                    { term: 'APR (est.)', def: 'Annualized return estimate. Formula: Spread × 3 (payments/day) × 365 (days). Assumes rates stay constant — they will not.' },
-                    { term: 'HIGH Tier', def: 'APR ≥ 50%. Strong opportunity but usually short-lived — high funding rates attract arbitrageurs and compress quickly.' },
-                    { term: 'MED Tier', def: 'APR between 20–50%. More sustainable, moderate risk. Good for longer-term delta-neutral strategies.' },
-                    { term: 'LOW Tier', def: 'APR below 20%. Small spread, may not cover trading fees and slippage. Monitor but proceed with caution.' },
-                    { term: 'Delta-Neutral', def: 'Holding equal long + short positions so price moves do not affect PnL — only funding payments matter.' },
-                    { term: 'Long Position', def: 'The exchange where you open a LONG. Usually where funding rate is lower (or negative) so you receive funding.' },
-                    { term: 'Short Position', def: 'The exchange where you open a SHORT. Usually where funding rate is higher so you pay less (or also receive).' },
-                  ].map(item => (
-                    <div key={item.term} className="border-b border-border1 last:border-0 pb-2 last:pb-0">
-                      <div className="text-[11px] font-semibold text-text1">{item.term}</div>
-                      <div className="text-[10px] text-text3 leading-relaxed mt-0.5">{item.def}</div>
+                    { label: 'Total Opportunities', value: String(opportunities.length), color: 'text-accent' },
+                    { label: '🔥 High Yield (≥50%)', value: String(highCount), color: 'text-success' },
+                    { label: '⚡ Medium (20-50%)', value: String(medCount), color: 'text-warn' },
+                    { label: 'Best APR', value: opportunities[0] ? fmt(opportunities[0].spreadAPR, 1) + '%' : '—', color: 'text-success' },
+                    { label: 'Perp DEX Live', value: String(4 - Object.keys(errors).length) + '/4', color: 'text-text1' },
+                  ].map(s => (
+                    <div key={s.label} className="bg-surface rounded-xl border border-border1 shadow-card p-3.5">
+                      <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-1">{s.label}</div>
+                      <div className={'text-[18px] font-bold ' + s.color}>{s.value}</div>
                     </div>
                   ))}
                 </div>
+
+                {/* Exchange errors */}
+                {Object.keys(errors).length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {Object.entries(errors).map(([ex, err]) => (
+                      <div key={ex} className="flex items-center gap-1.5 px-3 py-1.5 bg-danger/5 border border-danger/20 rounded-lg text-[11px] text-danger">
+                        <span>⚠</span> {ex}: {err}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Filters */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1.5 bg-surface border border-border1 rounded-lg p-1">
+                    {(['all', 'high', 'medium', 'low'] as const).map(t => (
+                      <button key={t} onClick={() => setFilterTier(t)}
+                        className={'px-3 py-1 rounded text-[11px] font-semibold transition-all ' +
+                          (filterTier === t ? 'bg-accent text-white shadow-sm' : 'text-text3 hover:text-text2')}>
+                        {t === 'all' ? 'All Tiers' : t.charAt(0).toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-surface border border-border1 rounded-lg p-1">
+                    {exchanges.map(ex => (
+                      <button key={ex} onClick={() => setFilterExchange(ex)}
+                        className={'px-2.5 py-1 rounded text-[11px] font-semibold transition-all ' +
+                          (filterExchange === ex ? 'bg-accent text-white shadow-sm' : 'text-text3 hover:text-text2')}>
+                        {ex === 'all' ? 'All' : ex}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    {(['apr', 'symbol'] as const).map(k => (
+                      <button key={k} onClick={() => toggleSort(k)}
+                        className={'px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ' +
+                          (sortBy === k ? 'bg-accent/10 border-accent/30 text-accent' : 'bg-surface border-border1 text-text3')}>
+                        Sort: {k === 'apr' ? 'APR' : 'Symbol'} {sortBy === k ? (currentDir === 'desc' ? '↓' : '↑') : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-text3">
+                  Showing <span className="font-semibold text-text1">{filtered.length}</span> opportunities where Pacifica is on one side
+                </div>
+
+                {/* Cards grid */}
+                {loading ? (
+                  <div className="flex items-center justify-center py-20 gap-3">
+                    <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
+                    <span className="text-text3 text-sm">Scanning exchanges for funding rate spreads...</span>
+                  </div>
+                ) : filtered.length > 0 ? (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+                    {filtered.map((opp, i) => (
+                      <ArbCard key={i} opp={opp} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-surface rounded-xl border border-border1 p-16 text-center">
+                    <div className="text-3xl mb-3">🔍</div>
+                    <div className="text-text2 font-semibold">No opportunities found</div>
+                    <div className="text-text3 text-sm mt-1">Try lowering the tier filter or wait for market conditions to change</div>
+                  </div>
+                )}
+
+              </div>{/* end main */}
+
+              {/* RIGHT sidebar */}
+              <div className="w-60 shrink-0 overflow-y-auto space-y-4" style={{ maxHeight: 'calc(100vh - 120px)' }}>
+                <div className="bg-surface rounded-xl border border-border1 shadow-card p-4">
+                  <h3 className="text-[12px] font-bold text-text1 mb-3">📖 How It Works</h3>
+                  <div className="space-y-3">
+                    {[
+                      { title: '1. Spot the Spread', body: 'Same asset, different funding rates — earn the difference delta-neutral.' },
+                      { title: '2. Open Opposite Positions', body: 'LONG where funding is lower (receive), SHORT where higher (pay less).' },
+                      { title: '3. Collect Every 1h', body: 'APR = |spread| × 24 × 365. Pays hourly on Pacifica.' },
+                      { title: '4. BBO Spread', body: 'Entry cost estimate. Negative = costs to enter. Factor into P&L.' },
+                    ].map(s => (
+                      <div key={s.title}>
+                        <div className="text-[11px] font-semibold text-text1 mb-0.5">{s.title}</div>
+                        <p className="text-text3 text-[10px] leading-relaxed">{s.body}</p>
+                        <div className="h-px bg-border1 mt-2" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-surface rounded-xl border border-border1 shadow-card p-4">
+                  <h3 className="text-[12px] font-bold text-text1 mb-3">📘 Legend</h3>
+                  <div className="space-y-2">
+                    {[
+                      { label: 'Pay', color: 'text-danger', def: 'You pay this rate' },
+                      { label: 'Recv', color: 'text-success', def: 'You receive this rate' },
+                      { label: 'ASK (Entry)', color: 'text-text2', def: 'Long entry fills at ask' },
+                      { label: 'BID (Entry)', color: 'text-text2', def: 'Short entry fills at bid' },
+                      { label: 'BBO Spread', color: 'text-text2', def: 'Bid/Ask cross-exchange ratio' },
+                    ].map(item => (
+                      <div key={item.label} className="border-b border-border1 last:border-0 pb-1.5 last:pb-0">
+                        <div className={'text-[11px] font-semibold ' + item.color}>{item.label}</div>
+                        <div className="text-[10px] text-text3">{item.def}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-            </div>{/* end flex wrapper */}
           </div>
         </div>
       )}
@@ -511,12 +537,9 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                       {config.active ? '⏹ Stop Alerts' : '▶ Start Alerts'}
                     </button>
                   </div>
-
-                  {/* Alert-only disclaimer */}
                   <div className="mb-4 px-3 py-2.5 rounded-lg bg-warn/8 border border-warn/25 text-[11px] text-warn leading-relaxed">
-                    <span className="font-bold">📢 Notification bot only.</span> This bot monitors for opportunities and sends alerts via Telegram, Discord, or browser notifications. <span className="font-semibold">It does not open or execute trades automatically.</span> You must place orders manually on the exchanges.
+                    <span className="font-bold">📢 Notification bot only.</span> Monitors for opportunities and sends alerts. Does not execute trades automatically.
                   </div>
-
                   <div className="space-y-3">
                     <div>
                       <label className="text-[10px] text-text3 uppercase font-semibold block mb-1.5">Minimum APR Threshold (%)</label>
@@ -527,16 +550,12 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                         <span className="text-[14px] font-bold text-accent w-14 text-right">{config.minAPR}%</span>
                       </div>
                     </div>
-
                     <div>
                       <label className="text-[10px] text-text3 uppercase font-semibold block mb-1.5">Monitored Exchanges</label>
                       <div className="flex flex-wrap gap-2">
                         {['Pacifica', 'Hyperliquid', 'Aster', 'dYdX'].map(ex => (
                           <button key={ex}
-                            onClick={() => setConfig(c => ({
-                              ...c,
-                              exchanges: c.exchanges.includes(ex) ? c.exchanges.filter(e => e !== ex) : [...c.exchanges, ex]
-                            }))}
+                            onClick={() => setConfig(c => ({ ...c, exchanges: c.exchanges.includes(ex) ? c.exchanges.filter(e => e !== ex) : [...c.exchanges, ex] }))}
                             className={'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ' +
                               (config.exchanges.includes(ex) ? 'bg-accent/10 border-accent/30 text-accent' : 'border-border1 text-text3')}>
                             {ex}
@@ -544,7 +563,6 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                         ))}
                       </div>
                     </div>
-
                     <div className="flex items-center justify-between py-1">
                       <div>
                         <div className="text-[12px] font-semibold text-text1">🔔 Sound Alerts</div>
@@ -555,16 +573,12 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                         <div className={'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ' + (config.soundEnabled ? 'translate-x-5' : 'translate-x-0.5')} />
                       </button>
                     </div>
-
                     <div className="flex items-center justify-between py-1">
                       <div>
                         <div className="text-[12px] font-semibold text-text1">🖥 Browser Notifications</div>
-                        <div className="text-[10px] text-text3">
-                          {'Notification' in window && Notification.permission === 'granted' ? '✓ Enabled' : 'Click to enable'}
-                        </div>
+                        <div className="text-[10px] text-text3">{'Notification' in window && Notification.permission === 'granted' ? '✓ Enabled' : 'Click to enable'}</div>
                       </div>
-                      <button
-                        onClick={() => { requestNotifPermission(); setConfig(c => ({ ...c, browserNotif: !c.browserNotif })); }}
+                      <button onClick={() => { requestNotifPermission(); setConfig(c => ({ ...c, browserNotif: !c.browserNotif })); }}
                         className={'relative w-11 h-6 rounded-full transition-colors ' + (config.browserNotif ? 'bg-accent' : 'bg-border2')}>
                         <div className={'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ' + (config.browserNotif ? 'translate-x-5' : 'translate-x-0.5')} />
                       </button>
@@ -575,116 +589,82 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                 {/* Telegram */}
                 <div className="bg-surface rounded-xl border border-border1 shadow-card p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[13px] font-bold text-text1 flex items-center gap-2">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.68 7.93c-.12.56-.46.7-.93.44l-2.58-1.9-1.24 1.2c-.14.14-.25.25-.52.25l.19-2.63 4.83-4.37c.21-.19-.05-.29-.32-.1L7.4 14.17l-2.53-.79c-.55-.17-.56-.55.12-.82l9.88-3.81c.46-.17.86.11.77.05z" fill="#2CA5E0"/></svg>
-                      Telegram Alerts
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setConfig(c => ({ ...c, telegramActive: !c.telegramActive }))}
-                        className={'px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ' +
-                          (config.telegramActive ? 'bg-danger/10 border-danger/30 text-danger' : 'bg-success/10 border-success/30 text-success')}>
-                        {config.telegramActive ? '⏹ Stop' : '▶ Start'}
-                      </button>
-                    </div>
+                    <h3 className="text-[13px] font-bold text-text1">📱 Telegram Alerts</h3>
+                    <button onClick={() => setConfig(c => ({ ...c, telegramActive: !c.telegramActive }))}
+                      className={'px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ' +
+                        (config.telegramActive ? 'bg-danger/10 border-danger/30 text-danger' : 'bg-success/10 border-success/30 text-success')}>
+                      {config.telegramActive ? '⏹ Stop' : '▶ Start'}
+                    </button>
                   </div>
                   <div className="space-y-3">
                     <div>
                       <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">Bot Token</label>
-                      <input
-                        type="password"
-                        placeholder="123456789:ABCdef..."
-                        value={config.telegramToken}
+                      <input type="password" placeholder="123456789:ABCdef..." value={config.telegramToken}
                         onChange={e => setConfig(c => ({ ...c, telegramToken: e.target.value }))}
-                        className="w-full bg-surface2 border border-border1 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-accent font-mono"
-                      />
+                        className="w-full bg-surface2 border border-border1 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-accent font-mono" />
                     </div>
                     <div>
                       <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">Chat ID</label>
-                      <input
-                        type="text"
-                        placeholder="-1001234567890"
-                        value={config.telegramChatId}
+                      <input type="text" placeholder="-1001234567890" value={config.telegramChatId}
                         onChange={e => setConfig(c => ({ ...c, telegramChatId: e.target.value }))}
-                        className="w-full bg-surface2 border border-border1 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-accent font-mono"
-                      />
+                        className="w-full bg-surface2 border border-border1 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-accent font-mono" />
                     </div>
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => sendTelegram('✅ PacificaLens Arb Bot test message!\n\nConnection successful.', true)}
+                      <button onClick={() => sendTelegram('✅ PacificaLens Arb Bot test message!\n\nConnection successful.', true)}
                         disabled={!config.telegramToken || !config.telegramChatId}
                         className="flex-1 py-2 text-[12px] font-semibold bg-blue-500/10 border border-blue-500/30 text-blue-500 rounded-lg hover:bg-blue-500/20 transition-colors disabled:opacity-40">
                         Test
                       </button>
-                      <button
-                        onClick={() => { try { localStorage.setItem('arb_bot_config', JSON.stringify(config)); setBotLog(prev => [{ ts: Date.now(), msg: 'Telegram settings saved', type: 'info' as const }, ...prev]); } catch {} }}
+                      <button onClick={() => { try { localStorage.setItem('arb_bot_config', JSON.stringify(config)); setBotLog(prev => [{ ts: Date.now(), msg: 'Telegram settings saved', type: 'info' as const }, ...prev]); } catch {} }}
                         className="px-4 py-2 text-[12px] font-semibold bg-surface2 border border-border1 rounded-lg hover:border-accent text-text2 transition-colors">
                         Save
                       </button>
                     </div>
-                    <p className="text-[10px] text-text3 leading-relaxed">
-                      Create a bot via @BotFather, add it to your channel/group, get the Chat ID using @userinfobot
-                    </p>
+                    <p className="text-[10px] text-text3 leading-relaxed">Create a bot via @BotFather, add it to your channel/group, get Chat ID via @userinfobot</p>
                   </div>
                 </div>
 
                 {/* Discord */}
                 <div className="bg-surface rounded-xl border border-border1 shadow-card p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[13px] font-bold text-text1 flex items-center gap-2">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.001.022.015.043.036.055a19.909 19.909 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" fill="#5865F2"/></svg>
-                      Discord Alerts
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setConfig(c => ({ ...c, discordActive: !c.discordActive }))}
-                        className={'px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ' +
-                          (config.discordActive ? 'bg-danger/10 border-danger/30 text-danger' : 'bg-success/10 border-success/30 text-success')}>
-                        {config.discordActive ? '⏹ Stop' : '▶ Start'}
-                      </button>
-                    </div>
+                    <h3 className="text-[13px] font-bold text-text1">💬 Discord Alerts</h3>
+                    <button onClick={() => setConfig(c => ({ ...c, discordActive: !c.discordActive }))}
+                      className={'px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ' +
+                        (config.discordActive ? 'bg-danger/10 border-danger/30 text-danger' : 'bg-success/10 border-success/30 text-success')}>
+                      {config.discordActive ? '⏹ Stop' : '▶ Start'}
+                    </button>
                   </div>
                   <div className="space-y-3">
                     <div>
                       <label className="text-[10px] text-text3 uppercase font-semibold block mb-1">Webhook URL</label>
-                      <input
-                        type="password"
-                        placeholder="https://discord.com/api/webhooks/..."
-                        value={config.discordWebhook}
+                      <input type="password" placeholder="https://discord.com/api/webhooks/..." value={config.discordWebhook}
                         onChange={e => setConfig(c => ({ ...c, discordWebhook: e.target.value }))}
-                        className="w-full bg-surface2 border border-border1 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-accent font-mono"
-                      />
+                        className="w-full bg-surface2 border border-border1 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-accent font-mono" />
                     </div>
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => sendDiscord('✅ PacificaLens Arb Bot test message!\n\nConnection successful.', 100, true)}
+                      <button onClick={() => sendDiscord('✅ PacificaLens Arb Bot test!\n\nConnection successful.', 100, true)}
                         disabled={!config.discordWebhook}
                         className="flex-1 py-2 text-[12px] font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 rounded-lg hover:bg-indigo-500/20 transition-colors disabled:opacity-40">
                         Test
                       </button>
-                      <button
-                        onClick={() => { try { localStorage.setItem('arb_bot_config', JSON.stringify(config)); setBotLog(prev => [{ ts: Date.now(), msg: 'Discord settings saved', type: 'info' as const }, ...prev]); } catch {} }}
+                      <button onClick={() => { try { localStorage.setItem('arb_bot_config', JSON.stringify(config)); setBotLog(prev => [{ ts: Date.now(), msg: 'Discord settings saved', type: 'info' as const }, ...prev]); } catch {} }}
                         className="px-4 py-2 text-[12px] font-semibold bg-surface2 border border-border1 rounded-lg hover:border-accent text-text2 transition-colors">
                         Save
                       </button>
                     </div>
-                    <p className="text-[10px] text-text3 leading-relaxed">
-                      Discord channel → Edit Channel → Integrations → Webhooks → New Webhook → Copy URL
-                    </p>
+                    <p className="text-[10px] text-text3 leading-relaxed">Discord channel → Edit Channel → Integrations → Webhooks → New Webhook → Copy URL</p>
                   </div>
                 </div>
               </div>
 
-              {/* Bot Activity Log */}
+              {/* Activity Log */}
               <div className="space-y-4">
                 <div className="bg-surface rounded-xl border border-border1 shadow-card overflow-hidden">
                   <div className="px-5 py-3 border-b border-border1 bg-surface2 flex items-center justify-between">
                     <h3 className="text-[13px] font-bold text-text1">Activity Log</h3>
                     <div className="flex items-center gap-3">
-                      <span className="text-[11px] text-text3">{botLog.length} events</span>
-                      {botLog.length > 0 && (
-                        <button onClick={() => setBotLog([])} className="text-[11px] text-text3 hover:text-danger transition-colors">Clear</button>
-                      )}
+                      <span className="text-[11px] text-text3">{botLog.length} events · {sentCount} sent</span>
+                      {botLog.length > 0 && <button onClick={() => setBotLog([])} className="text-[11px] text-text3 hover:text-danger transition-colors">Clear</button>}
                     </div>
                   </div>
                   <div className="h-64 overflow-y-auto">
@@ -697,16 +677,15 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                       <div className="flex flex-col items-center justify-center h-full text-text3 gap-2">
                         <span className="text-2xl">💤</span>
                         <p className="text-sm">Bot not started yet</p>
-                        <p className="text-[11px]">Configure and press Start Bot</p>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Live opportunities preview */}
+                {/* Live preview */}
                 <div className="bg-surface rounded-xl border border-border1 shadow-card overflow-hidden">
                   <div className="px-5 py-3 border-b border-border1 bg-surface2">
-                    <h3 className="text-[13px] font-bold text-text1">Top 5 Live Opportunities (Pacifica)</h3>
+                    <h3 className="text-[13px] font-bold text-text1">Top 5 Live (Pacifica side)</h3>
                   </div>
                   <div>
                     {opportunities.filter(o => o.long.exchange === 'Pacifica' || o.short.exchange === 'Pacifica').slice(0, 5).map((opp, i) => (
@@ -723,30 +702,18 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                         </div>
                       </div>
                     ))}
-                    {opportunities.length === 0 && (
-                      <div className="p-8 text-center text-text3 text-sm">Scanning...</div>
-                    )}
+                    {opportunities.length === 0 && <div className="p-8 text-center text-text3 text-sm">Scanning...</div>}
                   </div>
                 </div>
 
-                {/* Disclaimer */}
-                <div className="bg-surface2 border border-border1 rounded-xl px-4 py-3 flex gap-2.5">
-                  <span className="text-[16px] shrink-0">ℹ️</span>
-                  <div className="text-[11px] text-text2 leading-relaxed">
-                    <strong className="text-text1">Alerts only</strong> — this bot monitors funding rates and sends notifications. It does not open or close trades automatically. Use alerts to manually execute on Pacifica and the opposing exchange.
-                  </div>
-                </div>
-
-                {/* Setup guide */}
                 <div className="bg-accent/5 rounded-xl border border-accent/20 p-5">
-                  <h3 className="text-[12px] font-bold text-accent mb-3">⚡ Quick Setup Guide</h3>
+                  <h3 className="text-[12px] font-bold text-accent mb-3">⚡ Quick Setup</h3>
                   <ol className="space-y-2 text-[11px] text-text2">
-                    <li className="flex gap-2"><span className="text-accent font-bold">1.</span> Set your minimum APR threshold (default: 20%)</li>
-                    <li className="flex gap-2"><span className="text-accent font-bold">2.</span> Select which exchanges to monitor</li>
-                    <li className="flex gap-2"><span className="text-accent font-bold">3.</span> Add Telegram token + Chat ID for mobile alerts</li>
-                    <li className="flex gap-2"><span className="text-accent font-bold">4.</span> Add Discord webhook for server alerts</li>
-                    <li className="flex gap-2"><span className="text-accent font-bold">5.</span> Enable browser notifications for desktop alerts</li>
-                    <li className="flex gap-2"><span className="text-accent font-bold">6.</span> Click <span className="text-success font-bold">Start Alerts</span> — notifications will fire when opportunities appear</li>
+                    <li className="flex gap-2"><span className="text-accent font-bold">1.</span> Set minimum APR threshold</li>
+                    <li className="flex gap-2"><span className="text-accent font-bold">2.</span> Select exchanges to monitor</li>
+                    <li className="flex gap-2"><span className="text-accent font-bold">3.</span> Add Telegram token + Chat ID</li>
+                    <li className="flex gap-2"><span className="text-accent font-bold">4.</span> Add Discord webhook</li>
+                    <li className="flex gap-2"><span className="text-accent font-bold">5.</span> Click <span className="text-success font-bold">Start Alerts</span></li>
                   </ol>
                 </div>
               </div>
@@ -756,5 +723,4 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
       )}
     </div>
   );
-
 }
