@@ -150,7 +150,7 @@ function ArbCard({ opp }: { opp: ArbitrageOpportunity }) {
             <FreqBadge intervalHours={freqHours(opp.long.exchange)} />
           </div>
           <div>
-            <div className="text-[8px] text-text3 uppercase tracking-wide font-semibold">Ask (Entry)</div>
+            <div className="text-[8px] text-text3 uppercase tracking-wide font-semibold">Ask </div>
             <div className="text-[15px] font-bold text-text1 font-mono leading-tight">${fmtPrice(opp.long.askPrice)}</div>
             <div className="text-[9px] text-text3 font-mono">Bid ${fmtPrice(opp.long.bidPrice)}</div>
           </div>
@@ -185,7 +185,7 @@ function ArbCard({ opp }: { opp: ArbitrageOpportunity }) {
             <span className="text-[10px] font-bold text-danger tracking-widest">SHORT</span>
           </div>
           <div>
-            <div className="text-[8px] text-text3 uppercase tracking-wide font-semibold">Bid (Entry)</div>
+            <div className="text-[8px] text-text3 uppercase tracking-wide font-semibold">Bid </div>
             <div className="text-[15px] font-bold text-text1 font-mono leading-tight">${fmtPrice(opp.short.bidPrice)}</div>
             <div className="text-[9px] text-text3 font-mono">Ask ${fmtPrice(opp.short.askPrice)}</div>
           </div>
