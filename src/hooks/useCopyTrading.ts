@@ -142,7 +142,15 @@ export function useCopyTrading() {
 
       if (rawArr) {
         const mapEntry = (d: Record<string, unknown>): LeaderboardEntry => ({
-          account:        String(d.address || d.account || d.wallet || '').toLowerCase(),
+          account:        (() => {
+            // API may return shortened address in 'address' and full in 'account'
+            // Always prefer the longest (full) address — truncated ones contain '...'
+            const candidates = [d.address, d.account, d.wallet]
+              .map(v => String(v || ''))
+              .filter(v => v.length > 0);
+            const full = candidates.find(v => !v.includes('...'));
+            return (full || candidates[0] || '').toLowerCase();
+          })(),
           pnl_7d:         Number(d.pnl_7d ?? 0),
           pnl_30d:        Number(d.pnl_30d ?? 0),
           pnl_all:        Number(d.pnl_all_time ?? d.pnl_all ?? 0),
