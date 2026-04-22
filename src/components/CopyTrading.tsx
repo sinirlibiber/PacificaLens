@@ -1343,7 +1343,7 @@ export function CopyTrading({ markets, tickers, wallet, accountInfo, onToast, en
             {lbLoading && !pagedList.length ? (
               <div className="flex items-center justify-center flex-1 h-64 gap-3">
                 <div className="w-6 h-6 border-2 border-border2 border-t-accent rounded-full animate-spin" />
-                <span className="text-[12px] text-text3">Loading leaderboard...</span>
+                <span className="text-[12px] text-text3">Loading AlphaBoard...</span>
               </div>
             ) : (
               <div className="overflow-x-auto">
