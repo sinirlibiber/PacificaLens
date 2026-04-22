@@ -128,10 +128,16 @@ export async function getAccountInfo(wallet: string): Promise<AccountInfo | null
 }
 
 // GET /api/v1/positions?account=WALLET
+// Also tries /leaderboard/positions which is the correct endpoint for other traders
 export async function getPositions(wallet: string): Promise<Position[]> {
   try {
-    const res = await proxyGet<PacificaRes<Position[]>>(`positions?account=${wallet}`);
-    if (res.success && Array.isArray(res.data)) return res.data;
+    // Primary: leaderboard/positions (correct endpoint for viewing other traders' positions)
+    const res = await proxyGet<PacificaRes<Position[]>>(`leaderboard/positions?account=${wallet}`);
+    if (res.success && Array.isArray(res.data) && res.data.length > 0) return res.data;
+
+    // Fallback: standard positions endpoint (works for own wallet)
+    const res2 = await proxyGet<PacificaRes<Position[]>>(`positions?account=${wallet}`);
+    if (res2.success && Array.isArray(res2.data)) return res2.data;
     return [];
   } catch { return []; }
 }
