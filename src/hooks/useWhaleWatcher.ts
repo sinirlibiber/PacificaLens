@@ -83,7 +83,7 @@ export function useWhaleWatcher(
       const prev = prevOI.current[m.symbol];
       if (oi > 0 && prev && prev > 0 && prev !== oi) {
         const pct = ((oi - prev) / prev) * 100;
-        if (Math.abs(pct) >= 2) {
+        if (Math.abs(pct) >= 0.5) {
           newOiAlerts.push({ symbol: m.symbol, changePercent: pct, direction: pct > 0 ? 'up' : 'down', ts: Date.now() });
           const p = pressureRef.current[m.symbol];
           if (p) p.oiChange = pct;
@@ -95,7 +95,7 @@ export function useWhaleWatcher(
     const newFundAlerts: FundingAlert[] = [];
     for (const m of markets) {
       const fr = Number(tickers[m.symbol]?.funding || 0) * 100;
-      if (Math.abs(fr) >= 0.01) newFundAlerts.push({ symbol: m.symbol, rate: fr, ts: Date.now() });
+      if (Math.abs(fr) >= 0.001) newFundAlerts.push({ symbol: m.symbol, rate: fr, ts: Date.now() });
       prevFund.current[m.symbol] = fr;
     }
     newFundAlerts.sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate));
