@@ -2,7 +2,7 @@
   "regions": ["fra1"],
   "crons": [
     {
-      "path": "/api/trader-score",
+      "path": "/api/cron/recompute-scores",
       "schedule": "0 6 * * *"
     }
   ]

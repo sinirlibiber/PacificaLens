@@ -11,8 +11,8 @@ interface ScoreCache {
   totalTraders: number;
 }
 
-const LS_KEY = 'pacificalens_trader_scores_v2';
-const STALE_THRESHOLD = 23 * 60 * 60 * 1000; // 23 hours — matches daily cron
+const LS_KEY = 'pacificalens_trader_scores_v4'; // v4: stale threshold düşürüldü
+const STALE_THRESHOLD = 60 * 60 * 1000; // 1 saat — yeni traderlar hızlı görünsün
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -96,7 +96,10 @@ export function useTraderScore() {
 
   // ── Helper to get a single trader's score ───────────────────
   const getScore = useCallback(
-    (account: string): TraderScore | null => scores[account] ?? null,
+    (account: string): TraderScore | null =>
+      // API stores keys as lowercase; normalise the lookup so "0xABC" and
+      // "0xabc" both hit the same entry regardless of what AlphaBoard passes in.
+      scores[account] ?? scores[account.toLowerCase()] ?? null,
     [scores]
   );
 

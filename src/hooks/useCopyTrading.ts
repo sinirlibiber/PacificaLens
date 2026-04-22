@@ -142,7 +142,7 @@ export function useCopyTrading() {
 
       if (rawArr) {
         const mapEntry = (d: Record<string, unknown>): LeaderboardEntry => ({
-          account:        String(d.address || d.account || d.wallet || ''),
+          account:        String(d.address || d.account || d.wallet || '').toLowerCase(),
           pnl_7d:         Number(d.pnl_7d ?? 0),
           pnl_30d:        Number(d.pnl_30d ?? 0),
           pnl_all:        Number(d.pnl_all_time ?? d.pnl_all ?? 0),

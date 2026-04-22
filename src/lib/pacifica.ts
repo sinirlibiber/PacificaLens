@@ -22,6 +22,7 @@ export interface Market {
   funding_rate: string;
   next_funding_rate: string;
   isolated_only: boolean;
+  instrument_type?: string; // "perpetual" | "spot"
 }
 
 // GET /api/v1/info/prices
@@ -76,7 +77,12 @@ export interface AccountInfo {
 export async function getMarkets(): Promise<Market[]> {
   try {
     const res = await proxyGet<PacificaRes<Market[]>>('info');
-    if (res.success && Array.isArray(res.data)) return res.data;
+    if (res.success && Array.isArray(res.data)) {
+      // Spot marketleri filtrele (SOL-USDC, BTC-USDC vb.) — sadece perpetual'lar kalsın
+      return res.data.filter((m: Market) => 
+        m.instrument_type ? m.instrument_type === "perpetual" : !m.symbol.includes("-")
+      );
+    }
     return [];
   } catch (e) {
     console.error('[Pacifica] getMarkets:', e);
@@ -89,7 +95,9 @@ export async function getTickers(): Promise<Record<string, Ticker>> {
   try {
     const res = await proxyGet<PacificaRes<Ticker[]>>('info/prices');
     if (res.success && Array.isArray(res.data)) {
-      return Object.fromEntries(res.data.map(t => [t.symbol, t]));
+      return Object.fromEntries(
+        res.data.filter((t: Ticker) => !t.symbol.includes('-')).map((t: Ticker) => [t.symbol, t])
+      );
     }
     return {};
   } catch (e) {
@@ -123,7 +131,12 @@ export async function getAccountInfo(wallet: string): Promise<AccountInfo | null
 export async function getPositions(wallet: string): Promise<Position[]> {
   try {
     const res = await proxyGet<PacificaRes<Position[]>>(`positions?account=${wallet}`);
-    if (res.success && Array.isArray(res.data)) return res.data;
+    if (res.success && Array.isArray(res.data)) {
+      // Spot marketleri filtrele (SOL-USDC, BTC-USDC vb.) — sadece perpetual'lar kalsın
+      return res.data.filter((m: Market) => 
+        m.instrument_type ? m.instrument_type === "perpetual" : !m.symbol.includes("-")
+      );
+    }
     return [];
   } catch { return []; }
 }
@@ -154,7 +167,12 @@ export async function getCandles(symbol: string, interval = '1h', limit = 100): 
     };
     const start = end - (intervalMs[interval] || 3600000) * limit;
     const res = await proxyGet<PacificaRes<Candle[]>>(`kline?symbol=${symbol}&interval=${interval}&start_time=${start}&end_time=${end}`);
-    if (res.success && Array.isArray(res.data)) return res.data;
+    if (res.success && Array.isArray(res.data)) {
+      // Spot marketleri filtrele (SOL-USDC, BTC-USDC vb.) — sadece perpetual'lar kalsın
+      return res.data.filter((m: Market) => 
+        m.instrument_type ? m.instrument_type === "perpetual" : !m.symbol.includes("-")
+      );
+    }
     return [];
   } catch { return []; }
 }
@@ -172,7 +190,12 @@ export interface Trade {
 export async function getRecentTrades(symbol: string): Promise<Trade[]> {
   try {
     const res = await proxyGet<PacificaRes<Trade[]>>(`trades?symbol=${symbol}`);
-    if (res.success && Array.isArray(res.data)) return res.data;
+    if (res.success && Array.isArray(res.data)) {
+      // Spot marketleri filtrele (SOL-USDC, BTC-USDC vb.) — sadece perpetual'lar kalsın
+      return res.data.filter((m: Market) => 
+        m.instrument_type ? m.instrument_type === "perpetual" : !m.symbol.includes("-")
+      );
+    }
     return [];
   } catch { return []; }
 }
@@ -210,7 +233,12 @@ export async function getTradeHistory(wallet: string, limit = 50): Promise<Trade
   try {
     // Try newer endpoint first
     const res = await proxyGet<PacificaRes<TradeHistory[]>>(`trades/history?account=${wallet}&limit=${limit}`);
-    if (res.success && Array.isArray(res.data)) return res.data;
+    if (res.success && Array.isArray(res.data)) {
+      // Spot marketleri filtrele (SOL-USDC, BTC-USDC vb.) — sadece perpetual'lar kalsın
+      return res.data.filter((m: Market) => 
+        m.instrument_type ? m.instrument_type === "perpetual" : !m.symbol.includes("-")
+      );
+    }
     // Fallback to legacy endpoint
     const res2 = await proxyGet<PacificaRes<TradeHistory[]>>(`account/trade_history?account=${wallet}&limit=${limit}`);
     if (res2.success && Array.isArray(res2.data)) return res2.data;
@@ -238,7 +266,12 @@ export async function getEquityHistory(wallet: string): Promise<EquityHistory[]>
 export async function getFundingHistory(wallet: string): Promise<FundingHistory[]> {
   try {
     const res = await proxyGet<PacificaRes<FundingHistory[]>>(`account/funding_history?account=${wallet}`);
-    if (res.success && Array.isArray(res.data)) return res.data;
+    if (res.success && Array.isArray(res.data)) {
+      // Spot marketleri filtrele (SOL-USDC, BTC-USDC vb.) — sadece perpetual'lar kalsın
+      return res.data.filter((m: Market) => 
+        m.instrument_type ? m.instrument_type === "perpetual" : !m.symbol.includes("-")
+      );
+    }
     const res2 = await proxyGet<PacificaRes<FundingHistory[]>>(`funding_history?account=${wallet}`);
     if (res2.success && Array.isArray(res2.data)) return res2.data;
     return [];
@@ -266,7 +299,12 @@ export async function getOpenOrders(wallet: string): Promise<OpenOrder[]> {
   try {
     // Try account-specific endpoint first, then fallback
     const res = await proxyGet<PacificaRes<OpenOrder[]>>(`orders/open?account=${wallet}`);
-    if (res.success && Array.isArray(res.data)) return res.data;
+    if (res.success && Array.isArray(res.data)) {
+      // Spot marketleri filtrele (SOL-USDC, BTC-USDC vb.) — sadece perpetual'lar kalsın
+      return res.data.filter((m: Market) => 
+        m.instrument_type ? m.instrument_type === "perpetual" : !m.symbol.includes("-")
+      );
+    }
     // Some API versions use different path
     const res2 = await proxyGet<PacificaRes<OpenOrder[]>>(`account/orders/open?account=${wallet}`);
     if (res2.success && Array.isArray(res2.data)) return res2.data;
@@ -277,7 +315,12 @@ export async function getOpenOrders(wallet: string): Promise<OpenOrder[]> {
 export async function getOrderHistory(wallet: string, limit = 100): Promise<OpenOrder[]> {
   try {
     const res = await proxyGet<PacificaRes<OpenOrder[]>>(`orders/history?account=${wallet}&limit=${limit}`);
-    if (res.success && Array.isArray(res.data)) return res.data;
+    if (res.success && Array.isArray(res.data)) {
+      // Spot marketleri filtrele (SOL-USDC, BTC-USDC vb.) — sadece perpetual'lar kalsın
+      return res.data.filter((m: Market) => 
+        m.instrument_type ? m.instrument_type === "perpetual" : !m.symbol.includes("-")
+      );
+    }
     return [];
   } catch { return []; }
 }
