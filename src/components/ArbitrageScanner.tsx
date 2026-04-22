@@ -50,12 +50,20 @@ function Countdown({ targetMs }: { targetMs: number }) {
   return <span>{h > 0 ? `${h}:` : ''}{String(m).padStart(2,'0')}:{String(s).padStart(2,'0')}</span>;
 }
 
-// ── Exchange badge ────────────────────────────────────────────────────────────
-function ExBadge({ label, color }: { label: string; color: string }) {
+
+// ── Funding frequency badge ───────────────────────────────────────────────────
+function FreqBadge({ intervalHours }: { intervalHours: number }) {
+  const is1h = intervalHours === 1;
   return (
-    <span className="text-[9px] font-bold px-2 py-0.5 rounded border"
-      style={{ color, borderColor: color + '50', background: color + '18' }}>
-      {label}
+    <span
+      className="text-[8px] font-bold px-1.5 py-0.5 rounded"
+      style={
+        is1h
+          ? { background: 'rgba(16,185,129,0.12)', color: '#059669', border: '0.5px solid rgba(16,185,129,0.25)' }
+          : { background: 'rgba(245,158,11,0.12)', color: '#b45309', border: '0.5px solid rgba(245,158,11,0.25)' }
+      }
+    >
+      {intervalHours}h
     </span>
   );
 }
@@ -63,24 +71,33 @@ function ExBadge({ label, color }: { label: string; color: string }) {
 // ── Individual arbitrage card ─────────────────────────────────────────────────
 function ArbCard({ opp }: { opp: ArbitrageOpportunity }) {
   const tierColor = opp.tier === 'high' ? '#10b981' : opp.tier === 'medium' ? '#f59e0b' : '#94a3b8';
-  const tierLabel = opp.tier === 'high' ? 'HIGH' : opp.tier === 'medium' ? 'MEDIUM' : 'LOW';
+  const tierLabel = opp.tier === 'high' ? 'HIGH' : opp.tier === 'medium' ? 'MED' : 'LOW';
 
+  // Funding rate formatting
   const fmtFR = (rate: number, isLong: boolean) => {
-    // For long side: negative FR = you receive (good), positive = you pay
-    // For short side: positive FR = you receive (good), negative = you pay
     const youReceive = isLong ? rate <= 0 : rate >= 0;
-    const label = youReceive ? 'Recv' : 'Pay';
     const color = youReceive ? '#10b981' : '#ef4444';
+    const sign = youReceive ? '+' : '-';
     const pct = (Math.abs(rate) * 100).toFixed(4);
-    return { label, color, pct };
+    return { youReceive, color, sign, pct };
   };
 
   const longFR = fmtFR(opp.long.fundingRate, true);
   const shortFR = fmtFR(opp.short.fundingRate, false);
 
+  // BBO bar: clamp to ±1% for visual width, 50% = zero
   const bboColor = opp.bboSpread >= 0 ? '#10b981' : '#ef4444';
-  const bboLabel = opp.bboSpread >= 0 ? '+' : '';
-  const nextFundingMs = Math.min(opp.long.nextFundingTime, opp.short.nextFundingTime);
+  const bboPct = (opp.bboSpread * 100).toFixed(3);
+  const bboBarWidth = Math.min(Math.abs(opp.bboSpread) * 10000, 50); // max 50% of half-bar
+
+  // Net hourly = sum of what you receive on both sides
+  const longRecv = opp.long.fundingRate <= 0 ? Math.abs(opp.long.fundingRate) : 0;
+  const shortRecv = opp.short.fundingRate >= 0 ? opp.short.fundingRate : 0;
+  const netHourly = (longRecv + shortRecv) * 100;
+
+  // Infer funding interval from exchange name (Bybit/Gate/MEXC default 4h, others 1h)
+  const freqHours = (ex: string) =>
+    ['Bybit', 'Gate.io', 'MEXC', 'Lighter'].includes(ex) ? 4 : 1;
 
   const fmtPrice = (p: number) => {
     if (p >= 1000) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -88,120 +105,139 @@ function ArbCard({ opp }: { opp: ArbitrageOpportunity }) {
     return p.toFixed(6);
   };
 
+  const nextFundingMs = Math.min(opp.long.nextFundingTime, opp.short.nextFundingTime);
+
   return (
     <div className="bg-surface border border-border1 rounded-xl overflow-hidden shadow-card hover:border-border2 transition-colors">
-      {/* Card header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border1 bg-surface2">
+
+      {/* ── Header: coin + exchange pills + tier ── */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border1">
         <div className="flex items-center gap-2">
           <CoinLogo symbol={opp.symbol} size={20} />
           <span className="text-[13px] font-bold text-text1">{opp.symbol}/USDT</span>
-          <span className="text-[9px] text-text3 font-medium">{opp.long.exchange.toUpperCase()} - {opp.short.exchange.toUpperCase()}</span>
+          {/* Exchange pills with arrow between */}
+          <div className="flex items-center gap-1">
+            <span
+              className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+              style={{ color: opp.long.color, background: opp.long.color + '18', border: `0.5px solid ${opp.long.color}40` }}
+            >
+              {opp.long.exchange.toUpperCase()}
+            </span>
+            <span className="text-[9px] text-text3">⟷</span>
+            <span
+              className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+              style={{ color: opp.short.color, background: opp.short.color + '18', border: `0.5px solid ${opp.short.color}40` }}
+            >
+              {opp.short.exchange.toUpperCase()}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ color: tierColor, background: tierColor + '18', border: `1px solid ${tierColor}50` }}>
-            {tierLabel}
-          </span>
-          <span className="text-[9px] text-text3">
-            Pacifica 1h / {opp.long.exchange === 'Pacifica' ? opp.short.exchange : opp.long.exchange} 1h
-          </span>
-        </div>
+        <span
+          className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+          style={{ color: tierColor, background: tierColor + '18', border: `0.5px solid ${tierColor}40` }}
+        >
+          {tierLabel}
+        </span>
       </div>
 
-      {/* Long / Short columns */}
-      <div className="grid grid-cols-2 divide-x divide-border1">
-        {/* LONG side */}
-        <div className="p-3.5 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-success tracking-wide">LONG</span>
-            <ExBadge label={opp.long.exchange.toUpperCase()} color={opp.long.color} />
+      {/* ── 3-column body: LONG | APR center | SHORT ── */}
+      <div className="grid" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
+
+        {/* LONG column */}
+        <div className="p-3 space-y-2">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10px] font-bold text-success tracking-widest">LONG</span>
+            <FreqBadge intervalHours={freqHours(opp.long.exchange)} />
           </div>
           <div>
-            <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide">ASK (ENTRY)</div>
-            <div className="text-[16px] font-bold text-text1 font-mono">${fmtPrice(opp.long.askPrice)}</div>
-            <div className="text-[10px] text-text3 font-mono">Bid ${fmtPrice(opp.long.bidPrice)}</div>
+            <div className="text-[8px] text-text3 uppercase tracking-wide font-semibold">Ask (Entry)</div>
+            <div className="text-[15px] font-bold text-text1 font-mono leading-tight">${fmtPrice(opp.long.askPrice)}</div>
+            <div className="text-[9px] text-text3 font-mono">Bid ${fmtPrice(opp.long.bidPrice)}</div>
           </div>
           <div>
             <div className="text-[10px] font-semibold font-mono" style={{ color: longFR.color }}>
-              {longFR.label} {longFR.color === '#10b981' ? '+' : '-'}{longFR.pct}% / 1h
+              {longFR.sign}{longFR.pct}% / {freqHours(opp.long.exchange)}h
             </div>
-            <div className="text-[9px] text-text3 flex items-center gap-1 mt-0.5">
-              ⏱ {opp.long.exchange} 1h·<Countdown targetMs={opp.long.nextFundingTime} />
+            <div className="text-[8px] text-text3 mt-0.5">
+              <Countdown targetMs={opp.long.nextFundingTime} />
             </div>
           </div>
         </div>
 
-        {/* SHORT side */}
-        <div className="p-3.5 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-danger tracking-wide">SHORT</span>
-            <ExBadge label={opp.short.exchange.toUpperCase()} color={opp.short.color} />
+        {/* CENTER: APR + 1h spread */}
+        <div
+          className="flex flex-col items-center justify-center px-3 py-3 border-x border-border1"
+          style={{ minWidth: '80px' }}
+        >
+          <div className="text-[8px] text-text3 uppercase tracking-wide font-semibold mb-0.5">APR</div>
+          <div className="text-[20px] font-bold font-mono leading-tight" style={{ color: tierColor }}>
+            {fmt(opp.spreadAPR, 1)}%
+          </div>
+          <div className="w-full h-px bg-border1 my-2" />
+          <div className="text-[8px] text-text3 uppercase tracking-wide font-semibold mb-0.5">1h spread</div>
+          <div className="text-[11px] font-mono text-text2">{(opp.spreadRate * 100).toFixed(4)}%</div>
+        </div>
+
+        {/* SHORT column */}
+        <div className="p-3 space-y-2 text-right">
+          <div className="flex items-center justify-end gap-1.5 mb-1">
+            <FreqBadge intervalHours={freqHours(opp.short.exchange)} />
+            <span className="text-[10px] font-bold text-danger tracking-widest">SHORT</span>
           </div>
           <div>
-            <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide">BID (ENTRY)</div>
-            <div className="text-[16px] font-bold text-text1 font-mono">${fmtPrice(opp.short.bidPrice)}</div>
-            <div className="text-[10px] text-text3 font-mono">Ask ${fmtPrice(opp.short.askPrice)}</div>
+            <div className="text-[8px] text-text3 uppercase tracking-wide font-semibold">Bid (Entry)</div>
+            <div className="text-[15px] font-bold text-text1 font-mono leading-tight">${fmtPrice(opp.short.bidPrice)}</div>
+            <div className="text-[9px] text-text3 font-mono">Ask ${fmtPrice(opp.short.askPrice)}</div>
           </div>
           <div>
             <div className="text-[10px] font-semibold font-mono" style={{ color: shortFR.color }}>
-              {shortFR.label} {shortFR.color === '#10b981' ? '+' : '-'}{shortFR.pct}% / 1h
+              {shortFR.sign}{shortFR.pct}% / {freqHours(opp.short.exchange)}h
             </div>
-            <div className="text-[9px] text-text3 flex items-center gap-1 mt-0.5">
-              ⏱ {opp.short.exchange} 1h·<Countdown targetMs={opp.short.nextFundingTime} />
+            <div className="text-[8px] text-text3 mt-0.5">
+              <Countdown targetMs={opp.short.nextFundingTime} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* BBO Spread row */}
-      <div className="px-4 py-2 border-t border-border1 bg-surface2 flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[9px] text-text3 font-semibold uppercase tracking-wide">BBO SPREAD</span>
-          <span className="text-[11px] font-bold font-mono" style={{ color: bboColor }}>
-            {bboLabel}{(opp.bboSpread * 100).toFixed(3)}%
-          </span>
-          <span className="text-[9px] text-text3">
-            ({opp.long.exchange === 'Pacifica' ? 'Pacifica' : opp.short.exchange} bid / {opp.short.exchange === 'Pacifica' ? 'Pacifica' : opp.long.exchange} ask − 1)
-          </span>
+      {/* ── BBO bar row ── */}
+      <div className="px-4 py-2 border-t border-border1 bg-surface2 flex items-center gap-2">
+        <span className="text-[8px] text-text3 uppercase tracking-wide font-semibold shrink-0">BBO Spread</span>
+        {/* Track: left = negative zone, right = positive zone */}
+        <div className="flex-1 h-1 rounded-full bg-border1 relative overflow-hidden">
+          {opp.bboSpread < 0 ? (
+            <div
+              className="absolute right-1/2 top-0 h-full rounded-l-full"
+              style={{ width: `${bboBarWidth}%`, background: '#ef4444' }}
+            />
+          ) : (
+            <div
+              className="absolute left-1/2 top-0 h-full rounded-r-full"
+              style={{ width: `${bboBarWidth}%`, background: '#10b981' }}
+            />
+          )}
+          {/* Center marker */}
+          <div className="absolute left-1/2 top-0 h-full w-px bg-border2 -translate-x-1/2" />
         </div>
-        <div className="text-[9px] text-text3">
-          live <span className="text-text2 font-mono">{new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
-        </div>
+        <span className="text-[10px] font-bold font-mono shrink-0" style={{ color: bboColor }}>
+          {opp.bboSpread >= 0 ? '+' : ''}{bboPct}%
+        </span>
       </div>
 
-      {/* Real P&L section */}
-      <div className="px-4 py-3 border-t border-border1 space-y-1.5">
-        <div className="text-[9px] text-text3 uppercase font-semibold tracking-wide mb-2">REAL P&amp;L</div>
-        <div className="text-[11px] text-text2">
-          Next:{' '}
-          <span className="font-bold" style={{ color: longFR.color }}>
-            {longFR.label === 'Recv' ? 'receive' : 'pay'} {longFR.pct}%
+      {/* ── Net hourly + next funding ── */}
+      <div className="px-4 py-2 border-t border-border1 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[8px] text-text3 uppercase tracking-wide font-semibold">Net hourly</span>
+          <span
+            className="text-[11px] font-bold font-mono"
+            style={{ color: netHourly > 0 ? '#10b981' : '#ef4444' }}
+          >
+            {netHourly > 0 ? '+' : ''}{netHourly.toFixed(4)}%
           </span>
-          {' '}in{' '}
-          <span className="font-mono text-text1"><Countdown targetMs={opp.long.nextFundingTime} /></span>
-          {' '}({opp.long.exchange} long)
         </div>
-        <div className="text-[11px] text-text2">
-          Then:{' '}
-          <span className="font-bold" style={{ color: shortFR.color }}>
-            {shortFR.label === 'Recv' ? 'receive' : 'pay'} {shortFR.pct}%
-          </span>
-          {' '}in{' '}
-          <span className="font-mono text-text1"><Countdown targetMs={opp.short.nextFundingTime} /></span>
-          {' '}({opp.short.exchange} short)
-        </div>
-      </div>
-
-      {/* APR footer */}
-      <div className="px-4 py-2.5 border-t border-border1 flex items-center justify-between bg-surface2/50">
-        <div>
-          <div className="text-[9px] text-text3 uppercase font-semibold">Spread APR (est.)</div>
-          <div className="text-[18px] font-bold font-mono" style={{ color: tierColor }}>
-            {fmt(opp.spreadAPR, 1)}%
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-[9px] text-text3 uppercase font-semibold">1h Spread</div>
-          <div className="text-[13px] font-mono text-text2">{(opp.spreadRate * 100).toFixed(4)}%</div>
+        <div className="flex items-center gap-1 text-[8px] text-text3">
+          <span>Next funding</span>
+          <span className="font-mono text-text2"><Countdown targetMs={nextFundingMs} /></span>
         </div>
       </div>
     </div>
@@ -482,11 +518,12 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                 <div className="bg-surface rounded-xl border border-border1 shadow-card p-4">
                   <h3 className="text-[12px] font-bold text-text1 mb-3">📖 How It Works</h3>
                   <div className="space-y-3">
-                    {[
+                    [
                       { title: '1. Spot the Spread', body: 'Same asset, different funding rates — earn the difference delta-neutral.' },
-                      { title: '2. Open Opposite Positions', body: 'LONG where funding is lower (receive), SHORT where higher (pay less).' },
-                      { title: '3. Collect Every 1h', body: 'APR = |spread| × 24 × 365. Pays hourly on Pacifica.' },
-                      { title: '4. BBO Spread', body: 'Entry cost estimate. Negative = costs to enter. Factor into P&L.' },
+                      { title: '2. Open Opposite Positions', body: 'LONG where funding is lower (receive), SHORT where higher (pay more).' },
+                      { title: '3. Collect Every 1h / 4h', body: 'APR = |spread| × 24 × 365. Frequency badge shows each exchange\'s interval.' },
+                      { title: '4. BBO Spread Bar', body: 'Red bar = entry costs you. Green bar = entry earns you. Factor into net P&L.' },
+                      { title: '5. Net Hourly', body: 'Combined receive rate from both sides. Your actual hourly yield before fees.' },
                     ].map(s => (
                       <div key={s.title}>
                         <div className="text-[11px] font-semibold text-text1 mb-0.5">{s.title}</div>
@@ -501,11 +538,13 @@ export function ArbitrageScanner({ pacificaRates, pacificaPrices, initialSubPage
                   <h3 className="text-[12px] font-bold text-text1 mb-3">📘 Legend</h3>
                   <div className="space-y-2">
                     {[
-                      { label: 'Pay', color: 'text-danger', def: 'You pay this rate' },
-                      { label: 'Recv', color: 'text-success', def: 'You receive this rate' },
-                      { label: 'ASK (Entry)', color: 'text-text2', def: 'Long entry fills at ask' },
-                      { label: 'BID (Entry)', color: 'text-text2', def: 'Short entry fills at bid' },
-                      { label: 'BBO Spread', color: 'text-text2', def: 'Bid/Ask cross-exchange ratio' },
+                      { label: '+rate%', color: 'text-success', def: 'You receive this funding rate' },
+                      { label: '−rate%', color: 'text-danger', def: 'You pay this funding rate' },
+                      { label: 'Ask (Entry)', color: 'text-text2', def: 'Long position fills at ask price' },
+                      { label: 'Bid (Entry)', color: 'text-text2', def: 'Short position fills at bid price' },
+                      { label: 'BBO Spread bar', color: 'text-text2', def: 'Red = entry costs · Green = entry earns' },
+                      { label: 'Net hourly', color: 'text-success', def: 'Combined receive rate from both sides' },
+                      { label: '1h / 4h badge', color: 'text-warn', def: 'Funding interval for that exchange' },
                     ].map(item => (
                       <div key={item.label} className="border-b border-border1 last:border-0 pb-1.5 last:pb-0">
                         <div className={'text-[11px] font-semibold ' + item.color}>{item.label}</div>
